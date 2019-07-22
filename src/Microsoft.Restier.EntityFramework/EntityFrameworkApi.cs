@@ -28,7 +28,7 @@ namespace Microsoft.Restier.EntityFramework
 #if EF7
     [CLSCompliant(false)]
 #endif
-    public class EntityFrameworkApi<T> : ApiBase where T : DbContext
+    public class EntityFrameworkApi<T> : ApiBase, IDbContextProvider where T : DbContext
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="EntityFrameworkApi{T}" /> class.
@@ -54,13 +54,18 @@ namespace Microsoft.Restier.EntityFramework
         /// <summary>
         /// Gets the underlying DbContext for this API.
         /// </summary>
-        protected T DbContext
+        protected virtual T DbContext
         {
             get
             {
                 return (T)this.ServiceProvider.GetService<DbContext>();
             }
         }
+
+        /// <summary>
+        /// Gets the underlying DbContext for this API.
+        /// </summary>
+        DbContext IDbContextProvider.DbContext => DbContext;
 
 
         /// <summary>

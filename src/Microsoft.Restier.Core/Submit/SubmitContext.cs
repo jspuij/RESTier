@@ -22,8 +22,11 @@ namespace Microsoft.Restier.Core.Submit
         /// <param name="changeSet">
         /// A change set.
         /// </param>
-        public SubmitContext(ApiBase api, ChangeSet changeSet)
-            : base(api) => this.changeSet = changeSet;
+        /// <param name="propertyBag">
+        /// An <see cref="IPropertyBag"/> implementation to hold state in this context.
+        /// </param>
+        public SubmitContext(ApiBase api, ChangeSet changeSet, IPropertyBag propertyBag)
+            : base(api, propertyBag) => this.changeSet = changeSet;
 
         /// <summary>
         /// Gets or sets the change set.

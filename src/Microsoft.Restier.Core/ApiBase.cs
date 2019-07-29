@@ -189,7 +189,8 @@ namespace Microsoft.Restier.Core
         /// <returns>A task that represents the asynchronous operation whose result is a submit result.</returns>
         public async Task<SubmitResult> SubmitAsync(ChangeSet changeSet = null, CancellationToken cancellationToken = default)
         {
-            var submitContext = new SubmitContext(this, changeSet);
+            // TODO: JWS: Probably a factory for the context. But later.
+            var submitContext = new SubmitContext(this, changeSet, new PropertyBag());
             return await submitHandler.SubmitAsync(submitContext, cancellationToken).ConfigureAwait(false);
         }
 

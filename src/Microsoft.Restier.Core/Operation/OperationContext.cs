@@ -33,13 +33,17 @@ namespace Microsoft.Restier.Core.Operation
         /// <param name="bindingParameterValue">
         /// A queryable for binding parameter value and if it is function/action import, the value will be null.
         /// </param>
+        /// <param name="propertyBag">
+        /// An <see cref="IPropertyBag"/> implementation to hold state in this context.
+        /// </param>
         public OperationContext(
             ApiBase api,
             Func<string, object> getParameterValueFunc,
             string operationName,
             bool isFunction,
-            IEnumerable bindingParameterValue)
-            : base(api)
+            IEnumerable bindingParameterValue,
+            IPropertyBag propertyBag)
+            : base(api, propertyBag)
         {
             GetParameterValueFunc = getParameterValueFunc;
             OperationName = operationName;

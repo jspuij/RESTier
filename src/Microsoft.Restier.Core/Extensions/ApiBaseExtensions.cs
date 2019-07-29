@@ -184,7 +184,8 @@ namespace Microsoft.Restier.Core
 
             try
             {
-                var buildContext = new ModelContext(api);
+                // TODO: JWS: Probably a factory for the context. But later.
+                var buildContext = new ModelContext(api, new PropertyBag());
                 var model = await builder.GetModelAsync(buildContext, cancellationToken).ConfigureAwait(false);
                 source.SetResult(model);
                 return model;
@@ -394,7 +395,8 @@ namespace Microsoft.Restier.Core
             Ensure.NotNull(api, nameof(api));
             Ensure.NotNull(request, nameof(request));
 
-            var queryContext = new QueryContext(api, request);
+            // TODO: JWS: Probably a factory for the context. But later.
+            var queryContext = new QueryContext(api, request, new PropertyBag());
             var model = await api.GetModelAsync(cancellationToken).ConfigureAwait(false);
             queryContext.Model = model;
             return await api.QueryHandler.QueryAsync(queryContext, cancellationToken).ConfigureAwait(false);
@@ -469,7 +471,8 @@ namespace Microsoft.Restier.Core
             var mapper = api.GetApiService<IModelMapper>();
             if (mapper != null)
             {
-                var modelContext = new ModelContext(api);
+                // TODO: JWS: Probably a factory for the context. But later.
+                var modelContext = new ModelContext(api, new PropertyBag());
                 if (namespaceName == null)
                 {
                     mapper.TryGetRelevantType(modelContext, name, out elementType);

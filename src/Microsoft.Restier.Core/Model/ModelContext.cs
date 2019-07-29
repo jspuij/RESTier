@@ -18,7 +18,10 @@ namespace Microsoft.Restier.Core.Model
         /// <param name="api">
         /// An Api.
         /// </param>
-        public ModelContext(ApiBase api) : base(api)
+        /// <param name="propertyBag">
+        /// An <see cref="IPropertyBag"/> implementation to hold state in this context.
+        /// </param>
+        public ModelContext(ApiBase api, IPropertyBag propertyBag) : base(api, propertyBag)
         {
             ResourceSetTypeMap = new Dictionary<string, Type>();
             ResourceTypeKeyPropertiesMap = new Dictionary<Type, ICollection<PropertyInfo>>();

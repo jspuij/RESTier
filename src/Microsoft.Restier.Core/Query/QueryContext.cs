@@ -20,8 +20,11 @@ namespace Microsoft.Restier.Core.Query
         /// <param name="request">
         /// A query request.
         /// </param>
-        public QueryContext(ApiBase api, QueryRequest request)
-            : base(api)
+        /// <param name="propertyBag">
+        /// An <see cref="IPropertyBag"/> implementation to hold state in this context.
+        /// </param>
+        public QueryContext(ApiBase api, QueryRequest request, IPropertyBag propertyBag)
+            : base(api, propertyBag)
         {
             Ensure.NotNull(request, nameof(request));
             Request = request;

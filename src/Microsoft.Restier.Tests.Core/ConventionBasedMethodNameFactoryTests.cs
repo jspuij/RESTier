@@ -98,7 +98,7 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<TestApi>();
 
-            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null);
+            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null, new PropertyBag());
             var name = ConventionBasedMethodNameFactory.GetFunctionMethodName(context, RestierPipelineState.Authorization, RestierOperationMethod.Execute);
             name.Should().Be("CanExecuteTestMethod");
         }
@@ -111,7 +111,7 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<TestApi>();
 
-            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null);
+            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null, new PropertyBag());
             var name = ConventionBasedMethodNameFactory.GetFunctionMethodName(context, RestierPipelineState.PreSubmit, RestierOperationMethod.Execute);
             name.Should().Be("OnExecutingTestMethod");
         }
@@ -123,7 +123,7 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<TestApi>();
 
-            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null);
+            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null, new PropertyBag());
             var name = ConventionBasedMethodNameFactory.GetFunctionMethodName(context, RestierPipelineState.Submit, RestierOperationMethod.Execute);
             name.Should().Be("");
         }
@@ -135,7 +135,7 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<TestApi>();
 
-            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null);
+            var context = new OperationContext(api, (string test) => { return null; }, "TestMethod", true, null, new PropertyBag());
             var name = ConventionBasedMethodNameFactory.GetFunctionMethodName(context, RestierPipelineState.PostSubmit, RestierOperationMethod.Execute);
             name.Should().Be("OnExecutedTestMethod");
         }

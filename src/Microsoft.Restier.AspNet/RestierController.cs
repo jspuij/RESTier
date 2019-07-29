@@ -697,7 +697,8 @@ namespace Microsoft.Restier.AspNet
                 getParaValueFunc,
                 operationName,
                 isFunction,
-                bindingParameterValue)
+                bindingParameterValue,
+                new PropertyBag())
             {
                 Request = Request
             };

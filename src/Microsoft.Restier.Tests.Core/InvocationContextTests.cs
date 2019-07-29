@@ -23,7 +23,7 @@ namespace Microsoft.Restier.Tests.Core
             var container = new RestierContainerBuilder(typeof(TestApi));
             var provider = container.BuildContainer();
             var api = provider.GetService<ApiBase>();
-            var context = new InvocationContext(api);
+            var context = new InvocationContext(api, new PropertyBag());
             context.GetApiService<IServiceA>().Should().BeSameAs(TestApi.ApiService);
         }
 

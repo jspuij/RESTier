@@ -36,7 +36,7 @@ namespace Microsoft.Restier.EntityFramework.Tests
                 new Dictionary<string, object>(),
                 new Dictionary<string, object> { { "Addr", new Dictionary<string, object> { { "Zip", "332" } } } });
             var changeSet = new ChangeSet(new[] { item });
-            var sc = new SubmitContext(api, changeSet);
+            var sc = new SubmitContext(api, changeSet, new PropertyBag());
 
             // Act
             var changeSetPreparer = api.GetApiService<IChangeSetInitializer>();

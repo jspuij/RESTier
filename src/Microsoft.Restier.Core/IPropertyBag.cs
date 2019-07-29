@@ -3,16 +3,15 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace Microsoft.Restier.Core
 {
     /// <summary>
-    /// Represents a bag of properties.
+    /// Interface that represents a bag of properties.
     /// </summary>
-    internal class PropertyBag : IPropertyBag
+    public interface IPropertyBag
     {
-        private readonly IDictionary<string, object> properties = new Dictionary<string, object>();
-
         /// <summary>
         /// Indicates if this object has a property.
         /// </summary>
@@ -21,11 +20,7 @@ namespace Microsoft.Restier.Core
         /// <c>true</c> if this object has the
         /// property; otherwise, <c>false</c>.
         /// </returns>
-        public bool HasProperty(string name)
-        {
-            Ensure.NotNull(name, nameof(name));
-            return properties.ContainsKey(name);
-        }
+        bool HasProperty(string name);
 
         /// <summary>
         /// Gets a property.
@@ -39,29 +34,14 @@ namespace Microsoft.Restier.Core
         /// <returns>
         /// The value of the property.
         /// </returns>
-        public T GetProperty<T>(string name)
-        {
-            Ensure.NotNull(name, nameof(name));
-            var value = GetProperty(name);
-            if (!(value is T))
-            {
-                value = default(T);
-            }
-
-            return (T)value;
-        }
+        T GetProperty<T>(string name);
 
         /// <summary>
         /// Gets a property.
         /// </summary>
         /// <param name="name">The name of a property.</param>
         /// <returns>The value of the property.</returns>
-        public object GetProperty(string name)
-        {
-            Ensure.NotNull(name, nameof(name));
-            properties.TryGetValue(name, out var value);
-            return value;
-        }
+        object GetProperty(string name);
 
         /// <summary>
         /// Sets a property.
@@ -72,11 +52,7 @@ namespace Microsoft.Restier.Core
         /// <param name="value">
         /// A value for the property.
         /// </param>
-        public void SetProperty(string name, object value)
-        {
-            Ensure.NotNull(name, nameof(name));
-            properties[name] = value;
-        }
+        void SetProperty(string name, object value);
 
         /// <summary>
         /// Removes a property.
@@ -84,10 +60,6 @@ namespace Microsoft.Restier.Core
         /// <param name="name">
         /// The name of a property.
         /// </param>
-        public void RemoveProperty(string name)
-        {
-            Ensure.NotNull(name, nameof(name));
-            properties.Remove(name);
-        }
+        void RemoveProperty(string name);
     }
 }

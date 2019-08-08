@@ -36,6 +36,17 @@ namespace Microsoft.Restier.EntityFramework
         /// <param name="serviceProvider">
         /// An <see cref="IServiceProvider"/> containing all services of this <see cref="EntityFrameworkApi{T}"/>.
         /// </param>
+        /// <param name="propertyBag">An <see cref="IPropertyBag"/> implementation to store properties on the <see cref="EntityFrameworkApi{T}"/>.</param>
+        public EntityFrameworkApi(IServiceProvider serviceProvider, IPropertyBag propertyBag) : base(serviceProvider, propertyBag)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EntityFrameworkApi{T}" /> class.
+        /// </summary>
+        /// <param name="serviceProvider">
+        /// An <see cref="IServiceProvider"/> containing all services of this <see cref="EntityFrameworkApi{T}"/>.
+        /// </param>
         public EntityFrameworkApi(IServiceProvider serviceProvider) : base(serviceProvider)
         {
         }

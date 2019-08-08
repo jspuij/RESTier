@@ -21,7 +21,7 @@ namespace Microsoft.Restier.Core
     /// API type to avoid re-computing it on each invocation.
     /// </para>
     /// </remarks>
-    public abstract class ApiBase : IDisposable
+    public abstract class ApiBase : IDisposable, IPropertyBag
     {
 
         #region Private Members
@@ -36,6 +36,7 @@ namespace Microsoft.Restier.Core
         private readonly DefaultSubmitHandler submitHandler;
 
         private readonly DefaultQueryHandler queryHandler;
+        private readonly IPropertyBag propertyBag;
 
         #endregion
 
@@ -81,9 +82,14 @@ namespace Microsoft.Restier.Core
         /// <param name="serviceProvider">
         /// An <see cref="IServiceProvider"/> containing all services of this <see cref="ApiConfiguration"/>.
         /// </param>
-        protected ApiBase(IServiceProvider serviceProvider)
+        /// <param name="propertyBag">An <see cref="IPropertyBag"/> implementation to store properties on the ApiBase.</param>
+        protected ApiBase(IServiceProvider serviceProvider, IPropertyBag propertyBag)
         {
+            Ensure.NotNull(serviceProvider, nameof(serviceProvider));
+            Ensure.NotNull(propertyBag, nameof(propertyBag));
+
             ServiceProvider = serviceProvider;
+            this.propertyBag = propertyBag;
 
             //RWM: This stuff SHOULD be getting passed into a constructor. But the DI implementation is less than awesome.
             //     So we'll work around it for now and still save some allocations.
@@ -116,6 +122,16 @@ namespace Microsoft.Restier.Core
 
             queryHandler = new DefaultQueryHandler(queryExpressionSourcer, queryExpressionAuthorizer, queryExpressionExpander, queryExpressionProcessor);
             submitHandler = new DefaultSubmitHandler(changeSetInitializer, submitExecutor, changeSetItemAuthorizer, changeSetItemValidator, changeSetItemFilter);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ApiBase" /> class.
+        /// </summary>
+        /// <param name="serviceProvider">
+        /// An <see cref="IServiceProvider"/> containing all services of this <see cref="ApiConfiguration"/>.
+        /// </param>
+        protected ApiBase(IServiceProvider serviceProvider) : this(serviceProvider, new PropertyBag())
+        {
         }
 
         #endregion
@@ -226,6 +242,39 @@ namespace Microsoft.Restier.Core
 
         #endregion
 
+        #region IPropertyBag Forwarding
+
+        /// <inheritdoc />
+        public T GetProperty<T>(string name)
+        {
+            return propertyBag.GetProperty<T>(name);
+        }
+
+        /// <inheritdoc />
+        public object GetProperty(string name)
+        {
+            return propertyBag.GetProperty(name);
+        }
+
+        /// <inheritdoc />
+        public bool HasProperty(string name)
+        {
+            return propertyBag.HasProperty(name);
+        }
+
+        /// <inheritdoc />
+        public void RemoveProperty(string name)
+        {
+            propertyBag.RemoveProperty(name);
+        }
+
+        /// <inheritdoc />
+        public void SetProperty(string name, object value)
+        {
+            propertyBag.SetProperty(name, value);
+        }
+
+        #endregion
     }
 
 }

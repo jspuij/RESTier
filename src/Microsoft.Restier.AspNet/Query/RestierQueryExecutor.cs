@@ -31,15 +31,17 @@ namespace Microsoft.Restier.AspNet.Query
         /// <returns></returns>
         public async Task<QueryResult> ExecuteQueryAsync<TElement>(QueryContext context, IQueryable<TElement> query, CancellationToken cancellationToken)
         {
-            var countOption = context.GetApiService<RestierQueryExecutorOptions>();
-            if (countOption.IncludeTotalCount)
+            // TODO: JWS maybe move to context later, instead of on the Api object as propertybag.
+            var restierQueryOptions = context.Api.GetRestierQueryExecutorOptions();
+
+            if (restierQueryOptions !=  null && restierQueryOptions.IncludeTotalCount)
             {
                 var countQuery = ExpressionHelpers.GetCountableQuery(query);
                 var expression = ExpressionHelpers.Count(countQuery.Expression, countQuery.ElementType);
                 var result = await ExecuteExpressionAsync<long>(context, countQuery.Provider, expression, cancellationToken).ConfigureAwait(false);
                 var totalCount = result.Results.Cast<long>().Single();
 
-                countOption.SetTotalCount(totalCount);
+                restierQueryOptions.SetTotalCount(totalCount);
             }
 
             return await Inner.ExecuteQueryAsync(context, query, cancellationToken).ConfigureAwait(false);

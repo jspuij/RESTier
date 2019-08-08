@@ -6,6 +6,7 @@ using FluentAssertions;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Newtonsoft.Json.Linq;
 
 namespace Microsoft.Restier.Tests.AspNet.FeatureTests
 {
@@ -52,6 +53,21 @@ namespace Microsoft.Restier.Tests.AspNet.FeatureTests
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
 
+        /// <summary>
+        /// Tests if the query pipeline creates included counts.
+        /// </summary>
+        /// <returns></returns>
+        [TestMethod]
+        public async Task TestIncludeCount()
+        {
+            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Books?$count=true&$top=1");
+            var content = await response.Content.ReadAsStringAsync();
+            TestContext.WriteLine(content);
+            response.IsSuccessStatusCode.Should().BeTrue();
+            int result = JObject.Parse(content)["@odata.count"].Value<int>();
+            result.Should().BeGreaterThan(1);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
     }
 
 }

@@ -64,8 +64,7 @@ namespace Microsoft.Restier.AspNet
 
             services.AddService<IModelMapper, ModelMapper>();
 
-            return services.AddScoped<RestierQueryExecutorOptions>()
-                    .AddService<IQueryExecutor, RestierQueryExecutor>();
+            return services.AddService<IQueryExecutor, RestierQueryExecutor>();
         }
 
         internal static void AddRestierModelExtender(

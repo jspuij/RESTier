@@ -634,9 +634,10 @@ namespace Microsoft.Restier.AspNet
 
             if (queryOptions.Count != null && !applyCount)
             {
-                var queryExecutorOptions = api.GetApiService<RestierQueryExecutorOptions>();
+                var queryExecutorOptions = new RestierQueryExecutorOptions();
                 queryExecutorOptions.IncludeTotalCount = queryOptions.Count.Value;
                 queryExecutorOptions.SetTotalCount = value => properties.TotalCount = value;
+                api.SetRestierQueryExecutorOptions(queryExecutorOptions);
             }
 
             // Validate query before apply, and query setting like MaxExpansionDepth can be customized here

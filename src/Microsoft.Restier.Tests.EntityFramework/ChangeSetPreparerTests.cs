@@ -13,6 +13,7 @@ using Microsoft.Restier.Tests.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Restier.EntityFramework.Tests
 {
@@ -40,7 +41,7 @@ namespace Microsoft.Restier.EntityFramework.Tests
             var sc = new SubmitContext(api, changeSet, new PropertyBag());
 
             // Act
-            var changeSetPreparer = api.GetApiService<IChangeSetInitializer>();
+            var changeSetPreparer = api.ServiceProvider.GetService<IChangeSetInitializer>();
             await changeSetPreparer.InitializeAsync(sc, CancellationToken.None).ConfigureAwait(false);
             var person = item.Resource as Employee;
 

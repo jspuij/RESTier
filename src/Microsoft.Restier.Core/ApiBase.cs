@@ -3,9 +3,12 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
 
@@ -37,6 +40,8 @@ namespace Microsoft.Restier.Core
 
         private readonly DefaultQueryHandler queryHandler;
         private readonly IPropertyBag propertyBag;
+        private readonly IModelBuilder modelBuilder;
+        private readonly IModelMapper mapper;
 
         #endregion
 
@@ -103,6 +108,15 @@ namespace Microsoft.Restier.Core
             var changeSetItemValidator = serviceProvider.GetService<IChangeSetItemValidator>();
             var changeSetItemFilter = serviceProvider.GetService<IChangeSetItemFilter>();
             var submitExecutor = serviceProvider.GetService<ISubmitExecutor>();
+            modelBuilder = serviceProvider.GetService<IModelBuilder>();
+            mapper = serviceProvider.GetService<IModelMapper>();
+
+            // TODO: JWS: check this in the constructor. But now too many unit tests fail, so we will 
+            // save this for a rewrite.
+            //if (modelBuilder == null)
+            //{
+            //    throw new InvalidOperationException(Resources.ModelBuilderNotRegistered);
+            //}
 
             if (queryExpressionSourcer == null)
             {
@@ -198,6 +212,56 @@ namespace Microsoft.Restier.Core
         #region Public Methods
 
         /// <summary>
+        /// Asynchronously gets an API model using an API context.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// An optional cancellation token.
+        /// </param>
+        /// <returns>
+        /// A task that represents the asynchronous
+        /// operation whose result is the API model.
+        /// </returns>
+        public async Task<IEdmModel> GetModelAsync(CancellationToken cancellationToken = default)
+        {
+            var config = this.Configuration;
+
+            if (config.Model != null)
+            {
+                return config.Model;
+            }
+
+            if (modelBuilder == null)
+            {
+                throw new InvalidOperationException(Resources.ModelBuilderNotRegistered);
+            }
+
+            var source = config.CompleteModelGeneration(out var running);
+            if (source == null)
+            {
+                return await running.ConfigureAwait(false);
+            }
+
+            try
+            {
+                // TODO: JWS: Probably a factory for the context. But later.
+                var buildContext = new ModelContext(this, new PropertyBag());
+                var model = await modelBuilder.GetModelAsync(buildContext, cancellationToken).ConfigureAwait(false);
+                source.SetResult(model);
+                return model;
+            }
+            catch (AggregateException e)
+            {
+                source.SetException(e.InnerExceptions);
+                throw;
+            }
+            catch (Exception e)
+            {
+                source.SetException(e);
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Asynchronously submits changes made using an API context.
         /// </summary>
         /// <param name="changeSet">A change set, or <c>null</c> to submit existing pending changes.</param>
@@ -211,6 +275,38 @@ namespace Microsoft.Restier.Core
         }
 
         #endregion
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="namespaceName"></param>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        internal Type EnsureElementType(string namespaceName, string name)
+        {
+            Type elementType = null;
+
+            if (mapper != null)
+            {
+                // TODO: JWS: Probably a factory for the context. But later.
+                var modelContext = new ModelContext(this, new PropertyBag());
+                if (namespaceName == null)
+                {
+                    mapper.TryGetRelevantType(modelContext, name, out elementType);
+                }
+                else
+                {
+                    mapper.TryGetRelevantType(modelContext, namespaceName, name, out elementType);
+                }
+            }
+
+            if (elementType == null)
+            {
+                throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, Resources.ElementTypeNotFound, name));
+            }
+
+            return elementType;
+        }
 
         #region IDisposable Pattern
 

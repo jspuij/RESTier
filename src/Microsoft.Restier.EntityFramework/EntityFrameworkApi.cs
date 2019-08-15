@@ -58,7 +58,7 @@ namespace Microsoft.Restier.EntityFramework
         {
             get
             {
-                return (T)this.GetApiService<DbContext>();
+                return (T)this.ServiceProvider.GetService<DbContext>();
             }
         }
 

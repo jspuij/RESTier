@@ -28,15 +28,15 @@ namespace Microsoft.Restier.Tests.Core
         {
             var apiA = await RestierTestHelpers.GetTestableApiInstance<TestApiA>();
 
-            apiA.GetApiService<IServiceA>().Should().BeNull();
-            apiA.GetApiService<IServiceB>().Should().BeNull();
+            apiA.ServiceProvider.GetService<IServiceA>().Should().BeNull();
+            apiA.ServiceProvider.GetService<IServiceB>().Should().BeNull();
 
             var apiB = await RestierTestHelpers.GetTestableApiInstance<TestApiB>();
 
-            apiB.GetApiService<IServiceA>().Should().BeSameAs(TestApiB.serviceA);
+            apiB.ServiceProvider.GetService<IServiceA>().Should().BeSameAs(TestApiB.serviceA);
 
-            var serviceBInstance = apiB.GetApiService<ServiceB>();
-            var serviceBInterface = apiB.GetApiService<IServiceB>();
+            var serviceBInstance = apiB.ServiceProvider.GetService<ServiceB>();
+            var serviceBInterface = apiB.ServiceProvider.GetService<IServiceB>();
             serviceBInterface.Should().BeSameAs(serviceBInstance);
 
             var serviceBFirst = serviceBInterface as ServiceB;
@@ -52,7 +52,7 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<ApiBase>();
 
-            var handler = api.GetApiService<IServiceB>();
+            var handler = api.ServiceProvider.GetService<IServiceB>();
             handler.GetStr().Should().Be("q2Pre_q1Pre_q1Post_q2Post_");
         }
 

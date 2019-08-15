@@ -61,13 +61,13 @@ namespace Microsoft.Restier.Tests.Core
             var scopedProvider  = scope.ServiceProvider;
             var api = scopedProvider.GetService<ApiBase>();
 
-            api.GetApiService<MyPropertyBag>().Should().NotBeNull();
+            api.ServiceProvider.GetService<MyPropertyBag>().Should().NotBeNull();
             MyPropertyBag.InstanceCount.Should().Be(1);
 
             var scopedProvider2 = provider.GetRequiredService<IServiceScopeFactory>().CreateScope().ServiceProvider;
             var api2 = scopedProvider2.GetService<ApiBase>();
 
-            api2.GetApiService<MyPropertyBag>().Should().NotBeNull();
+            api2.ServiceProvider.GetService<MyPropertyBag>().Should().NotBeNull();
             MyPropertyBag.InstanceCount.Should().Be(2);
 
             scope.Dispose();

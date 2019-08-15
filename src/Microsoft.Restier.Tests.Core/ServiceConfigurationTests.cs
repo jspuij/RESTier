@@ -24,7 +24,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task ContributorsAreCalledCorrectly()
         {
             var api = await RestierTestHelpers.GetTestableApiInstance<TestApiA>();
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("03210");
         }
 
@@ -32,7 +32,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task NextInjectedViaProperty()
         {
             var api = await RestierTestHelpers.GetTestableApiInstance<TestApiB>();
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("01");
         }
 
@@ -40,15 +40,15 @@ namespace Microsoft.Restier.Tests.Core
         public async Task ContextApiScopeWorksCorrectly()
         {
             var api = await RestierTestHelpers.GetTestableApiInstance<TestApiC>();
-            var service1 = api.GetApiService<ISomeService>();
+            var service1 = api.ServiceProvider.GetService<ISomeService>();
 
             var api2 = await RestierTestHelpers.GetTestableApiInstance<TestApiC>();
-            var service2 = api2.GetApiService<ISomeService>();
+            var service2 = api2.ServiceProvider.GetService<ISomeService>();
 
             service1.Should().NotBe(service2);
 
             var api3 = await RestierTestHelpers.GetTestableApiInstance<TestApiC>();
-            var service3 = api3.GetApiService<ISomeService>();
+            var service3 = api3.ServiceProvider.GetService<ISomeService>();
 
             service3.Should().NotBe(service2);
         }
@@ -60,13 +60,13 @@ namespace Microsoft.Restier.Tests.Core
             // Outmost service does not call inner service
             var api = await RestierTestHelpers.GetTestableApiInstance<TestApiD>();
 
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("42");
 
             // Test expression compilation. (RWM: I don't think this works the way they thought it did.)
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("42");
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("42");
         }
 
@@ -78,16 +78,16 @@ namespace Microsoft.Restier.Tests.Core
             var api = provider.GetService<ApiBase>();
 
             var expected = "Text42";
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be(expected);
 
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be(expected);
 
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be(expected);
 
-            api.GetApiService<ISomeService>().Should().NotBe(api.GetApiService<ISomeService>());
+            api.ServiceProvider.GetService<ISomeService>().Should().NotBe(api.ServiceProvider.GetService<ISomeService>());
         }
 
         [TestMethod]
@@ -97,12 +97,12 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<ApiBase>();
 
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("42");
 
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("42");
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("42");
         }
 
@@ -114,13 +114,13 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<ApiBase>();
 
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("0122");
 
             // Test expression compilation
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("0122");
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("0122");
         }
 
@@ -131,13 +131,13 @@ namespace Microsoft.Restier.Tests.Core
             var provider = container.BuildContainer();
             var api = provider.GetService<ApiBase>();
 
-            var value = api.GetApiService<ISomeService>().Call();
+            var value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("4200");
 
             // Test expression compilation
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("4200");
-            value = api.GetApiService<ISomeService>().Call();
+            value = api.ServiceProvider.GetService<ISomeService>().Call();
             value.Should().Be("4200");
         }
 
@@ -148,7 +148,7 @@ namespace Microsoft.Restier.Tests.Core
         {
             var api = await RestierTestHelpers.GetTestableApiInstance<TestApiH>();
 
-            Action exceptionTest = () => { api.GetApiService<ISomeService>(); };
+            Action exceptionTest = () => { api.ServiceProvider.GetService<ISomeService>(); };
             exceptionTest.Should().Throw<InvalidOperationException>();
         }
 

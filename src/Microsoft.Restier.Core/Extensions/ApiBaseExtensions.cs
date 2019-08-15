@@ -38,97 +38,6 @@ namespace Microsoft.Restier.Core
             .Cast<MethodInfo>()
             .Single(m => m.GetParameters().Length == 3);
 
-        #region GetApiService<T>
-
-        /// <summary>
-        /// Gets a service instance.
-        /// </summary>
-        /// <param name="api">
-        /// An API.
-        /// </param>
-        /// <typeparam name="T">The service type.</typeparam>
-        /// <returns>The service instance.</returns>
-        public static T GetApiService<T>(this ApiBase api) where T : class
-        {
-            Ensure.NotNull(api, nameof(api));
-            return api.ServiceProvider.GetService<T>();
-        }
-
-        /// <summary>
-        /// Gets all registered service instances.
-        /// </summary>
-        /// <param name="api">
-        /// An API.
-        /// </param>
-        /// <typeparam name="T">The service type.</typeparam>
-        /// <returns>The ordered collection of service instances.</returns>
-        public static IEnumerable<T> GetApiServices<T>(this ApiBase api) where T : class
-        {
-            Ensure.NotNull(api, nameof(api));
-            return api.ServiceProvider.GetServices<T>();
-        }
-
-        #endregion
-
-        #region Model
-
-        /// <summary>
-        /// Asynchronously gets an API model using an API context.
-        /// </summary>
-        /// <param name="api">
-        /// An API.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// An optional cancellation token.
-        /// </param>
-        /// <returns>
-        /// A task that represents the asynchronous
-        /// operation whose result is the API model.
-        /// </returns>
-        public static async Task<IEdmModel> GetModelAsync(this ApiBase api, CancellationToken cancellationToken = default)
-        {
-            Ensure.NotNull(api, nameof(api));
-
-            var config = api.Configuration;
-            if (config.Model != null)
-            {
-                return config.Model;
-            }
-
-            var builder = api.GetApiService<IModelBuilder>();
-            if (builder == null)
-            {
-                throw new InvalidOperationException(Resources.ModelBuilderNotRegistered);
-            }
-
-            var source = config.CompleteModelGeneration(out var running);
-            if (source == null)
-            {
-                return await running.ConfigureAwait(false);
-            }
-
-            try
-            {
-                // TODO: JWS: Probably a factory for the context. But later.
-                var buildContext = new ModelContext(api, new PropertyBag());
-                var model = await builder.GetModelAsync(buildContext, cancellationToken).ConfigureAwait(false);
-                source.SetResult(model);
-                return model;
-            }
-            catch (AggregateException e)
-            {
-                source.SetException(e.InnerExceptions);
-                throw;
-            }
-            catch (Exception e)
-            {
-                source.SetException(e);
-                throw;
-            }
-        }
-
-        #endregion
-
         #region GetQueryableSource
 
         /// <summary>
@@ -380,40 +289,6 @@ namespace Microsoft.Restier.Core
             }
 
             return new QueryableSource<TElement>(Expression.Call(null, sourceMethod.MakeGenericMethod(typeof(TElement)), expressions));
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="api"></param>
-        /// <param name="namespaceName"></param>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        private static Type EnsureElementType(this ApiBase api, string namespaceName, string name)
-        {
-            Type elementType = null;
-
-            var mapper = api.GetApiService<IModelMapper>();
-            if (mapper != null)
-            {
-                // TODO: JWS: Probably a factory for the context. But later.
-                var modelContext = new ModelContext(api, new PropertyBag());
-                if (namespaceName == null)
-                {
-                    mapper.TryGetRelevantType(modelContext, name, out elementType);
-                }
-                else
-                {
-                    mapper.TryGetRelevantType(modelContext, namespaceName, name, out elementType);
-                }
-            }
-
-            if (elementType == null)
-            {
-                throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, Resources.ElementTypeNotFound, name));
-            }
-
-            return elementType;
         }
 
         #endregion

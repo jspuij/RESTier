@@ -8,7 +8,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
-using CloudNimble.Breakdance.Restier;
+
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;

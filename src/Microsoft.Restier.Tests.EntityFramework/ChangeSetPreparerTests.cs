@@ -5,10 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using CloudNimble.Breakdance.Restier;
+
 using FluentAssertions;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Tests.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -25,7 +26,7 @@ namespace Microsoft.Restier.EntityFramework.Tests
         {
             // Arrange
             var provider = await RestierTestHelpers.GetTestableInjectionContainer<LibraryApi>();
-            var api = provider.GetTestableApiInstance<LibraryApi>();
+            var api = provider.GetService(typeof(LibraryApi)) as LibraryApi;
 
             var item = new DataModificationItem(
                 "Readers",

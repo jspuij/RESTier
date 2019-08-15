@@ -8,7 +8,7 @@ using System.Linq.Expressions;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
-using CloudNimble.Breakdance.Restier;
+
 using FluentAssertions;
 using Microsoft.AspNet.OData;
 using Microsoft.AspNet.OData.Builder;
@@ -19,6 +19,7 @@ using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Tests.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

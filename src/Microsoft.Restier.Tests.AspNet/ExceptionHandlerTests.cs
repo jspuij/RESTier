@@ -4,11 +4,12 @@ using System.Net;
 using System.Net.Http;
 using System.Security;
 using System.Threading.Tasks;
-using CloudNimble.Breakdance.Restier;
+
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Tests.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

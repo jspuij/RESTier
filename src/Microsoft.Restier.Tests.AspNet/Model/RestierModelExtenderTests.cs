@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CloudNimble.Breakdance.Restier;
+
 using FluentAssertions;
 using Microsoft.AspNet.OData.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +12,7 @@ using Microsoft.Restier.AspNet.Model;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Tests.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

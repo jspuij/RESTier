@@ -5,7 +5,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CloudNimble.Breakdance.Restier;
+
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;

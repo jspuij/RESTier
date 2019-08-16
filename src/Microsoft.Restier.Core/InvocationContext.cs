@@ -2,8 +2,6 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
-using Microsoft.Extensions.DependencyInjection;
-using System.Collections.Generic;
 
 namespace Microsoft.Restier.Core
 {
@@ -17,7 +15,6 @@ namespace Microsoft.Restier.Core
     /// </remarks>
     public class InvocationContext : IPropertyBag
     {
-        private readonly IServiceProvider provider;
         private readonly IPropertyBag propertyBag;
 
         /// <summary>
@@ -34,8 +31,6 @@ namespace Microsoft.Restier.Core
             Ensure.NotNull(api, nameof(api));
             Ensure.NotNull(propertyBag, nameof(propertyBag));
 
-            // JWS: until we have removed all calls to GetApiService.
-            this.provider = api.ServiceProvider;
             this.propertyBag = propertyBag;
             Api = api;
         }
@@ -44,16 +39,6 @@ namespace Microsoft.Restier.Core
         /// Gets the <see cref="ApiBase"/> descendant for this invocation.
         /// </summary>
         public ApiBase Api { get; }
-
-        /// <summary>
-        /// Gets an API service.
-        /// </summary>
-        /// <typeparam name="T">The API service type.</typeparam>
-        /// <returns>The API service instance.</returns>
-        public T GetApiService<T>() where T : class
-        {
-            return provider.GetService<T>();
-        }
 
         #region IPropertyBag Forwarding
 

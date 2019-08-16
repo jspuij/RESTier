@@ -27,25 +27,29 @@ namespace Microsoft.Restier.Core.Query
         private readonly IQueryExpressionExpander expander;
         private readonly IQueryExpressionProcessor processor;
         private readonly IQueryExpressionSourcer sourcer;
+        private readonly IQueryExecutor executor;
 
         /// <summary>
         /// Initializes a new instance of the DefaultQueryHandler class.
         /// </summary>
         /// <param name="sourcer">The query expression sourcer to use.</param>
+        /// <param name="executor">The query executer to use.</param>
         /// <param name="authorizer">The query expression authorizer to use.</param>
         /// <param name="expander">The query expression expander to use.</param>
         /// <param name="processor">The query expression processor to use.</param>
         public DefaultQueryHandler(IQueryExpressionSourcer sourcer,
+            IQueryExecutor executor,
             IQueryExpressionAuthorizer authorizer = null,
             IQueryExpressionExpander expander = null,
             IQueryExpressionProcessor processor = null)
         {
             Ensure.NotNull(sourcer, nameof(sourcer));
-
+            Ensure.NotNull(executor, nameof(executor));
             this.authorizer = authorizer;
             this.expander = expander;
             this.processor = processor;
             this.sourcer = sourcer;
+            this.executor = executor;
         }
 
         /// <summary>
@@ -89,11 +93,6 @@ namespace Microsoft.Restier.Core.Query
 
             // execute query
             QueryResult result;
-            var executor = context.GetApiService<IQueryExecutor>();
-            if (executor == null)
-            {
-                throw new NotSupportedException(Resources.QueryExecutorMissing);
-            }
 
             if (elementType != null)
             {

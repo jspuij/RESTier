@@ -104,6 +104,7 @@ namespace Microsoft.Restier.Core
             var queryExpressionAuthorizer = serviceProvider.GetService<IQueryExpressionAuthorizer>();
             var queryExpressionExpander = serviceProvider.GetService<IQueryExpressionExpander>();
             var queryExpressionProcessor = serviceProvider.GetService<IQueryExpressionProcessor>();
+            var queryExecutor = serviceProvider.GetService<IQueryExecutor>();
             var changeSetInitializer = serviceProvider.GetService<IChangeSetInitializer>();
             var changeSetItemAuthorizer = serviceProvider.GetService<IChangeSetItemAuthorizer>();
             var changeSetItemValidator = serviceProvider.GetService<IChangeSetItemValidator>();
@@ -128,6 +129,10 @@ namespace Microsoft.Restier.Core
                 // Missing sourcer
                 throw new NotSupportedException(Resources.QuerySourcerMissing);
             }
+            if (queryExecutor == null)
+            {
+                throw new NotSupportedException(Resources.QueryExecutorMissing);
+            }
 
             if (changeSetInitializer == null)
             {
@@ -139,7 +144,7 @@ namespace Microsoft.Restier.Core
                 throw new NotSupportedException(Resources.SubmitExecutorMissing);
             }
 
-            queryHandler = new DefaultQueryHandler(queryExpressionSourcer, queryExpressionAuthorizer, queryExpressionExpander, queryExpressionProcessor);
+            queryHandler = new DefaultQueryHandler(queryExpressionSourcer, queryExecutor, queryExpressionAuthorizer, queryExpressionExpander, queryExpressionProcessor);
             submitHandler = new DefaultSubmitHandler(changeSetInitializer, submitExecutor, changeSetItemAuthorizer, changeSetItemValidator, changeSetItemFilter);
         }
 

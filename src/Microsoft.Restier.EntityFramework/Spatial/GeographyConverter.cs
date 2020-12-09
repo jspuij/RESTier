@@ -1,14 +1,17 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="GeographyConverter.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
+// </copyright>
 
-using System;
-using System.Data.Entity.Spatial;
-using System.Globalization;
-using System.Text;
-using Microsoft.Spatial;
-
+// TODO: Add support for spatial for EF Core.
 namespace Microsoft.Restier.EntityFramework
 {
+    using System;
+    using System.Data.Entity.Spatial;
+    using System.Globalization;
+    using System.Text;
+    using Microsoft.Spatial;
+
     /// <summary>
     /// The class defined conversion between GeographyPoint and DbGeography,
     /// and between GeographyLineString and DbGeography.
@@ -20,10 +23,10 @@ namespace Microsoft.Restier.EntityFramework
         private static readonly CultureInfo DefaultCulture = CultureInfo.GetCultureInfo("En-Us");
 
         /// <summary>
-        /// Convert a DbGeography to Edm GeographyPoint
+        /// Convert a DbGeography to Edm GeographyPoint.
         /// </summary>
-        /// <param name="geography"> The DbGeography to be converted</param>
-        /// <returns>A Edm GeographyPoint</returns>
+        /// <param name="geography"> The DbGeography to be converted.</param>
+        /// <returns>A Edm GeographyPoint.</returns>
         public static GeographyPoint ToGeographyPoint(this DbGeography geography)
         {
             if (geography == null)
@@ -47,10 +50,10 @@ namespace Microsoft.Restier.EntityFramework
         }
 
         /// <summary>
-        /// Convert a Edm GeographyPoint to DbGeography
+        /// Convert a Edm GeographyPoint to DbGeography.
         /// </summary>
-        /// <param name="point">The Edm GeographyPoint to be converted</param>
-        /// <returns>A DbGeography</returns>
+        /// <param name="point">The Edm GeographyPoint to be converted.</param>
+        /// <returns>A DbGeography.</returns>
         public static DbGeography ToDbGeography(this GeographyPoint point)
         {
             if (point == null)
@@ -77,10 +80,10 @@ namespace Microsoft.Restier.EntityFramework
         }
 
         /// <summary>
-        /// Convert a DbGeography to Edm GeographyPoint
+        /// Convert a DbGeography to Edm GeographyPoint.
         /// </summary>
-        /// <param name="geography"> The DbGeography to be converted</param>
-        /// <returns>A Edm GeographyLineString</returns>
+        /// <param name="geography"> The DbGeography to be converted.</param>
+        /// <returns>A Edm GeographyLineString.</returns>
         public static GeographyLineString ToGeographyLineString(this DbGeography geography)
         {
             if (geography == null)
@@ -124,10 +127,10 @@ namespace Microsoft.Restier.EntityFramework
         }
 
         /// <summary>
-        /// Convert a Edm GeographyLineString to DbGeography
+        /// Convert a Edm GeographyLineString to DbGeography.
         /// </summary>
-        /// <param name="lineString">The Edm GeographyLineString to be converted</param>
-        /// <returns>A DbGeography</returns>
+        /// <param name="lineString">The Edm GeographyLineString to be converted.</param>
+        /// <returns>A DbGeography.</returns>
         public static DbGeography ToDbGeography(this GeographyLineString lineString)
         {
             if (lineString == null)

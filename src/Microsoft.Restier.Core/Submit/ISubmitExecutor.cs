@@ -1,11 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ISubmitExecutor.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Threading;
-using System.Threading.Tasks;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System.Threading;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// Represents a service that executes a submission.
     /// </summary>

@@ -1,12 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="IModelBuilder.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.OData.Edm;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Model
 {
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// The service for model generation.
     /// </summary>
@@ -16,7 +18,7 @@ namespace Microsoft.Restier.Core.Model
         /// Asynchronously gets an API model for an API.
         /// </summary>
         /// <param name="context">
-        /// The context for processing
+        /// The context for processing.
         /// </param>
         /// <param name="cancellationToken">
         /// An optional cancellation token.

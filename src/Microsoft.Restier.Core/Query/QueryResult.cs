@@ -1,12 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="QueryResult.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections;
-using Microsoft.OData.Edm;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Query
 {
+    using System;
+    using System.Collections;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// Represents a query result.
     /// </summary>
@@ -25,7 +27,7 @@ namespace Microsoft.Restier.Core.Query
         public QueryResult(Exception exception)
         {
             Ensure.NotNull(exception, nameof(exception));
-            Exception = exception;
+            this.Exception = exception;
         }
 
         /// <summary>
@@ -37,7 +39,7 @@ namespace Microsoft.Restier.Core.Query
         public QueryResult(IEnumerable results)
         {
             Ensure.NotNull(results, nameof(results));
-            Results = results;
+            this.Results = results;
         }
 
         /// <summary>
@@ -48,14 +50,14 @@ namespace Microsoft.Restier.Core.Query
         /// </remarks>
         public Exception Exception
         {
-            get => exception;
+            get => this.exception;
 
             set
             {
                 Ensure.NotNull(value, nameof(value));
-                exception = value;
-                resultsSource = null;
-                results = null;
+                this.exception = value;
+                this.resultsSource = null;
+                this.results = null;
             }
         }
 
@@ -68,16 +70,16 @@ namespace Microsoft.Restier.Core.Query
         /// </remarks>
         public IEdmEntitySet ResultsSource
         {
-            get => resultsSource;
+            get => this.resultsSource;
 
             set
             {
-                if (exception != null)
+                if (this.exception != null)
                 {
                     throw new InvalidOperationException(Resources.CannotSetResultsSourceIfThereIsAnyError);
                 }
 
-                resultsSource = value;
+                this.resultsSource = value;
             }
         }
 
@@ -89,14 +91,14 @@ namespace Microsoft.Restier.Core.Query
         /// </remarks>
         public IEnumerable Results
         {
-            get => results;
+            get => this.results;
 
             set
             {
                 Ensure.NotNull(value, nameof(value));
-                exception = null;
-                resultsSource = null;
-                results = value;
+                this.exception = null;
+                this.resultsSource = null;
+                this.results = value;
             }
         }
     }

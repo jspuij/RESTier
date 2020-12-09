@@ -1,10 +1,12 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="SubmitContext.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System;
+
     /// <summary>
     /// Represents context under which a submit flow operates.
     /// </summary>
@@ -33,17 +35,17 @@ namespace Microsoft.Restier.Core.Submit
         /// </remarks>
         public ChangeSet ChangeSet
         {
-            get => changeSet;
+            get => this.changeSet;
 
             set
             {
-                if (Result != null)
+                if (this.Result != null)
                 {
                     throw new InvalidOperationException(
                         Resources.CannotSetChangeSetIfThereIsResult);
                 }
 
-                changeSet = value;
+                this.changeSet = value;
             }
         }
 
@@ -52,12 +54,12 @@ namespace Microsoft.Restier.Core.Submit
         /// </summary>
         public SubmitResult Result
         {
-            get => result;
+            get => this.result;
 
             set
             {
                 Ensure.NotNull(value, nameof(value));
-                result = value;
+                this.result = value;
             }
         }
     }

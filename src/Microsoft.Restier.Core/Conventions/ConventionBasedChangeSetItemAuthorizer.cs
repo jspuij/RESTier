@@ -1,14 +1,16 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ConventionBasedChangeSetItemAuthorizer.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Restier.Core.Submit;
+// </copyright>
 
 namespace Microsoft.Restier.Core
 {
+    using System;
+    using System.Diagnostics;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.Restier.Core.Submit;
+
     /// <summary>
     /// A convention-based change set item authorizer.
     /// </summary>
@@ -30,12 +32,13 @@ namespace Microsoft.Restier.Core
         public Task<bool> AuthorizeAsync(SubmitContext context, ChangeSetItem item, CancellationToken cancellationToken)
         {
             Ensure.NotNull(context, nameof(context));
+            Ensure.NotNull(item, nameof(item));
             var result = true;
 
             var returnType = typeof(bool);
             var dataModification = (DataModificationItem)item;
             var methodName = ConventionBasedMethodNameFactory.GetEntitySetMethodName(dataModification, RestierPipelineState.Authorization);
-            var method = targetType.GetQualifiedMethod(methodName);
+            var method = this.targetType.GetQualifiedMethod(methodName);
 
             if (method == null)
             {
@@ -44,7 +47,7 @@ namespace Microsoft.Restier.Core
 
             if (!method.IsFamily && !method.IsFamilyOrAssembly)
             {
-                Trace.WriteLine($"Restier Authorizer found '{methodName}' but it is unaccessible due to its protection level. Your method will not be called until you change it to 'protected internal'.");
+                Trace.WriteLine($"Restier Authorizer found '{methodName}' but it is inaccessible due to its protection level. Your method will not be called until you change it to 'protected internal'.");
                 return Task.FromResult(result);
             }
 
@@ -58,8 +61,9 @@ namespace Microsoft.Restier.Core
             if (!method.IsStatic)
             {
                 target = context.Api;
-                if (target == null || !targetType.IsInstanceOfType(target))
+                if (!this.targetType.IsInstanceOfType(target))
                 {
+                    Trace.WriteLine("The Restier API is of the incorrect type.");
                     return Task.FromResult(result);
                 }
             }
@@ -70,9 +74,8 @@ namespace Microsoft.Restier.Core
                 result = (bool)method.Invoke(target, null);
             }
 
+            Trace.WriteLine($"Restier Authorizer found '{methodName}', but it has an incorrect number of arguments. The number of arguments should be 0.");
             return Task.FromResult(result);
         }
-
     }
-
 }

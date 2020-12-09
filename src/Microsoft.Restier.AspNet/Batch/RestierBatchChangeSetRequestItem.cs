@@ -1,26 +1,28 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierBatchChangeSetRequestItem.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNet.OData.Batch;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Submit;
+// </copyright>
 
 namespace Microsoft.Restier.AspNet.Batch
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
+    using System.Net.Http;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.AspNet.OData.Batch;
+    using Microsoft.Restier.Core;
+    using Microsoft.Restier.Core.Submit;
+
     /// <summary>
     /// Represents an API <see cref="ChangeSet"/> request.
     /// </summary>
     public class RestierBatchChangeSetRequestItem : ChangeSetRequestItem
     {
         /// <summary>
-        /// An Api
+        /// An Api.
         /// </summary>
         private readonly ApiBase api;
 
@@ -50,14 +52,14 @@ namespace Microsoft.Restier.AspNet.Batch
 
             var changeSetProperty = new RestierChangeSetProperty(this)
             {
-                ChangeSet = new ChangeSet()
+                ChangeSet = new ChangeSet(),
             };
-            SetChangeSetProperty(changeSetProperty);
+            this.SetChangeSetProperty(changeSetProperty);
 
             var contentIdToLocationMapping = new Dictionary<string, string>();
             var responseTasks = new List<Task<Task<HttpResponseMessage>>>();
 
-            foreach (var request in Requests)
+            foreach (var request in this.Requests)
             {
                 // Since exceptions may occure before the request is sent to RestierController,
                 // we must catch the exceptions here and call OnChangeSetCompleted,
@@ -124,12 +126,16 @@ namespace Microsoft.Restier.AspNet.Batch
             return new ChangeSetResponseItem(responses);
         }
 
+        /// <summary>
+        /// Asynchronously submits a <see cref="ChangeSet"/>.
+        /// </summary>
+        /// <param name="changeSet">The change set to submit.</param>
+        /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
 #pragma warning disable CA1822 // Do not declare static members on generic types
         internal async Task SubmitChangeSet(ChangeSet changeSet)
 #pragma warning restore CA1822 // Do not declare static members on generic types
-
         {
-            var submitResults = await api.SubmitAsync(changeSet).ConfigureAwait(false);
+            var submitResults = await this.api.SubmitAsync(changeSet).ConfigureAwait(false);
         }
 
         private static void DisposeResponses(IEnumerable<HttpResponseMessage> responses)
@@ -145,7 +151,7 @@ namespace Microsoft.Restier.AspNet.Batch
 
         private void SetChangeSetProperty(RestierChangeSetProperty changeSetProperty)
         {
-            foreach (var request in Requests)
+            foreach (var request in this.Requests)
             {
                 request.SetChangeSet(changeSetProperty);
             }

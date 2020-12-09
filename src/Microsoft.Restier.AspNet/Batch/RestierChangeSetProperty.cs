@@ -1,20 +1,22 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierChangeSetProperty.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Restier.Core.Submit;
+// </copyright>
 
 namespace Microsoft.Restier.AspNet.Batch
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
+    using System.Net.Http;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.Restier.Core.Submit;
+
     /// <summary>
     /// Represents an API <see cref="ChangeSet"/> property.
-    /// TODO need to redesign this class
+    /// TODO need to redesign this class.
     /// </summary>
     internal class RestierChangeSetProperty
     {
@@ -39,7 +41,10 @@ namespace Microsoft.Restier.AspNet.Batch
         /// </summary>
         public ChangeSet ChangeSet { get; set; }
 
-        public IList<Exception> Exceptions { get; set; }
+        /// <summary>
+        /// Gets the list of Exceptions.
+        /// </summary>
+        public IList<Exception> Exceptions { get; private set; }
 
         /// <summary>
         /// The callback to execute when the changeset is completed.
@@ -49,7 +54,7 @@ namespace Microsoft.Restier.AspNet.Batch
         {
             if (Interlocked.Decrement(ref this.subRequestCount) == 0)
             {
-                if (Exceptions.Count == 0)
+                if (this.Exceptions.Count == 0)
                 {
                     this.changeSetRequestItem.SubmitChangeSet(this.ChangeSet)
                         .ContinueWith(t =>
@@ -71,7 +76,7 @@ namespace Microsoft.Restier.AspNet.Batch
                 }
                 else
                 {
-                    this.changeSetCompletedTaskSource.SetException(Exceptions.Select(c => c.Demystify()));
+                    this.changeSetCompletedTaskSource.SetException(this.Exceptions.Select(c => c.Demystify()));
                 }
             }
 

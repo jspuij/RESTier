@@ -1,11 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="IChangeSetItemFilter.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Threading;
-using System.Threading.Tasks;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System.Threading;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// Represents a change set item filter to have logic before and after change set item processed.
     /// </summary>

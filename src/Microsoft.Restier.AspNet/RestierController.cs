@@ -1,36 +1,40 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierController.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Web.Http;
-using System.Web.Http.Controllers;
-using Microsoft.AspNet.OData;
-using Microsoft.AspNet.OData.Extensions;
-using Microsoft.AspNet.OData.Formatter;
-using Microsoft.AspNet.OData.Query;
-using Microsoft.AspNet.OData.Results;
-using Microsoft.OData;
-using Microsoft.OData.Edm;
-using Microsoft.OData.UriParser;
-using Microsoft.Restier.AspNet.Model;
-using Microsoft.Restier.AspNet.Query;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Operation;
-using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Core.Submit;
-// This is a must for creating response with correct extension method
-using ODataPath = Microsoft.AspNet.OData.Routing.ODataPath;
-
+// </copyright>
 
 namespace Microsoft.Restier.AspNet
 {
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.Linq;
+    using System.Net;
+    using System.Net.Http;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using System.Web.Http;
+    using System.Web.Http.Controllers;
+    using Microsoft.AspNet.OData;
+    using Microsoft.AspNet.OData.Extensions;
+    using Microsoft.AspNet.OData.Formatter;
+    using Microsoft.AspNet.OData.Query;
+    using Microsoft.AspNet.OData.Results;
+    using Microsoft.OData;
+    using Microsoft.OData.Edm;
+    using Microsoft.OData.UriParser;
+    using Microsoft.Restier.AspNet.Model;
+    using Microsoft.Restier.AspNet.Operation;
+    using Microsoft.Restier.AspNet.Query;
+    using Microsoft.Restier.Core;
+    using Microsoft.Restier.Core.Operation;
+    using Microsoft.Restier.Core.Query;
+    using Microsoft.Restier.Core.Submit;
+
+    // This is a must for creating response with correct extension method
+    using ODataPath = Microsoft.AspNet.OData.Routing.ODataPath;
+
     /// <summary>
     /// The all-in-one controller class to handle API requests.
     /// </summary>
@@ -41,7 +45,7 @@ namespace Microsoft.Restier.AspNet
         private const string IfMatchKey = "@IfMatchKey";
         private const string IfNoneMatchKey = "@IfNoneMatchKey";
 
-        private  ApiBase api;
+        private ApiBase api;
         private ODataValidationSettings validationSettings;
         private IOperationExecutor operationExecutor;
         private ODataQuerySettings querySettings;
@@ -56,7 +60,7 @@ namespace Microsoft.Restier.AspNet
         /// to work correctly. The second constructor with arguments specifies those
         /// dependencies. When using the constructor without arguments, a DI container
         /// is requested from the HttpRequestMessage and the dependencies are
-        /// resolved at run time. 
+        /// resolved at run time.
         /// It is better to use a DI framework and register RestierController yourself
         /// to allow the DI container to explicitly resolve dependencies at the start
         /// of your application.
@@ -87,57 +91,13 @@ namespace Microsoft.Restier.AspNet
         }
 
         /// <summary>
-        /// Initializes the <see cref="ApiController"/> instance with the specified controllerContext.
-        /// </summary>
-        /// <remarks>
-        /// Resolves the api, query settings, validation settings, operation executor from
-        /// the Request container associated with the HttpRequestMessage.
-        /// </remarks>
-        /// <param name="controllerContext"> 
-        /// The <see cref="HttpControllerContext"/> object that is used for the initialization.
-        /// </param>
-        protected override void Initialize(HttpControllerContext controllerContext)
-        {
-            base.Initialize(controllerContext);
-
-            if (api != null && querySettings != null && validationSettings != null && operationExecutor != null)
-            {
-                return;
-            }
-
-            // TODO: JWS Either properly inject RestierController into the DI Container.
-            // or provide sensible defaults for these dependencies to reduce DI dependency.
-#pragma warning disable CA1062 // Validate arguments of public methods
-            var provider = controllerContext.Request.GetRequestContainer();
-#pragma warning restore CA1062 // Validate arguments of public methods
-
-            if (api == null)
-            {
-                api = provider.GetService(typeof(ApiBase)) as ApiBase;
-            }
-            if (querySettings == null)
-            {
-                querySettings = provider.GetService(typeof(ODataQuerySettings)) as ODataQuerySettings;
-            }
-            if (validationSettings == null)
-            {
-                validationSettings = provider.GetService(typeof(ODataValidationSettings)) as ODataValidationSettings;
-            }
-            if (operationExecutor == null)
-            {
-                operationExecutor = provider.GetService(typeof(IOperationExecutor)) as IOperationExecutor;
-            }
-
-        }
-
-        /// <summary>
         /// Handles a GET request to query entities.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The task object that contains the response message.</returns>
         public async Task<HttpResponseMessage> Get(CancellationToken cancellationToken)
         {
-            var path = GetPath();
+            var path = this.GetPath();
             var lastSegment = path.Segments.LastOrDefault();
             if (lastSegment == null)
             {
@@ -147,7 +107,7 @@ namespace Microsoft.Restier.AspNet
             IQueryable result = null;
 
             // Get queryable path builder to builder
-            var queryable = GetQuery(path);
+            var queryable = this.GetQuery(path);
             ETag etag;
 
             // TODO #365 Do not support additional path segment after function call now
@@ -155,9 +115,9 @@ namespace Microsoft.Restier.AspNet
             {
                 var operation = unboundSegment.OperationImports.FirstOrDefault();
                 Func<string, object> getParaValueFunc = p => unboundSegment.Parameters.FirstOrDefault(c => c.Name == p).Value;
-                result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, true, null, cancellationToken).ConfigureAwait(false);
+                result = await this.ExecuteOperationAsync(getParaValueFunc, operation.Name, true, null, cancellationToken).ConfigureAwait(false);
 
-                var applied = await ApplyQueryOptionsAsync(result, path, true).ConfigureAwait(false);
+                var applied = await this.ApplyQueryOptionsAsync(result, path, true).ConfigureAwait(false);
                 result = applied.Queryable;
                 etag = applied.Etag;
             }
@@ -165,32 +125,31 @@ namespace Microsoft.Restier.AspNet
             {
                 if (queryable == null)
                 {
-                    throw new HttpResponseException(Request.CreateErrorResponse(HttpStatusCode.NotFound, Resources.ResourceNotFound));
+                    throw new HttpResponseException(this.Request.CreateErrorResponse(HttpStatusCode.NotFound, Resources.ResourceNotFound));
                 }
 
                 if (lastSegment is OperationSegment)
                 {
-                    result = await ExecuteQuery(queryable, cancellationToken).ConfigureAwait(false);
+                    result = await this.ExecuteQuery(queryable, cancellationToken).ConfigureAwait(false);
 
                     var boundSeg = (OperationSegment)lastSegment;
                     var operation = boundSeg.Operations.FirstOrDefault();
                     Func<string, object> getParaValueFunc = p => boundSeg.Parameters.FirstOrDefault(c => c.Name == p).Value;
-                    result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, true, result, cancellationToken).ConfigureAwait(false);
+                    result = await this.ExecuteOperationAsync(getParaValueFunc, operation.Name, true, result, cancellationToken).ConfigureAwait(false);
 
-                    var applied = await ApplyQueryOptionsAsync(result, path, true).ConfigureAwait(false);
+                    var applied = await this.ApplyQueryOptionsAsync(result, path, true).ConfigureAwait(false);
                     result = applied.Queryable;
                     etag = applied.Etag;
-
                 }
                 else
                 {
-                    var applied = await ApplyQueryOptionsAsync(queryable, path, false).ConfigureAwait(false);
-                    result = await ExecuteQuery(applied.Queryable, cancellationToken).ConfigureAwait(false);
+                    var applied = await this.ApplyQueryOptionsAsync(queryable, path, false).ConfigureAwait(false);
+                    result = await this.ExecuteQuery(applied.Queryable, cancellationToken).ConfigureAwait(false);
                     etag = applied.Etag;
                 }
             }
 
-            return CreateQueryResponse(result, path.EdmType, etag);
+            return this.CreateQueryResponse(result, path.EdmType, etag);
         }
 
         /// <summary>
@@ -206,8 +165,8 @@ namespace Microsoft.Restier.AspNet
                 throw new ArgumentNullException(nameof(edmEntityObject));
             }
 
-            CheckModelState();
-            var path = GetPath();
+            this.CheckModelState();
+            var path = this.GetPath();
             if (!(path.NavigationSource is IEdmEntitySet entitySet))
             {
                 throw new NotImplementedException(Resources.InsertOnlySupportedOnEntitySet);
@@ -222,7 +181,7 @@ namespace Microsoft.Restier.AspNet
                 actualEntityType = edmEntityObject.ActualEdmType;
             }
 
-            var model = await api.GetModelAsync(cancellationToken).ConfigureAwait(false);
+            var model = await this.api.GetModelAsync(cancellationToken).ConfigureAwait(false);
 
             var postItem = new DataModificationItem(
                 entitySet.Name,
@@ -231,15 +190,15 @@ namespace Microsoft.Restier.AspNet
                 RestierEntitySetOperation.Insert,
                 null,
                 null,
-                edmEntityObject.CreatePropertyDictionary(actualEntityType, api, true));
+                edmEntityObject.CreatePropertyDictionary(actualEntityType, this.api, true));
 
-            var changeSetProperty = Request.GetChangeSet();
+            var changeSetProperty = this.Request.GetChangeSet();
             if (changeSetProperty == null)
             {
                 var changeSet = new ChangeSet();
                 changeSet.Entries.Add(postItem);
 
-                var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                var result = await this.api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -248,7 +207,7 @@ namespace Microsoft.Restier.AspNet
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            return CreateCreatedODataResult(postItem.Resource);
+            return this.CreateCreatedODataResult(postItem.Resource);
         }
 
         /// <summary>
@@ -258,7 +217,8 @@ namespace Microsoft.Restier.AspNet
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The task object that contains the updated result.</returns>
 #pragma warning disable CA1062 // Validate public arguments
-        public async Task<IHttpActionResult> Put(EdmEntityObject edmEntityObject, CancellationToken cancellationToken) => await Update(edmEntityObject, true, cancellationToken).ConfigureAwait(false);
+        public async Task<IHttpActionResult> Put(EdmEntityObject edmEntityObject, CancellationToken cancellationToken)
+            => await this.Update(edmEntityObject, true, cancellationToken).ConfigureAwait(false);
 
         /// <summary>
         /// Handles a PATCH request to partially update an entity.
@@ -266,7 +226,8 @@ namespace Microsoft.Restier.AspNet
         /// <param name="edmEntityObject">The entity object to update.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The task object that contains the updated result.</returns>
-        public async Task<IHttpActionResult> Patch(EdmEntityObject edmEntityObject, CancellationToken cancellationToken) => await Update(edmEntityObject, false, cancellationToken).ConfigureAwait(false);
+        public async Task<IHttpActionResult> Patch(EdmEntityObject edmEntityObject, CancellationToken cancellationToken)
+            => await this.Update(edmEntityObject, false, cancellationToken).ConfigureAwait(false);
 #pragma warning restore CA1062 // Validate public arguments
 
         /// <summary>
@@ -276,19 +237,19 @@ namespace Microsoft.Restier.AspNet
         /// <returns>The task object that contains the deletion result.</returns>
         public async Task<IHttpActionResult> Delete(CancellationToken cancellationToken)
         {
-            var path = GetPath();
+            var path = this.GetPath();
             if (!(path.NavigationSource is IEdmEntitySet entitySet))
             {
                 throw new NotImplementedException(Resources.DeleteOnlySupportedOnEntitySet);
             }
 
-            var propertiesInEtag = await GetOriginalValues(entitySet).ConfigureAwait(false);
+            var propertiesInEtag = await this.GetOriginalValues(entitySet).ConfigureAwait(false);
             if (propertiesInEtag == null)
             {
                 throw new StatusCodeException((HttpStatusCode)428, Resources.PreconditionRequired);
             }
 
-            var model = await api.GetModelAsync(cancellationToken).ConfigureAwait(false);
+            var model = await this.api.GetModelAsync(cancellationToken).ConfigureAwait(false);
 
             var deleteItem = new DataModificationItem(
                 entitySet.Name,
@@ -299,13 +260,13 @@ namespace Microsoft.Restier.AspNet
                 propertiesInEtag,
                 null);
 
-            var changeSetProperty = Request.GetChangeSet();
+            var changeSetProperty = this.Request.GetChangeSet();
             if (changeSetProperty == null)
             {
                 var changeSet = new ChangeSet();
                 changeSet.Entries.Add(deleteItem);
 
-                var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                var result = await this.api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -314,7 +275,7 @@ namespace Microsoft.Restier.AspNet
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            return StatusCode(HttpStatusCode.NoContent);
+            return this.StatusCode(HttpStatusCode.NoContent);
         }
 
         /// <summary>
@@ -325,8 +286,8 @@ namespace Microsoft.Restier.AspNet
         /// <returns>The task object that contains the action result.</returns>
         public async Task<HttpResponseMessage> PostAction(ODataActionParameters parameters, CancellationToken cancellationToken)
         {
-            CheckModelState();
-            var path = GetPath();
+            this.CheckModelState();
+            var path = this.GetPath();
 
             var lastSegment = path.Segments.LastOrDefault();
             if (lastSegment == null)
@@ -335,7 +296,7 @@ namespace Microsoft.Restier.AspNet
             }
 
             IQueryable result = null;
-            object getParaValueFunc(string p)
+            object GetParaValueFunc(string p)
             {
                 if (parameters == null)
                 {
@@ -349,33 +310,79 @@ namespace Microsoft.Restier.AspNet
             {
                 var unboundSegment = segment;
                 var operation = unboundSegment.OperationImports.FirstOrDefault();
-                result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, false, null, cancellationToken).ConfigureAwait(false);
+                result = await this.ExecuteOperationAsync(GetParaValueFunc, operation.Name, false, null, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 // Get queryable path builder to builder
-                var queryable = GetQuery(path);
+                var queryable = this.GetQuery(path);
                 if (queryable == null)
                 {
-                    throw new HttpResponseException(Request.CreateErrorResponse(HttpStatusCode.NotFound, Resources.ResourceNotFound));
+                    throw new HttpResponseException(this.Request.CreateErrorResponse(HttpStatusCode.NotFound, Resources.ResourceNotFound));
                 }
 
                 if (lastSegment is OperationSegment)
                 {
                     var operationSegment = lastSegment as OperationSegment;
                     var operation = operationSegment.Operations.FirstOrDefault();
-                    var queryResult = await ExecuteQuery(queryable, cancellationToken).ConfigureAwait(false);
-                    result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, false, queryResult, cancellationToken).ConfigureAwait(false);
+                    var queryResult = await this.ExecuteQuery(queryable, cancellationToken).ConfigureAwait(false);
+                    result = await this.ExecuteOperationAsync(GetParaValueFunc, operation.Name, false, queryResult, cancellationToken).ConfigureAwait(false);
                 }
             }
 
             if (path.EdmType == null)
             {
                 // This is a void action, return 204 directly
-                return Request.CreateResponse(HttpStatusCode.NoContent);
+                return this.Request.CreateResponse(HttpStatusCode.NoContent);
             }
 
-            return CreateQueryResponse(result, path.EdmType, null);
+            return this.CreateQueryResponse(result, path.EdmType, null);
+        }
+
+        /// <summary>
+        /// Initializes the <see cref="ApiController"/> instance with the specified controllerContext.
+        /// </summary>
+        /// <remarks>
+        /// Resolves the api, query settings, validation settings, operation executor from
+        /// the Request container associated with the HttpRequestMessage.
+        /// </remarks>
+        /// <param name="controllerContext">
+        /// The <see cref="HttpControllerContext"/> object that is used for the initialization.
+        /// </param>
+        protected override void Initialize(HttpControllerContext controllerContext)
+        {
+            base.Initialize(controllerContext);
+
+            if (this.api != null && this.querySettings != null && this.validationSettings != null && this.operationExecutor != null)
+            {
+                return;
+            }
+
+            // TODO: JWS Either properly inject RestierController into the DI Container.
+            // or provide sensible defaults for these dependencies to reduce DI dependency.
+#pragma warning disable CA1062 // Validate arguments of public methods
+            var provider = controllerContext.Request.GetRequestContainer();
+#pragma warning restore CA1062 // Validate arguments of public methods
+
+            if (this.api == null)
+            {
+                this.api = provider.GetService(typeof(ApiBase)) as ApiBase;
+            }
+
+            if (this.querySettings == null)
+            {
+                this.querySettings = provider.GetService(typeof(ODataQuerySettings)) as ODataQuerySettings;
+            }
+
+            if (this.validationSettings == null)
+            {
+                this.validationSettings = provider.GetService(typeof(ODataValidationSettings)) as ODataValidationSettings;
+            }
+
+            if (this.operationExecutor == null)
+            {
+                this.operationExecutor = provider.GetService(typeof(IOperationExecutor)) as IOperationExecutor;
+            }
         }
 
         private static IEdmTypeReference GetTypeReference(IEdmType edmType)
@@ -398,7 +405,7 @@ namespace Microsoft.Restier.AspNet
                 case EdmTypeKind.Primitive:
                     return new EdmPrimitiveTypeReference(edmType as IEdmPrimitiveType, isNullable);
                 default:
-                    throw Error.NotSupported(Resources.EdmTypeNotSupported, edmType.ToTraceString());
+                    throw new NotSupportedException(string.Format(CultureInfo.CurrentCulture, Resources.EdmTypeNotSupported, edmType.ToTraceString()));
             }
         }
 
@@ -407,15 +414,15 @@ namespace Microsoft.Restier.AspNet
             bool isFullReplaceUpdate,
             CancellationToken cancellationToken)
         {
-            CheckModelState();
-            var path = GetPath();
+            this.CheckModelState();
+            var path = this.GetPath();
             var entitySet = path.NavigationSource as IEdmEntitySet;
             if (entitySet == null)
             {
                 throw new NotImplementedException(Resources.UpdateOnlySupportedOnEntitySet);
             }
 
-            var propertiesInEtag = await GetOriginalValues(entitySet).ConfigureAwait(false);
+            var propertiesInEtag = await this.GetOriginalValues(entitySet).ConfigureAwait(false);
             if (propertiesInEtag == null)
             {
                 throw new StatusCodeException((HttpStatusCode)428, Resources.PreconditionRequired);
@@ -435,7 +442,7 @@ namespace Microsoft.Restier.AspNet
                 actualEntityType = edmEntityObject.ActualEdmType;
             }
 
-            var model = await api.GetModelAsync(cancellationToken).ConfigureAwait(false);
+            var model = await this.api.GetModelAsync(cancellationToken).ConfigureAwait(false);
 
             var updateItem = new DataModificationItem(
                 entitySet.Name,
@@ -444,19 +451,19 @@ namespace Microsoft.Restier.AspNet
                 RestierEntitySetOperation.Update,
                 RestierQueryBuilder.GetPathKeyValues(path),
                 propertiesInEtag,
-                edmEntityObject.CreatePropertyDictionary(actualEntityType, api, false))
+                edmEntityObject.CreatePropertyDictionary(actualEntityType, this.api, false))
             {
-                IsFullReplaceUpdateRequest = isFullReplaceUpdate
+                IsFullReplaceUpdateRequest = isFullReplaceUpdate,
             };
 
-            var changeSetProperty = Request.GetChangeSet();
+            var changeSetProperty = this.Request.GetChangeSet();
             if (changeSetProperty == null)
             {
                 var changeSet = new ChangeSet();
                 changeSet.Entries.Add(updateItem);
 
-                //RWM: Seems like we should be using the result here. For something else.
-                var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                // RWM: Seems like we should be using the result here. For something else.
+                var result = await this.api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -465,10 +472,9 @@ namespace Microsoft.Restier.AspNet
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            return CreateUpdatedODataResult(updateItem.Resource);
+            return this.CreateUpdatedODataResult(updateItem.Resource);
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "<Pending>")]
         private HttpResponseMessage CreateQueryResponse(IQueryable query, IEdmType edmType, ETag etag)
         {
             var typeReference = GetTypeReference(edmType);
@@ -477,17 +483,17 @@ namespace Microsoft.Restier.AspNet
 
             if (typeReference.IsPrimitive())
             {
-                if (shouldReturnCount || shouldWriteRawValue)
+                if (this.shouldReturnCount || this.shouldWriteRawValue)
                 {
                     var rawResult = new RawResult(query, typeReference);
                     singleResult = rawResult;
-                    response = Request.CreateResponse(HttpStatusCode.OK, rawResult);
+                    response = this.Request.CreateResponse(HttpStatusCode.OK, rawResult);
                 }
                 else
                 {
                     var primitiveResult = new PrimitiveResult(query, typeReference);
                     singleResult = primitiveResult;
-                    response = Request.CreateResponse(HttpStatusCode.OK, primitiveResult);
+                    response = this.Request.CreateResponse(HttpStatusCode.OK, primitiveResult);
                 }
             }
 
@@ -495,22 +501,22 @@ namespace Microsoft.Restier.AspNet
             {
                 var complexResult = new ComplexResult(query, typeReference);
                 singleResult = complexResult;
-                response = Request.CreateResponse(HttpStatusCode.OK, complexResult);
+                response = this.Request.CreateResponse(HttpStatusCode.OK, complexResult);
             }
 
             if (typeReference.IsEnum())
             {
-                if (shouldWriteRawValue)
+                if (this.shouldWriteRawValue)
                 {
                     var rawResult = new RawResult(query, typeReference);
                     singleResult = rawResult;
-                    response = Request.CreateResponse(HttpStatusCode.OK, rawResult);
+                    response = this.Request.CreateResponse(HttpStatusCode.OK, rawResult);
                 }
                 else
                 {
                     var enumResult = new EnumResult(query, typeReference);
                     singleResult = enumResult;
-                    response = Request.CreateResponse(HttpStatusCode.OK, enumResult);
+                    response = this.Request.CreateResponse(HttpStatusCode.OK, enumResult);
                 }
             }
 
@@ -520,7 +526,7 @@ namespace Microsoft.Restier.AspNet
                 {
                     // Per specification, If the property is single-valued and has the null value,
                     // the service responds with 204 No Content.
-                    return Request.CreateResponse(HttpStatusCode.NoContent);
+                    return this.Request.CreateResponse(HttpStatusCode.NoContent);
                 }
 
                 return response;
@@ -531,16 +537,16 @@ namespace Microsoft.Restier.AspNet
                 var elementType = typeReference.AsCollection().ElementType();
                 if (elementType.IsPrimitive() || elementType.IsEnum())
                 {
-                    return Request.CreateResponse(HttpStatusCode.OK, new NonResourceCollectionResult(query, typeReference));
+                    return this.Request.CreateResponse(HttpStatusCode.OK, new NonResourceCollectionResult(query, typeReference));
                 }
 
-                return Request.CreateResponse(HttpStatusCode.OK, new ResourceSetResult(query, typeReference));
+                return this.Request.CreateResponse(HttpStatusCode.OK, new ResourceSetResult(query, typeReference));
             }
 
             var entityResult = query.SingleOrDefault();
             if (entityResult == null)
             {
-                return Request.CreateResponse(HttpStatusCode.NoContent);
+                return this.Request.CreateResponse(HttpStatusCode.NoContent);
             }
 
             // Check the ETag here
@@ -555,11 +561,11 @@ namespace Microsoft.Restier.AspNet
                 entityResult = query.SingleOrDefault();
                 if (entityResult == null && !etag.IsIfNoneMatch)
                 {
-                    return Request.CreateResponse(HttpStatusCode.PreconditionFailed);
+                    return this.Request.CreateResponse(HttpStatusCode.PreconditionFailed);
                 }
                 else if (entityResult == null)
                 {
-                    return Request.CreateResponse(HttpStatusCode.NotModified);
+                    return this.Request.CreateResponse(HttpStatusCode.NotModified);
                 }
             }
 
@@ -574,41 +580,34 @@ namespace Microsoft.Restier.AspNet
             var genericMethod = type.GetMethods()
                 .Where(m => m.Name == "CreateResponse" && m.GetParameters().Length == 3);
             var method = genericMethod.FirstOrDefault().MakeGenericMethod(query.ElementType);
-            response = method.Invoke(null, new object[] { Request, HttpStatusCode.OK, entityResult }) as HttpResponseMessage;
+            response = method.Invoke(null, new object[] { this.Request, HttpStatusCode.OK, entityResult }) as HttpResponseMessage;
             return response;
         }
 
         private IQueryable GetQuery(ODataPath path)
         {
-            var builder = new RestierQueryBuilder(api, path);
+            var builder = new RestierQueryBuilder(this.api, path);
             var queryable = builder.BuildQuery();
-            shouldReturnCount = builder.IsCountPathSegmentPresent;
-            shouldWriteRawValue = builder.IsValuePathSegmentPresent;
+            this.shouldReturnCount = builder.IsCountPathSegmentPresent;
+            this.shouldWriteRawValue = builder.IsValuePathSegmentPresent;
 
             return queryable;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="queryable"></param>
-        /// <param name="path"></param>
-        /// <param name="applyCount"></param>
-        /// <returns></returns>
         private async Task<(IQueryable Queryable, ETag Etag)> ApplyQueryOptionsAsync(IQueryable queryable, ODataPath path, bool applyCount)
         {
             ETag etag = null;
 
-            if (shouldWriteRawValue)
+            if (this.shouldWriteRawValue)
             {
                 // Query options don't apply to $value.
                 return (queryable, null);
             }
 
-            var properties = Request.ODataProperties();
-            var model = await api.GetModelAsync().ConfigureAwait(false);
+            var properties = this.Request.ODataProperties();
+            var model = await this.api.GetModelAsync().ConfigureAwait(false);
             var queryContext = new ODataQueryContext(model, queryable.ElementType, path);
-            var queryOptions = new ODataQueryOptions(queryContext, Request);
+            var queryOptions = new ODataQueryOptions(queryContext, this.Request);
 
             // Get etag for query request
             if (queryOptions.IfMatch != null)
@@ -621,33 +620,32 @@ namespace Microsoft.Restier.AspNet
             }
 
             // TODO GitHubIssue#41 : Ensure stable ordering for query
-            
-            if (shouldReturnCount)
+            if (this.shouldReturnCount)
             {
                 // Query options other than $filter and $search don't apply to $count.
-                queryable = queryOptions.ApplyTo(queryable, querySettings, AllowedQueryOptions.All ^ AllowedQueryOptions.Filter);
+                queryable = queryOptions.ApplyTo(queryable, this.querySettings, AllowedQueryOptions.All ^ AllowedQueryOptions.Filter);
                 return (queryable, etag);
             }
 
             if (queryOptions.Count != null && !applyCount)
             {
-                var queryExecutorOptions = api.GetApiService<RestierQueryExecutorOptions>();
+                var queryExecutorOptions = this.api.GetApiService<RestierQueryExecutorOptions>();
                 queryExecutorOptions.IncludeTotalCount = queryOptions.Count.Value;
                 queryExecutorOptions.SetTotalCount = value => properties.TotalCount = value;
             }
 
             // Validate query before apply, and query setting like MaxExpansionDepth can be customized here
-            queryOptions.Validate(validationSettings);
+            queryOptions.Validate(this.validationSettings);
 
             // Entity count can NOT be evaluated at this point of time because the source
             // expression is just a placeholder to be replaced by the expression sourcer.
             if (!applyCount)
             {
-                queryable = queryOptions.ApplyTo(queryable, querySettings, AllowedQueryOptions.Count);
+                queryable = queryOptions.ApplyTo(queryable, this.querySettings, AllowedQueryOptions.Count);
             }
             else
             {
-                queryable = queryOptions.ApplyTo(queryable, querySettings);
+                queryable = queryOptions.ApplyTo(queryable, this.querySettings);
             }
 
             return (queryable, etag);
@@ -657,17 +655,17 @@ namespace Microsoft.Restier.AspNet
         {
             var queryRequest = new QueryRequest(queryable)
             {
-                ShouldReturnCount = shouldReturnCount
+                ShouldReturnCount = this.shouldReturnCount,
             };
 
-            var queryResult = await api.QueryAsync(queryRequest, cancellationToken).ConfigureAwait(false);
+            var queryResult = await this.api.QueryAsync(queryRequest, cancellationToken).ConfigureAwait(false);
             var result = queryResult.Results.AsQueryable();
             return result;
         }
 
         private ODataPath GetPath()
         {
-            var properties = Request.ODataProperties();
+            var properties = this.Request.ODataProperties();
             if (properties == null)
             {
                 throw new InvalidOperationException(Resources.InvalidODataInfoInRequest);
@@ -689,16 +687,16 @@ namespace Microsoft.Restier.AspNet
             IQueryable bindingParameterValue,
             CancellationToken cancellationToken)
         {
-
-            var context = new OperationContext(api,
+            var context = new RestierOperationContext(
+                this.api,
                 getParaValueFunc,
                 operationName,
                 isFunction,
                 bindingParameterValue)
             {
-                Request = Request
+                Request = this.Request,
             };
-            var result = operationExecutor.ExecuteOperationAsync(context, cancellationToken);
+            var result = this.operationExecutor.ExecuteOperationAsync(context, cancellationToken);
             return result;
         }
 
@@ -706,20 +704,20 @@ namespace Microsoft.Restier.AspNet
         {
             var originalValues = new Dictionary<string, object>();
 
-            var etagHeaderValue = Request.Headers.IfMatch.SingleOrDefault();
+            var etagHeaderValue = this.Request.Headers.IfMatch.SingleOrDefault();
             if (etagHeaderValue != null)
             {
-                var etag = Request.GetETag(etagHeaderValue);
+                var etag = this.Request.GetETag(etagHeaderValue);
                 etag.ApplyTo(originalValues);
 
                 originalValues.Add(IfMatchKey, etagHeaderValue.Tag);
                 return originalValues;
             }
 
-            etagHeaderValue = Request.Headers.IfNoneMatch.SingleOrDefault();
+            etagHeaderValue = this.Request.Headers.IfNoneMatch.SingleOrDefault();
             if (etagHeaderValue != null)
             {
-                var etag = Request.GetETag(etagHeaderValue);
+                var etag = this.Request.GetETag(etagHeaderValue);
                 etag.ApplyTo(originalValues);
 
                 originalValues.Add(IfNoneMatchKey, etagHeaderValue.Tag);
@@ -727,7 +725,7 @@ namespace Microsoft.Restier.AspNet
             }
 
             // return 428(Precondition Required) if entity requires concurrency check.
-            var model = await api.GetModelAsync().ConfigureAwait(false);
+            var model = await this.api.GetModelAsync().ConfigureAwait(false);
             var needEtag = model.IsConcurrencyCheckEnabled(entitySet);
             if (needEtag)
             {
@@ -737,9 +735,9 @@ namespace Microsoft.Restier.AspNet
             return originalValues;
         }
 
-        private IHttpActionResult CreateCreatedODataResult(object entity) => CreateResult(typeof(CreatedODataResult<>), entity);
+        private IHttpActionResult CreateCreatedODataResult(object entity) => this.CreateResult(typeof(CreatedODataResult<>), entity);
 
-        private IHttpActionResult CreateUpdatedODataResult(object entity) => CreateResult(typeof(UpdatedODataResult<>), entity);
+        private IHttpActionResult CreateUpdatedODataResult(object entity) => this.CreateResult(typeof(UpdatedODataResult<>), entity);
 
         private IHttpActionResult CreateResult(Type resultType, object result)
         {
@@ -750,10 +748,10 @@ namespace Microsoft.Restier.AspNet
 
         private void CheckModelState()
         {
-            if (!ModelState.IsValid)
+            if (!this.ModelState.IsValid)
             {
                 var errorList = (
-                    from item in ModelState
+                    from item in this.ModelState
                     where item.Value.Errors.Any()
                     select
                         string.Format(

@@ -1,11 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="PropertyModelReference.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using Microsoft.OData.Edm;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Query
 {
+    using System;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// Represents a reference to property data in terms of a model.
     /// </summary>
@@ -17,23 +19,23 @@ namespace Microsoft.Restier.Core.Query
         /// <summary>
         /// Initializes a new instance of the <see cref="PropertyModelReference" /> class.
         /// </summary>
+        /// <param name="source">
+        /// A source query model reference.
+        /// </param>
         /// <param name="propertyName">
         /// The name of a property.
         /// </param>
         /// <param name="property">
-        /// EDM property instance
+        /// EDM property instance.
         /// </param>
-        /// <param name="source">
-        /// A source query model reference.
-        /// </param>
-        internal PropertyModelReference(string propertyName, IEdmProperty property, QueryModelReference source)
+        internal PropertyModelReference(QueryModelReference source, string propertyName, IEdmProperty property)
         {
             Ensure.NotNull(propertyName, nameof(propertyName));
             this.propertyName = propertyName;
 
             Ensure.NotNull(property, nameof(property));
             this.property = property;
-            Source = source;
+            this.Source = source;
         }
 
         /// <summary>
@@ -51,7 +53,7 @@ namespace Microsoft.Restier.Core.Query
             this.propertyName = propertyName;
 
             Ensure.NotNull(source, nameof(source));
-            Source = source;
+            this.Source = source;
         }
 
         /// <summary>
@@ -66,9 +68,9 @@ namespace Microsoft.Restier.Core.Query
         {
             get
             {
-                if (Source != null)
+                if (this.Source != null)
                 {
-                    return Source.EntitySet;
+                    return this.Source.EntitySet;
                 }
 
                 return null;
@@ -82,9 +84,9 @@ namespace Microsoft.Restier.Core.Query
         {
             get
             {
-                if (Property != null)
+                if (this.Property != null)
                 {
-                    return Property.Type.Definition;
+                    return this.Property.Type.Definition;
                 }
 
                 return null;
@@ -98,18 +100,18 @@ namespace Microsoft.Restier.Core.Query
         {
             get
             {
-                if (property != null)
+                if (this.property != null)
                 {
-                    return property;
+                    return this.property;
                 }
 
-                if (Source != null)
+                if (this.Source != null)
                 {
-                    var structuredType = Source.Type as IEdmStructuredType;
+                    var structuredType = this.Source.Type as IEdmStructuredType;
                     if (structuredType != null)
                     {
-                        property = structuredType.FindProperty(propertyName);
-                        return property;
+                        this.property = structuredType.FindProperty(this.propertyName);
+                        return this.property;
                     }
                 }
 

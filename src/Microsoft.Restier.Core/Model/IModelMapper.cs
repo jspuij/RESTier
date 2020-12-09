@@ -1,10 +1,12 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="IModelMapper.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Model
 {
+    using System;
+
     /// <summary>
     /// Represents a service that maps between
     /// the model space and the object space.

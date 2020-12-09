@@ -1,12 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="IOperationAuthorizer.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Restier.Core.Submit;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Operation
 {
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.Restier.Core.Submit;
+
     /// <summary>
     /// Represents a operation authorizer.
     /// </summary>

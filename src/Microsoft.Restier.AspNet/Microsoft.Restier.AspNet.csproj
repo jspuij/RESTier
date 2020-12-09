@@ -47,4 +47,6 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <Import Project="..\Microsoft.Restier.AspNet.Shared\Microsoft.Restier.AspNet.Shared.projitems" Label="Shared" />
+
 </Project>

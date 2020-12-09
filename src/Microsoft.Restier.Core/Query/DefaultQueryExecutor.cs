@@ -1,16 +1,18 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="DefaultQueryExecutor.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Threading;
-using System.Threading.Tasks;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Query
 {
+    using System;
+    using System.Linq;
+    using System.Linq.Expressions;
+    using System.Threading;
+    using System.Threading.Tasks;
+
     /// <summary>
-    /// Default implementation for <see cref="IQueryExecutor"/>
+    /// Default implementation for <see cref="IQueryExecutor"/>.
     /// </summary>
     internal class DefaultQueryExecutor : IQueryExecutor
     {

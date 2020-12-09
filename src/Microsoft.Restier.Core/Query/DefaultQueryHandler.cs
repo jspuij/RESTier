@@ -1,19 +1,21 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="DefaultQueryHandler.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Net;
-using System.Security;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.OData.Edm;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Query
 {
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Linq.Expressions;
+    using System.Net;
+    using System.Security;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// Represents the default query handler.
     /// </summary>
@@ -29,13 +31,14 @@ namespace Microsoft.Restier.Core.Query
         private readonly IQueryExpressionSourcer sourcer;
 
         /// <summary>
-        /// Initializes a new instance of the DefaultQueryHandler class.
+        /// Initializes a new instance of the <see cref="DefaultQueryHandler"/> class.
         /// </summary>
         /// <param name="sourcer">The query expression sourcer to use.</param>
         /// <param name="authorizer">The query expression authorizer to use.</param>
         /// <param name="expander">The query expression expander to use.</param>
         /// <param name="processor">The query expression processor to use.</param>
-        public DefaultQueryHandler(IQueryExpressionSourcer sourcer,
+        public DefaultQueryHandler(
+            IQueryExpressionSourcer sourcer,
             IQueryExpressionAuthorizer authorizer = null,
             IQueryExpressionExpander expander = null,
             IQueryExpressionProcessor processor = null)
@@ -69,7 +72,12 @@ namespace Microsoft.Restier.Core.Query
 
             // process query expression
             var expression = context.Request.Expression;
-            var visitor = new QueryExpressionVisitor(context, sourcer, authorizer, expander, processor);
+            var visitor = new QueryExpressionVisitor(
+                context,
+                this.sourcer,
+                this.authorizer,
+                this.expander,
+                this.processor);
             expression = visitor.Visit(expression);
 
             // get element type
@@ -103,7 +111,7 @@ namespace Microsoft.Restier.Core.Query
                     .MakeGenericMethod(elementType);
                 var parameters = new object[]
                 {
-                    context, query, cancellationToken
+                    context, query, cancellationToken,
                 };
                 var task = method.Invoke(executor, parameters) as Task<QueryResult>;
                 result = await task.ConfigureAwait(false);
@@ -118,7 +126,7 @@ namespace Microsoft.Restier.Core.Query
                     .MakeGenericMethod(expression.Type);
                 var parameters = new object[]
                 {
-                    context, visitor.BaseQuery.Provider, expression, cancellationToken
+                    context, visitor.BaseQuery.Provider, expression, cancellationToken,
                 };
                 var task = method.Invoke(executor, parameters) as Task<QueryResult>;
                 result = await task.ConfigureAwait(false);
@@ -209,24 +217,11 @@ namespace Microsoft.Restier.Core.Query
                 .MakeGenericMethod(elementType);
             var parameters = new object[]
             {
-                context, query, cancellationToken
+                context, query, cancellationToken,
             };
 
             var task = method.Invoke(executor, parameters) as Task<QueryResult>;
             await task.ConfigureAwait(false);
-
-            // RWM: This code currently returns 404s if there are no results, instead of returning empty queries.
-            //      This means that legit EntitySets that just have no data in the table also return 404. No bueno.
-
-            //var task = method.Invoke(executor, parameters) as Task<QueryResult>;
-            //var result = await task.ConfigureAwait(false);
-
-            //var any = result.Results.Cast<object>().Any();
-            //if (!any)
-            //{
-            //    // Which means previous expression does not have result, and should throw ResourceNotFoundException.
-            //    throw new ResourceNotFoundException(Resources.ResourceNotFound);
-            //}
         }
 
         private static MethodCallExpression CheckWhereCondition(MethodCallExpression methodCallExpression)
@@ -266,7 +261,8 @@ namespace Microsoft.Restier.Core.Query
             private readonly IQueryExpressionProcessor processor;
             private readonly IQueryExpressionSourcer sourcer;
 
-            public QueryExpressionVisitor(QueryContext context,
+            public QueryExpressionVisitor(
+                QueryContext context,
                 IQueryExpressionSourcer sourcer,
                 IQueryExpressionAuthorizer authorizer = null,
                 IQueryExpressionExpander expander = null,
@@ -279,7 +275,7 @@ namespace Microsoft.Restier.Core.Query
                 this.expander = expander;
                 this.processor = processor;
                 this.sourcer = sourcer;
-                processedExpressions = new Dictionary<Expression, Expression>();
+                this.processedExpressions = new Dictionary<Expression, Expression>();
             }
 
             public IQueryable BaseQuery { get; private set; }
@@ -295,50 +291,50 @@ namespace Microsoft.Restier.Core.Query
 
                 // Initialize and push the visited node
                 var visited = node;
-                context.PushVisitedNode(visited);
+                this.context.PushVisitedNode(visited);
 
                 // If visited node has already been processed,
                 // skip normalization, inspection and filtering
                 // and simply replace with the processed node
-                if (processedExpressions.ContainsKey(visited))
+                if (this.processedExpressions.ContainsKey(visited))
                 {
-                    node = processedExpressions[visited];
+                    node = this.processedExpressions[visited];
                 }
                 else
                 {
                     // Only visit the visited node's children if
                     // the visited node represents API data
-                    if (!(context.ModelReference is DataSourceStubModelReference))
+                    if (!(this.context.ModelReference is DataSourceStubModelReference))
                     {
                         // Visit visited node's children
                         node = base.Visit(visited);
                     }
 
                     // Inspect the visited node
-                    Inspect();
+                    this.Inspect();
 
                     // Try to expand the visited node
                     // if it represents API data
-                    if (context.ModelReference is DataSourceStubModelReference)
+                    if (this.context.ModelReference is DataSourceStubModelReference)
                     {
-                        node = Expand(visited);
+                        node = this.Expand(visited);
                     }
 
                     // Process the visited node
-                    node = Process(visited, node);
+                    node = this.Process(visited, node);
                 }
 
                 if (visited == node)
                 {
-                    if (context.ModelReference is DataSourceStubModelReference)
+                    if (this.context.ModelReference is DataSourceStubModelReference)
                     {
                         // If no processing occurred on the visited node
                         // and it represents API data, then it must be
                         // in its most primitive form, so source the node
-                        node = Source(node);
+                        node = this.Source(node);
                     }
 
-                    if (BaseQuery == null)
+                    if (this.BaseQuery == null)
                     {
                         // The very first time control reaches here, the
                         // visited node represents the original starting
@@ -349,22 +345,22 @@ namespace Microsoft.Restier.Core.Query
                             throw new NotSupportedException(Resources.OriginalExpressionShouldBeConstant);
                         }
 
-                        BaseQuery = constant.Value as IQueryable;
-                        if (BaseQuery == null)
+                        this.BaseQuery = constant.Value as IQueryable;
+                        if (this.BaseQuery == null)
                         {
                             throw new NotSupportedException(Resources.OriginalExpressionShouldBeQueryable);
                         }
 
-                        node = BaseQuery.Expression;
+                        node = this.BaseQuery.Expression;
                     }
                 }
 
                 // TODO GitHubIssue#28 : Support transformation between API types and data source proxy types
-                context.PopVisitedNode();
+                this.context.PopVisitedNode();
 
-                if (context.VisitedNode != null)
+                if (this.context.VisitedNode != null)
                 {
-                    EntitySet = context.ModelReference?.EntitySet;
+                    this.EntitySet = this.context.ModelReference?.EntitySet;
                 }
 
                 return node;
@@ -372,7 +368,7 @@ namespace Microsoft.Restier.Core.Query
 
             private void Inspect()
             {
-                if (authorizer != null && !authorizer.Authorize(context))
+                if (this.authorizer != null && !this.authorizer.Authorize(this.context))
                 {
                     throw new SecurityException("The current user does not have permission to query from the requested resource.");
                 }
@@ -380,14 +376,14 @@ namespace Microsoft.Restier.Core.Query
 
             private Expression Expand(Expression visited)
             {
-                if (expander == null)
+                if (this.expander == null)
                 {
                     return visited;
                 }
 
-                var expanded = expander.Expand(context);
-                var callback = context.AfterNestedVisitCallback;
-                context.AfterNestedVisitCallback = null;
+                var expanded = this.expander.Expand(this.context);
+                var callback = this.context.AfterNestedVisitCallback;
+                this.context.AfterNestedVisitCallback = null;
                 if (expanded != null && expanded != visited)
                 {
                     if (!visited.Type.IsAssignableFrom(expanded.Type))
@@ -395,9 +391,9 @@ namespace Microsoft.Restier.Core.Query
                         throw new InvalidOperationException(Resources.ExpanderCannotChangeExpressionType);
                     }
 
-                    context.PushVisitedNode(null);
-                    expanded = Visit(expanded);
-                    context.PopVisitedNode();
+                    this.context.PushVisitedNode(null);
+                    expanded = this.Visit(expanded);
+                    this.context.PopVisitedNode();
                     if (callback != null)
                     {
                         callback();
@@ -411,11 +407,11 @@ namespace Microsoft.Restier.Core.Query
 
             private Expression Process(Expression visited, Expression processed)
             {
-                if (processor != null)
+                if (this.processor != null)
                 {
-                    var filtered = processor.Process(context);
-                    var callback = context.AfterNestedVisitCallback;
-                    context.AfterNestedVisitCallback = null;
+                    var filtered = this.processor.Process(this.context);
+                    var callback = this.context.AfterNestedVisitCallback;
+                    this.context.AfterNestedVisitCallback = null;
                     if (filtered != null && filtered != visited)
                     {
                         if (!visited.Type.IsAssignableFrom(filtered.Type))
@@ -440,16 +436,16 @@ namespace Microsoft.Restier.Core.Query
                             }
                         }
 
-                        processedExpressions.Add(visited, processed);
-                        context.PushVisitedNode(null);
+                        this.processedExpressions.Add(visited, processed);
+                        this.context.PushVisitedNode(null);
                         try
                         {
-                            processed = Visit(filtered);
+                            processed = this.Visit(filtered);
                         }
                         finally
                         {
-                            context.PopVisitedNode();
-                            processedExpressions.Remove(visited);
+                            this.context.PopVisitedNode();
+                            this.processedExpressions.Remove(visited);
                         }
 
                         if (callback != null)
@@ -464,7 +460,7 @@ namespace Microsoft.Restier.Core.Query
 
             private Expression Source(Expression node)
             {
-                node = sourcer.ReplaceQueryableSource(context, BaseQuery != null);
+                node = this.sourcer.ReplaceQueryableSource(this.context, this.BaseQuery != null);
                 if (node == null)
                 {
                     // Missing source expression

@@ -1,25 +1,27 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierExceptionFilterAttribute.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Formatting;
-using System.Security;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Web.Http;
-using System.Web.Http.Filters;
-using System.Web.Http.Results;
-using Microsoft.OData;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Submit;
+// </copyright>
 
 namespace Microsoft.Restier.AspNet
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
+    using System.Net;
+    using System.Net.Http;
+    using System.Net.Http.Formatting;
+    using System.Security;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using System.Web.Http;
+    using System.Web.Http.Filters;
+    using System.Web.Http.Results;
+    using Microsoft.OData;
+    using Microsoft.Restier.Core;
+    using Microsoft.Restier.Core.Submit;
+
     /// <summary>
     /// An ExceptionFilter that is capable of serializing well-known exceptions to the client.
     /// </summary>
@@ -29,7 +31,7 @@ namespace Microsoft.Restier.AspNet
         private static readonly List<ExceptionHandlerDelegate> Handlers = new List<ExceptionHandlerDelegate>
         {
             HandleChangeSetValidationException,
-            HandleCommonException
+            HandleCommonException,
         };
 
         private delegate Task<HttpResponseMessage> ExceptionHandlerDelegate(
@@ -74,14 +76,14 @@ namespace Microsoft.Restier.AspNet
                 {
                     error = new
                     {
-                        code = "",
+                        code = string.Empty,
                         innererror = new
                         {
                             message = validationException.Message,
-                            type = validationException.GetType().FullName
+                            type = validationException.GetType().FullName,
                         },
                         message = "Validaion failed for one or more objects.",
-                        validationentries = validationException.ValidationResults
+                        validationentries = validationException.ValidationResults,
                     },
                 };
 

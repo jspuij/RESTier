@@ -1,11 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="QueryContext.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using Microsoft.OData.Edm;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Query
 {
+    using System;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// Represents context under which a query flow operates.
     /// </summary>
@@ -24,7 +26,7 @@ namespace Microsoft.Restier.Core.Query
             : base(api)
         {
             Ensure.NotNull(request, nameof(request));
-            Request = request;
+            this.Request = request;
         }
 
         /// <summary>

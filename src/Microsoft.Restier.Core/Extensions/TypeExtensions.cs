@@ -1,11 +1,16 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="TypeExtensions.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Collections.Generic;
-using System.Reflection;
+// </copyright>
 
 namespace System
 {
+    using System.Collections.Generic;
+    using System.Reflection;
+
+    /// <summary>
+    /// Extension methods on a <see cref="Type"/> instance.
+    /// </summary>
     internal static partial class TypeExtensions
     {
         private const BindingFlags QualifiedMethodBindingFlags = BindingFlags.NonPublic |
@@ -71,8 +76,21 @@ namespace System
             return null;
         }
 
+        /// <summary>
+        /// Gets a non-public method on a type by it's qualified name.
+        /// </summary>
+        /// <param name="type">The type to get the method in.</param>
+        /// <param name="methodName">The name of the method.</param>
+        /// <returns>A <see cref="MethodInfo"/> instance or null if the MethodInfo is not found.</returns>
         public static MethodInfo GetQualifiedMethod(this Type type, string methodName) => type.GetMethod(methodName, QualifiedMethodBindingFlags);
 
+        /// <summary>
+        /// Tries to get the element type for a type by looking for an <see cref="IEnumerable{T}"/> implementation.
+        /// </summary>
+        /// <remarks>Does not return char for a string.</remarks>
+        /// <param name="type">The type to inspect.</param>
+        /// <param name="elementType">The extracted element type.</param>
+        /// <returns>True when an Element Type was found, false otherwise.</returns>
         public static bool TryGetElementType(this Type type, out Type elementType)
         {
             // Special case: string implements IEnumerable<char> however it should
@@ -98,47 +116,6 @@ namespace System
         {
             return type.IsGenericType &&
                    type.GetGenericTypeDefinition() == definition;
-        }
-    }
-
-    internal static class TypeHelper
-    {
-        public static Type GetUnderlyingTypeOrSelf(Type type) => Nullable.GetUnderlyingType(type) ?? type;
-
-        public static bool IsEnum(Type type)
-        {
-            var underlyingTypeOrSelf = GetUnderlyingTypeOrSelf(type);
-            return underlyingTypeOrSelf.IsEnum;
-        }
-
-        public static bool IsDateTime(Type type)
-        {
-            var underlyingTypeOrSelf = GetUnderlyingTypeOrSelf(type);
-            return underlyingTypeOrSelf == typeof(DateTime);
-        }
-
-        public static bool IsTimeSpan(Type type)
-        {
-            var underlyingTypeOrSelf = GetUnderlyingTypeOrSelf(type);
-            return underlyingTypeOrSelf == typeof(TimeSpan);
-        }
-
-        public static bool IsDateTimeOffset(Type type)
-        {
-            var underlyingTypeOrSelf = GetUnderlyingTypeOrSelf(type);
-            return underlyingTypeOrSelf == typeof(DateTimeOffset);
-        }
-    }
-
-    internal static class TypeConverter
-    {
-        public static object ChangeType(object value, Type conversionType, IFormatProvider provider)
-        {
-            if (conversionType == typeof(DateTime) && value is DateTimeOffset)
-            {
-                return ((DateTimeOffset)value).DateTime;
-            }
-            return Convert.ChangeType(value, conversionType, provider);
         }
     }
 }

@@ -1,12 +1,15 @@
-﻿namespace Microsoft.Restier.Core
-{
+﻿// <copyright file="RestierPipelineState.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Licensed under the MIT License.  See License.txt in the project root for license information.
+// </copyright>
 
+namespace Microsoft.Restier.Core
+{
     /// <summary>
     /// Represents the different parts of the Restier request execution pipeline.
     /// </summary>
     public enum RestierPipelineState
     {
-
         /// <summary>
         /// Represents the first step of the pipeline, when Restier checks to see if the call is allowed.
         /// </summary>
@@ -30,8 +33,6 @@
         /// <summary>
         /// Represents the fifth step of the pipeline, where you can spin off other work after the action has completed successfully.
         /// </summary>
-        PostSubmit = 5
-
+        PostSubmit = 5,
     }
-
 }

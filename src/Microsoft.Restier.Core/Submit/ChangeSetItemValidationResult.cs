@@ -1,12 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ChangeSetItemValidationResult.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Diagnostics.Tracing;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System.Diagnostics.Tracing;
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Converters;
+
     /// <summary>
     /// Represents a single result when validating an entity, property, etc.
     /// </summary>

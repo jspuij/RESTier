@@ -1,12 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ApiConfiguration.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using Microsoft.OData.Edm;
-using System.Threading;
-using System.Threading.Tasks;
+// </copyright>
 
 namespace Microsoft.Restier.Core
 {
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// Represents a configuration that defines an API.
     /// </summary>
@@ -24,12 +26,20 @@ namespace Microsoft.Restier.Core
     {
         private Task<IEdmModel> modelTask;
 
+        /// <summary>
+        /// Gets the Model.
+        /// </summary>
         internal IEdmModel Model { get; private set; }
 
+        /// <summary>
+        /// Completes Model generation.
+        /// </summary>
+        /// <param name="running">The task that indicates that it is running.</param>
+        /// <returns>A <see cref="TaskCompletionSource{IEdmModel}"/>.</returns>
         internal TaskCompletionSource<IEdmModel> CompleteModelGeneration(out Task<IEdmModel> running)
         {
             var source = new TaskCompletionSource<IEdmModel>(TaskCreationOptions.AttachedToParent);
-            var runningTask = Interlocked.CompareExchange(ref modelTask, source.Task, null);
+            var runningTask = Interlocked.CompareExchange(ref this.modelTask, source.Task, null);
             if (runningTask != null)
             {
                 running = runningTask;
@@ -42,12 +52,12 @@ namespace Microsoft.Restier.Core
                 {
                     if (task.Status == TaskStatus.RanToCompletion)
                     {
-                        Model = task.Result;
+                        this.Model = task.Result;
                     }
                     else
                     {
                         // Set modelTask null to allow retrying GetModelAsync.
-                        Interlocked.Exchange(ref modelTask, null);
+                        Interlocked.Exchange(ref this.modelTask, null);
                     }
                 },
                 TaskContinuationOptions.ExecuteSynchronously);

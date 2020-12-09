@@ -1,18 +1,20 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ConventionBasedChangeSetItemValidator.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
-using System.Diagnostics.Tracing;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Restier.Core.Submit;
+// </copyright>
 
 namespace Microsoft.Restier.Core
 {
+    using System;
+    using System.Collections.ObjectModel;
+    using System.ComponentModel;
+    using System.ComponentModel.DataAnnotations;
+    using System.Diagnostics.Tracing;
+    using System.Linq;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.Restier.Core.Submit;
+
     /// <summary>
     /// A convention-based change set item validator.
     /// </summary>
@@ -20,10 +22,16 @@ namespace Microsoft.Restier.Core
         IChangeSetItemValidator
     {
         /// <inheritdoc/>
-        public Task ValidateChangeSetItemAsync( SubmitContext context, ChangeSetItem item, Collection<ChangeSetItemValidationResult> validationResults, 
+        public Task ValidateChangeSetItemAsync(
+            SubmitContext context,
+            ChangeSetItem item,
+            Collection<ChangeSetItemValidationResult> validationResults,
             CancellationToken cancellationToken)
         {
             Ensure.NotNull(validationResults, nameof(validationResults));
+            Ensure.NotNull(context, nameof(context));
+            Ensure.NotNull(item, nameof(item));
+
             if (item is DataModificationItem dataModificationItem)
             {
                 var resource = dataModificationItem.Resource;
@@ -51,14 +59,14 @@ namespace Microsoft.Restier.Core
                                 Message = validationResult.ErrorMessage,
                                 Severity = EventLevel.Error,
                                 Target = resource,
-                                PropertyName = property.Name
+                                PropertyName = property.Name,
                             });
                         }
                     }
                 }
             }
 
-            return Task.WhenAll();
+            return Task.CompletedTask;
         }
     }
 }

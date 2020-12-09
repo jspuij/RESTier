@@ -1,12 +1,15 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="DataSourceStub.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Linq;
+// </copyright>
 
 #pragma warning disable CA1801 // Unused method parameters
 namespace Microsoft.Restier.Core
 {
+    using System;
+    using System.Diagnostics.CodeAnalysis;
+    using System.Linq;
+
     /// <summary>
     /// Represents method stubs that identify API data source.
     /// </summary>
@@ -16,6 +19,7 @@ namespace Microsoft.Restier.Core
     /// data source in API. Later in the query pipeline the sourcer from
     /// the data provider will replace the stub with the actual data source.
     /// </remarks>
+    [ExcludeFromCodeCoverage]
     public static class DataSourceStub
     {
         /// <summary>

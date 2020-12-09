@@ -1,19 +1,21 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierRoutingConvention.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Linq;
-using System.Net.Http;
-using System.Web.Http;
-using System.Web.Http.Controllers;
-using System.Web.Http.Routing;
-using Microsoft.AspNet.OData.Routing.Conventions;
-using Microsoft.OData.Edm;
-using Microsoft.OData.UriParser;
-using ODataPath = Microsoft.AspNet.OData.Routing.ODataPath;
+// </copyright>
 
 namespace Microsoft.Restier.AspNet
 {
+    using System;
+    using System.Linq;
+    using System.Net.Http;
+    using System.Web.Http;
+    using System.Web.Http.Controllers;
+    using System.Web.Http.Routing;
+    using Microsoft.AspNet.OData.Routing.Conventions;
+    using Microsoft.OData.Edm;
+    using Microsoft.OData.UriParser;
+    using ODataPath = Microsoft.AspNet.OData.Routing.ODataPath;
+
     /// <summary>
     /// The default routing convention implementation.
     /// </summary>
@@ -28,11 +30,11 @@ namespace Microsoft.Restier.AspNet
         private const string MethodNameOfPostAction = "PostAction";
 
         /// <summary>
-        /// Selects OData controller based on parsed OData URI
+        /// Selects OData controller based on parsed OData URI.
         /// </summary>
-        /// <param name="odataPath">Parsed OData URI</param>
-        /// <param name="request">Incoming HttpRequest</param>
-        /// <returns>Prefix for controller name</returns>
+        /// <param name="odataPath">Parsed OData URI.</param>
+        /// <param name="request">Incoming HttpRequest.</param>
+        /// <returns>Prefix for controller name.</returns>
         public string SelectController(ODataPath odataPath, HttpRequestMessage request)
         {
             Ensure.NotNull(odataPath, nameof(odataPath));
@@ -60,10 +62,10 @@ namespace Microsoft.Restier.AspNet
         /// <summary>
         /// Selects the appropriate action based on the parsed OData URI.
         /// </summary>
-        /// <param name="odataPath">Parsed OData URI</param>
-        /// <param name="controllerContext">Context for HttpController</param>
-        /// <param name="actionMap">Mapping from action names to HttpActions</param>
-        /// <returns>String corresponding to controller action name</returns>
+        /// <param name="odataPath">Parsed OData URI.</param>
+        /// <param name="controllerContext">Context for HttpController.</param>
+        /// <param name="actionMap">Mapping from action names to HttpActions.</param>
+        /// <returns>String corresponding to controller action name.</returns>
         public string SelectAction(ODataPath odataPath, HttpControllerContext controllerContext, ILookup<string, HttpActionDescriptor> actionMap)
         {
             // TODO GitHubIssue#44 : implement action selection for $ref, navigation scenarios, etc.
@@ -116,7 +118,7 @@ namespace Microsoft.Restier.AspNet
 
         private static bool IsMetadataPath(ODataPath odataPath)
         {
-            return odataPath.PathTemplate == "~" ||  odataPath.PathTemplate == "~/$metadata";
+            return odataPath.PathTemplate == "~" || odataPath.PathTemplate == "~/$metadata";
         }
 
         private static bool HasControllerForEntitySetOrSingleton(ODataPath odataPath, HttpRequestMessage request)
@@ -168,7 +170,7 @@ namespace Microsoft.Restier.AspNet
 
             var context = new HttpControllerContext(configuration, routeData, request)
             {
-                ControllerDescriptor = descriptor
+                ControllerDescriptor = descriptor,
             };
 
             try

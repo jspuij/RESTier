@@ -1,10 +1,12 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ChangeSet.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Collections.Generic;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System.Collections.Generic;
+
     /// <summary>
     /// Represents a change set.
     /// </summary>

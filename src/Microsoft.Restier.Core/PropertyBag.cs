@@ -1,11 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="PropertyBag.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
+// </copyright>
 
 namespace Microsoft.Restier.Core
 {
+    using System;
+    using System.Collections.Generic;
+
     /// <summary>
     /// Represents a bag of properties.
     /// </summary>
@@ -23,8 +25,8 @@ namespace Microsoft.Restier.Core
         /// </returns>
         public bool HasProperty(string name)
         {
-            Ensure.NotNull(name, nameof(name));
-            return properties.ContainsKey(name);
+            Ensure.NotNullOrWhiteSpace(name, nameof(name));
+            return this.properties.ContainsKey(name);
         }
 
         /// <summary>
@@ -41,8 +43,8 @@ namespace Microsoft.Restier.Core
         /// </returns>
         public T GetProperty<T>(string name)
         {
-            Ensure.NotNull(name, nameof(name));
-            var value = GetProperty(name);
+            Ensure.NotNullOrWhiteSpace(name, nameof(name));
+            var value = this.GetProperty(name);
             if (!(value is T))
             {
                 value = default(T);
@@ -58,8 +60,8 @@ namespace Microsoft.Restier.Core
         /// <returns>The value of the property.</returns>
         public object GetProperty(string name)
         {
-            Ensure.NotNull(name, nameof(name));
-            properties.TryGetValue(name, out var value);
+            Ensure.NotNullOrWhiteSpace(name, nameof(name));
+            this.properties.TryGetValue(name, out var value);
             return value;
         }
 
@@ -74,8 +76,8 @@ namespace Microsoft.Restier.Core
         /// </param>
         public void SetProperty(string name, object value)
         {
-            Ensure.NotNull(name, nameof(name));
-            properties[name] = value;
+            Ensure.NotNullOrWhiteSpace(name, nameof(name));
+            this.properties[name] = value;
         }
 
         /// <summary>
@@ -86,8 +88,8 @@ namespace Microsoft.Restier.Core
         /// </param>
         public void RemoveProperty(string name)
         {
-            Ensure.NotNull(name, nameof(name));
-            properties.Remove(name);
+            Ensure.NotNullOrWhiteSpace(name, nameof(name));
+            this.properties.Remove(name);
         }
     }
 }

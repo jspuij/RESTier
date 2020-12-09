@@ -1,16 +1,18 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ConventionBasedQueryExpressionProcessor.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Linq.Expressions;
-using Microsoft.OData.Edm;
-using Microsoft.Restier.Core.Query;
+// </copyright>
 
 namespace Microsoft.Restier.Core
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
+    using System.Linq.Expressions;
+    using Microsoft.OData.Edm;
+    using Microsoft.Restier.Core.Query;
+
     /// <summary>
     /// A convention-based query expression processor which will apply OnFilter logic into query expression.
     /// </summary>
@@ -29,7 +31,7 @@ namespace Microsoft.Restier.Core
         }
 
         /// <summary>
-        /// Gets a reference to an inner query expression processor in case they are chained.
+        /// Gets or sets a reference to an inner query expression processor in case they are chained.
         /// </summary>
         public IQueryExpressionProcessor Inner { get; set; }
 
@@ -38,12 +40,12 @@ namespace Microsoft.Restier.Core
         {
             Ensure.NotNull(context, nameof(context));
 
-            if (Inner != null)
+            if (this.Inner != null)
             {
-                var innerFilteredExpression = Inner.Process(context);
-                if (innerFilteredExpression != null && innerFilteredExpression != context.VisitedNode)
+                var innerProcessedExpression = this.Inner.Process(context);
+                if (innerProcessedExpression != null && innerProcessedExpression != context.VisitedNode)
                 {
-                    return innerFilteredExpression;
+                    return innerProcessedExpression;
                 }
             }
 
@@ -64,7 +66,7 @@ namespace Microsoft.Restier.Core
                     return null;
                 }
 
-                return AppendOnFilterExpression(context, entitySet, entityType);
+                return this.AppendOnFilterExpression(context, entitySet, entityType);
             }
 
             if (context.ModelReference is PropertyModelReference propertyModelReference && propertyModelReference.Property != null)
@@ -88,14 +90,14 @@ namespace Microsoft.Restier.Core
                     entityType = (IEdmEntityType)entityType.BaseType;
                 }
 
-                //Get the model, query it for the entity set of a given type.
+                // Get the model, query it for the entity set of a given type.
                 var entitySet = context.QueryContext.Model.EntityContainer.EntitySets().FirstOrDefault(c => c.EntityType() == entityType);
                 if (entitySet == null)
                 {
                     return null;
                 }
 
-                return AppendOnFilterExpression(context, entitySet, entityType);
+                return this.AppendOnFilterExpression(context, entitySet, entityType);
             }
 
             return null;
@@ -104,7 +106,7 @@ namespace Microsoft.Restier.Core
         private Expression AppendOnFilterExpression(QueryExpressionContext context, IEdmEntitySet entitySet, IEdmEntityType entityType)
         {
             var expectedMethodName = ConventionBasedMethodNameFactory.GetEntitySetMethodName(entitySet, RestierPipelineState.Submit, RestierEntitySetOperation.Filter);
-            var expectedMethod = targetType.GetQualifiedMethod(expectedMethodName);
+            var expectedMethod = this.targetType.GetQualifiedMethod(expectedMethodName);
             if (expectedMethod == null || (!expectedMethod.IsFamily && !expectedMethod.IsFamilyOrAssembly))
             {
                 if (expectedMethod != null)
@@ -114,12 +116,13 @@ namespace Microsoft.Restier.Core
                 else
                 {
                     var actualMethodName = expectedMethodName.Replace(entitySet.Name, entityType.Name);
-                    var actualMethod = targetType.GetQualifiedMethod(actualMethodName);
+                    var actualMethod = this.targetType.GetQualifiedMethod(actualMethodName);
                     if (actualMethod != null)
                     {
                         Trace.WriteLine($"BREAKING: Restier Filter expected'{expectedMethodName}' but found '{actualMethodName}'. Your method will not be called until you correct the method name.");
                     }
                 }
+
                 return null;
             }
 
@@ -133,7 +136,7 @@ namespace Microsoft.Restier.Core
             if (!expectedMethod.IsStatic)
             {
                 apiBase = context.QueryContext.Api;
-                if (apiBase == null || !targetType.IsInstanceOfType(apiBase))
+                if (apiBase == null || !this.targetType.IsInstanceOfType(apiBase))
                 {
                     return null;
                 }

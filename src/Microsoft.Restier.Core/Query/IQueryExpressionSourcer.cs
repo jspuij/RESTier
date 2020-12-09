@@ -1,10 +1,12 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="IQueryExpressionSourcer.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Linq.Expressions;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Query
 {
+    using System.Linq.Expressions;
+
     /// <summary>
     /// Represents a service that replace queryable source of an expression.
     /// </summary>

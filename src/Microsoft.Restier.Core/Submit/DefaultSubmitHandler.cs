@@ -1,35 +1,30 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="DefaultSubmitHandler.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics.Tracing;
-using System.Globalization;
-using System.Linq;
-using System.Security;
-using System.Threading;
-using System.Threading.Tasks;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Collections.ObjectModel;
+    using System.Diagnostics.Tracing;
+    using System.Globalization;
+    using System.Linq;
+    using System.Security;
+    using System.Threading;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// The default handler for submitting changes through the <see cref="ApiBase"/>.
     /// </summary>
     internal class DefaultSubmitHandler
     {
-
-        #region Private Members
-
         private readonly IChangeSetInitializer initializer;
         private readonly IChangeSetItemAuthorizer authorizer;
         private readonly IChangeSetItemValidator validator;
         private readonly IChangeSetItemFilter filter;
         private readonly ISubmitExecutor executor;
-
-        #endregion
-
-        #region Constructors
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultSubmitHandler"/> class.
@@ -39,9 +34,12 @@ namespace Microsoft.Restier.Core.Submit
         /// <param name="authorizer">An optional reference to an service that authorizes a submission.</param>
         /// <param name="validator">An optional reference to a service that validates a submission.</param>
         /// <param name="filter">An optional reference to a service that executes logic before and after a submission.</param>
-        public DefaultSubmitHandler(IChangeSetInitializer initializer, ISubmitExecutor executor,
-                                    IChangeSetItemAuthorizer authorizer = null, IChangeSetItemValidator validator = null,
-                                    IChangeSetItemFilter filter = null)
+        public DefaultSubmitHandler(
+            IChangeSetInitializer initializer,
+            ISubmitExecutor executor,
+            IChangeSetItemAuthorizer authorizer = null,
+            IChangeSetItemValidator validator = null,
+            IChangeSetItemFilter filter = null)
         {
             Ensure.NotNull(initializer, nameof(initializer));
             Ensure.NotNull(executor, nameof(executor));
@@ -52,10 +50,6 @@ namespace Microsoft.Restier.Core.Submit
             this.filter = filter;
             this.executor = executor;
         }
-
-        #endregion
-
-        #region Public Methods
 
         /// <summary>
         /// Asynchronously executes the submit flow.
@@ -69,33 +63,33 @@ namespace Microsoft.Restier.Core.Submit
         {
             Ensure.NotNull(context, nameof(context));
 
-            await initializer.InitializeAsync(context, cancellationToken).ConfigureAwait(false);
+            await this.initializer.InitializeAsync(context, cancellationToken).ConfigureAwait(false);
 
             if (context.Result != null)
             {
                 return context.Result;
+            }
+            else if (context.ChangeSet == null)
+            {
+                throw new InvalidOperationException(Resources.NoPendingChangedAndNoChangeSet);
             }
 
             var eventsChangeSet = context.ChangeSet;
 
             IEnumerable<ChangeSetItem> currentChangeSetItems = eventsChangeSet.Entries.ToArray();
 
-            await PerformValidate(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
+            await this.PerformValidate(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
 
-            await PerformPreEvent(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
+            await this.PerformPreEvent(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
 
-            await PerformPersist(context, cancellationToken).ConfigureAwait(false);
+            await this.PerformPersist(context, cancellationToken).ConfigureAwait(false);
 
             context.ChangeSet.Entries.Clear();
 
-            await PerformPostEvent(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
+            await this.PerformPostEvent(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
 
             return context.Result;
         }
-
-        #endregion
-
-        #region Private Methods
 
         private static string GetAuthorizeFailedMessage(ChangeSetItem item)
         {
@@ -130,9 +124,9 @@ namespace Microsoft.Restier.Core.Submit
 
         private async Task PerformValidate(SubmitContext context, IEnumerable<ChangeSetItem> changeSetItems, CancellationToken cancellationToken)
         {
-            await InvokeAuthorizers(context, changeSetItems, cancellationToken).ConfigureAwait(false);
+            await this.InvokeAuthorizers(context, changeSetItems, cancellationToken).ConfigureAwait(false);
 
-            await InvokeValidators(context, changeSetItems, cancellationToken).ConfigureAwait(false);
+            await this.InvokeValidators(context, changeSetItems, cancellationToken).ConfigureAwait(false);
 
             foreach (var item in changeSetItems.Where(i => i.HasChanged()))
             {
@@ -149,14 +143,14 @@ namespace Microsoft.Restier.Core.Submit
 
         private async Task InvokeAuthorizers(SubmitContext context, IEnumerable<ChangeSetItem> changeSetItems, CancellationToken cancellationToken)
         {
-            if (authorizer == null)
+            if (this.authorizer == null)
             {
                 return;
             }
 
             foreach (var item in changeSetItems.Where(i => i.HasChanged()))
             {
-                if (!await authorizer.AuthorizeAsync(context, item, cancellationToken).ConfigureAwait(false))
+                if (!await this.authorizer.AuthorizeAsync(context, item, cancellationToken).ConfigureAwait(false))
                 {
                     throw new SecurityException(GetAuthorizeFailedMessage(item));
                 }
@@ -165,7 +159,7 @@ namespace Microsoft.Restier.Core.Submit
 
         private async Task InvokeValidators(SubmitContext context, IEnumerable<ChangeSetItem> changeSetItems, CancellationToken cancellationToken)
         {
-            if (validator == null)
+            if (this.validator == null)
             {
                 return;
             }
@@ -174,7 +168,7 @@ namespace Microsoft.Restier.Core.Submit
 
             foreach (var entry in changeSetItems.Where(i => i.HasChanged()))
             {
-                await validator.ValidateChangeSetItemAsync(context, entry, validationResults, cancellationToken).ConfigureAwait(false);
+                await this.validator.ValidateChangeSetItemAsync(context, entry, validationResults, cancellationToken).ConfigureAwait(false);
             }
 
             var errors = validationResults.Where(result => result.Severity == EventLevel.Error);
@@ -184,14 +178,14 @@ namespace Microsoft.Restier.Core.Submit
                 var validationErrorMessage = Resources.ValidationFailsTheOperation;
                 throw new ChangeSetValidationException(validationErrorMessage)
                 {
-                    ValidationResults = errors
+                    ValidationResults = errors,
                 };
             }
         }
 
         private async Task PerformPreEvent(SubmitContext context, IEnumerable<ChangeSetItem> changeSetItems, CancellationToken cancellationToken)
         {
-            if (filter == null)
+            if (this.filter == null)
             {
                 return;
             }
@@ -202,10 +196,9 @@ namespace Microsoft.Restier.Core.Submit
                 {
                     item.ChangeSetItemProcessingStage = ChangeSetItemProcessingStage.PreEventing;
 
-
-                    if (filter != null)
+                    if (this.filter != null)
                     {
-                        await filter.OnChangeSetItemProcessingAsync(context, item, cancellationToken).ConfigureAwait(false);
+                        await this.filter.OnChangeSetItemProcessingAsync(context, item, cancellationToken).ConfigureAwait(false);
                     }
 
                     if (item.ChangeSetItemProcessingStage == ChangeSetItemProcessingStage.PreEventing)
@@ -226,24 +219,20 @@ namespace Microsoft.Restier.Core.Submit
 
         private async Task PerformPersist(SubmitContext context, CancellationToken cancellationToken)
         {
-            context.Result = await executor.ExecuteSubmitAsync(context, cancellationToken).ConfigureAwait(false);
+            context.Result = await this.executor.ExecuteSubmitAsync(context, cancellationToken).ConfigureAwait(false);
         }
 
         private async Task PerformPostEvent(SubmitContext context, IEnumerable<ChangeSetItem> changeSetItems, CancellationToken cancellationToken)
         {
-            if (filter == null)
+            if (this.filter == null)
             {
                 return;
             }
 
             foreach (var item in changeSetItems)
             {
-                await filter.OnChangeSetItemProcessedAsync(context, item, cancellationToken).ConfigureAwait(false);
+                await this.filter.OnChangeSetItemProcessedAsync(context, item, cancellationToken).ConfigureAwait(false);
             }
         }
-
-        #endregion
-
     }
-
 }

@@ -1,25 +1,26 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ServiceCollectionExtensions.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Linq;
-using Microsoft.AspNet.OData.Formatter.Deserialization;
-using Microsoft.AspNet.OData.Formatter.Serialization;
-using Microsoft.AspNet.OData.Query;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.OData;
-using Microsoft.Restier.AspNet.Formatter;
-using Microsoft.Restier.AspNet.Model;
-using Microsoft.Restier.AspNet.Operation;
-using Microsoft.Restier.AspNet.Query;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Model;
-using Microsoft.Restier.Core.Operation;
-using Microsoft.Restier.Core.Query;
+// </copyright>
 
 namespace Microsoft.Restier.AspNet
 {
+    using System;
+    using System.Linq;
+    using Microsoft.AspNet.OData.Formatter.Deserialization;
+    using Microsoft.AspNet.OData.Formatter.Serialization;
+    using Microsoft.AspNet.OData.Query;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.DependencyInjection.Extensions;
+    using Microsoft.OData;
+    using Microsoft.Restier.AspNet.Formatter;
+    using Microsoft.Restier.AspNet.Model;
+    using Microsoft.Restier.AspNet.Operation;
+    using Microsoft.Restier.AspNet.Query;
+    using Microsoft.Restier.Core;
+    using Microsoft.Restier.Core.Model;
+    using Microsoft.Restier.Core.Operation;
+    using Microsoft.Restier.Core.Query;
 
     /// <summary>
     /// Contains extension methods of <see cref="IServiceCollection"/>.
@@ -27,14 +28,12 @@ namespace Microsoft.Restier.AspNet
     /// </summary>
     public static class ServiceCollectionExtensions
     {
-        #region Public Methods
-
         /// <summary>
         /// This method is used to add odata publisher service into container.
         /// </summary>
         /// <typeparam name="T">The Api type.</typeparam>
         /// <param name="services">The <see cref="IServiceCollection"/>.</param>
-        /// <returns>Current <see cref="IServiceCollection"/></returns>
+        /// <returns>Current <see cref="IServiceCollection"/>.</returns>
         public static IServiceCollection AddRestierDefaultServices<T>(this IServiceCollection services)
         {
             Ensure.NotNull(services, nameof(services));
@@ -44,6 +43,7 @@ namespace Microsoft.Restier.AspNet
                 // Avoid applying multiple times to a same service collection.
                 return services;
             }
+
             services.AddSingleton<DefaultRestierServicesDetectionDummy>();
 
             // Do not add Restier implementation of chained service inside the container twice.
@@ -94,7 +94,7 @@ namespace Microsoft.Restier.AspNet
             // OData already registers the ODataPayloadValueConverter, so if we have 2, either the developer
             // added one, or we already did. OData resolves the right one so multiple can be registered.
             if (services.HasServiceCount<ODataPayloadValueConverter>() < 2)
-            { 
+            {
                 services.AddSingleton<ODataPayloadValueConverter, RestierPayloadValueConverter>();
             }
 
@@ -115,15 +115,11 @@ namespace Microsoft.Restier.AspNet
             return services;
         }
 
-        #endregion
-
-        #region Internal Methods
-
         /// <summary>
-        /// 
+        /// Adds the Model extender for the target type to the services collection.
         /// </summary>
-        /// <param name="services"></param>
-        /// <param name="targetType"></param>
+        /// <param name="services">The services collection.</param>
+        /// <param name="targetType">The target type.</param>
         internal static void AddRestierModelExtender(IServiceCollection services, Type targetType)
         {
             Ensure.NotNull(services, nameof(services));
@@ -140,28 +136,20 @@ namespace Microsoft.Restier.AspNet
         }
 
         /// <summary>
-        /// 
+        /// Adds the modelbuilder to the services collection for the target type.
         /// </summary>
-        /// <param name="services"></param>
-        /// <param name="targetType"></param>
+        /// <param name="services">The services collection.</param>
+        /// <param name="targetType">The target type.</param>
         internal static void AddOperationModelBuilder(IServiceCollection services, Type targetType)
         {
             services.AddChainedService<IModelBuilder>((sp, next) => new RestierOperationModelBuilder(targetType, next));
         }
-
-        #endregion
-
-        #region Private Members
 
         /// <summary>
         /// Dummy class to detect double registration of Default restier services inside a container.
         /// </summary>
         private sealed class DefaultRestierServicesDetectionDummy
         {
-
         }
-
-        #endregion
     }
-
 }

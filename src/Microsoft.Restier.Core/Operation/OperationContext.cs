@@ -1,20 +1,20 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="OperationContext.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Net.Http;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Operation
 {
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+
     /// <summary>
     /// Represents context under which a operation is executed.
     /// One instance created for one execution of one operation.
     /// </summary>
     public class OperationContext : InvocationContext
     {
-
         /// <summary>
         /// Initializes a new instance of the <see cref="OperationContext" /> class.
         /// </summary>
@@ -41,10 +41,13 @@ namespace Microsoft.Restier.Core.Operation
             IEnumerable bindingParameterValue)
             : base(api)
         {
-            GetParameterValueFunc = getParameterValueFunc;
-            OperationName = operationName;
-            IsFunction = isFunction;
-            BindingParameterValue = bindingParameterValue;
+            Ensure.NotNull(getParameterValueFunc, nameof(getParameterValueFunc));
+            Ensure.NotNullOrWhiteSpace(operationName, nameof(operationName));
+
+            this.GetParameterValueFunc = getParameterValueFunc;
+            this.OperationName = operationName;
+            this.IsFunction = isFunction;
+            this.BindingParameterValue = bindingParameterValue;
         }
 
         /// <summary>
@@ -68,7 +71,6 @@ namespace Microsoft.Restier.Core.Operation
         /// </summary>
         public IEnumerable BindingParameterValue { get; }
 
-
         /// <summary>
         /// Gets or sets the parameters value array used by method,
         /// It is only set after parameters are prepared.
@@ -76,10 +78,5 @@ namespace Microsoft.Restier.Core.Operation
 #pragma warning disable CA2227 // Collection properties should be read only
         public ICollection<object> ParameterValues { get; set; }
 #pragma warning restore CA2227 // Collection properties should be read only
-
-        /// <summary>
-        /// Gets or sets the http request for this operation call
-        /// </summary>
-        public HttpRequestMessage Request { get; set; } // TODO: RWM: Move to ApiBase.
     }
 }

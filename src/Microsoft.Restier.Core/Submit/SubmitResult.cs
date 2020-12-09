@@ -1,10 +1,12 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="SubmitResult.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Submit
 {
+    using System;
+
     /// <summary>
     /// Represents a submit result.
     /// </summary>
@@ -22,11 +24,11 @@ namespace Microsoft.Restier.Core.Submit
         public SubmitResult(Exception exception)
         {
             Ensure.NotNull(exception, nameof(exception));
-            Exception = exception;
+            this.Exception = exception;
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SubmitResult" /> class
+        /// Initializes a new instance of the <see cref="SubmitResult" /> class.
         /// </summary>
         /// <param name="completedChangeSet">
         /// A completed change set.
@@ -46,13 +48,13 @@ namespace Microsoft.Restier.Core.Submit
         /// </remarks>
         public Exception Exception
         {
-            get => exception;
+            get => this.exception;
 
             set
             {
                 Ensure.NotNull(value, nameof(value));
-                exception = value;
-                completedChangeSet = null;
+                this.exception = value;
+                this.completedChangeSet = null;
             }
         }
 
@@ -65,12 +67,13 @@ namespace Microsoft.Restier.Core.Submit
         /// </remarks>
         public ChangeSet CompletedChangeSet
         {
-            get => completedChangeSet;
+            get => this.completedChangeSet;
 
             set
             {
                 Ensure.NotNull(value, nameof(value));
-                completedChangeSet = value;
+                this.exception = null;
+                this.completedChangeSet = value;
             }
         }
     }

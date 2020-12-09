@@ -1,22 +1,24 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="EdmHelpers.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Globalization;
-using Microsoft.OData.Edm;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Model
 {
+    using System;
+    using System.Globalization;
+    using Microsoft.OData.Edm;
+
     /// <summary>
     /// An utility class to operate with Edm model.
     /// </summary>
     internal static class EdmHelpers
     {
         /// <summary>
-        /// Get the type reference based on Edm type
+        /// Get the type reference based on Edm type.
         /// </summary>
-        /// <param name="edmType">The edm type to retrieve Edm type reference</param>
-        /// <returns>The edm type reference</returns>
+        /// <param name="edmType">The edm type to retrieve Edm type reference.</param>
+        /// <returns>The edm type reference.</returns>
         public static IEdmTypeReference GetTypeReference(this IEdmType edmType)
         {
             Ensure.NotNull(edmType, nameof(edmType));

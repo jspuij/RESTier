@@ -1,21 +1,23 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierBatchHandler.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Web.Http;
-using System.Web.Http.Batch;
-using Microsoft.AspNet.OData.Batch;
-using Microsoft.AspNet.OData.Extensions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.OData;
-using Microsoft.Restier.Core;
+// </copyright>
 
 namespace Microsoft.Restier.AspNet.Batch
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Net.Http;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using System.Web.Http;
+    using System.Web.Http.Batch;
+    using Microsoft.AspNet.OData.Batch;
+    using Microsoft.AspNet.OData.Extensions;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.OData;
+    using Microsoft.Restier.Core;
+
     /// <summary>
     /// Default implementation of <see cref="ODataBatchHandler"/> in RESTier.
     /// </summary>
@@ -40,8 +42,8 @@ namespace Microsoft.Restier.AspNet.Batch
         {
             Ensure.NotNull(request, nameof(request));
 
-            var requestContainer = request.CreateRequestContainer(ODataRouteName);
-            requestContainer.GetRequiredService<ODataMessageReaderSettings>().BaseUri = GetBaseUri(request);
+            var requestContainer = request.CreateRequestContainer(this.ODataRouteName);
+            requestContainer.GetRequiredService<ODataMessageReaderSettings>().BaseUri = this.GetBaseUri(request);
 
             // TODO: JWS: needs to be a constructor dependency probably, but that's impossible now.
             var api = requestContainer.GetRequiredService<ApiBase>();
@@ -65,7 +67,7 @@ namespace Microsoft.Restier.AspNet.Batch
                         changeSetRequest.DeleteRequestContainer(false);
                     }
 
-                    requests.Add(CreateRestierBatchChangeSetRequestItem(api, changeSetRequests));
+                    requests.Add(this.CreateRestierBatchChangeSetRequestItem(api, changeSetRequests));
                 }
                 else if (batchReader.State == ODataBatchReaderState.Operation)
                 {
@@ -85,7 +87,7 @@ namespace Microsoft.Restier.AspNet.Batch
         /// <param name="api">A reference to the Api.</param>
         /// <param name="changeSetRequests">The list of changeset requests.</param>
         /// <returns>The created <see cref="RestierBatchChangeSetRequestItem"/> instance.</returns>
-        protected virtual RestierBatchChangeSetRequestItem CreateRestierBatchChangeSetRequestItem(ApiBase api, IList<HttpRequestMessage> changeSetRequests) => 
-            new RestierBatchChangeSetRequestItem(api, changeSetRequests);
+        protected virtual RestierBatchChangeSetRequestItem CreateRestierBatchChangeSetRequestItem(ApiBase api, IList<HttpRequestMessage> changeSetRequests)
+            => new RestierBatchChangeSetRequestItem(api, changeSetRequests);
     }
 }

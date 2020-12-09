@@ -1,43 +1,40 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="HttpConfigurationExtensions.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System.Collections.Generic;
-using Microsoft.AspNet.OData.Batch;
-using Microsoft.AspNet.OData.Extensions;
-using Microsoft.AspNet.OData.Query;
-using Microsoft.AspNet.OData.Routing.Conventions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.OData;
-using Microsoft.Restier.AspNet;
-using Microsoft.Restier.AspNet.Batch;
-using Microsoft.Restier.Core;
-using ServiceLifetime = Microsoft.OData.ServiceLifetime;
+// </copyright>
 
 namespace System.Web.Http
 {
+    using System.Collections.Generic;
+    using Microsoft.AspNet.OData.Batch;
+    using Microsoft.AspNet.OData.Extensions;
+    using Microsoft.AspNet.OData.Query;
+    using Microsoft.AspNet.OData.Routing.Conventions;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.DependencyInjection.Extensions;
+    using Microsoft.OData;
+    using Microsoft.Restier.AspNet;
+    using Microsoft.Restier.AspNet.Batch;
+    using Microsoft.Restier.Core;
+    using ServiceLifetime = Microsoft.OData.ServiceLifetime;
 
     /// <summary>
     /// Methods that extend <see cref="HttpConfiguration"/> to make registering Restier easier.
     /// </summary>
     public static class HttpConfigurationExtensions
     {
-
-        #region Private Members
-
-        private const string owinException = "Restier could not use the GlobalConfiguration to register the Batch handler. This is usually because you're running a self-hosted OWIN context.\r\n"
+        private const string OwinException = "Restier could not use the GlobalConfiguration to register the Batch handler. This is usually because you're running a self-hosted OWIN context.\r\n"
                     + "Please call `config.MapRestier<ApiType>(routeName, routePrefix, true, new HttpServer(config))` instead to correct this.";
 
-        #endregion
-
         /// <summary>
-        /// 
+        /// Register all services and create a custom container builder for Rester.
         /// </summary>
-        /// <typeparam name="TApi"></typeparam>
-        /// <param name="config"></param>
-        /// <param name="configureAction"></param>
-        /// <returns></returns>
-        public static HttpConfiguration UseRestier<TApi>(this HttpConfiguration config, Action<IServiceCollection> configureAction) where TApi : ApiBase
+        /// <typeparam name="TApi">The <see cref="ApiBase"/> type.</typeparam>
+        /// <param name="config">The <see cref="HttpConfiguration"/> to register on.</param>
+        /// <param name="configureAction">The configuration action.</param>
+        /// <returns>The same <see cref="HttpConfiguration"/>.</returns>
+        public static HttpConfiguration UseRestier<TApi>(this HttpConfiguration config, Action<IServiceCollection> configureAction)
+            where TApi : ApiBase
         {
             config.UseCustomContainerBuilder(() =>
             {
@@ -62,35 +59,35 @@ namespace System.Web.Http
         }
 
         /// <summary>
-        /// 
+        /// Map a Restier route.
         /// </summary>
-        /// <typeparam name="TApi"></typeparam>
-        /// <param name="config"></param>
-        /// <param name="routeName"></param>
-        /// <param name="routePrefix"></param>
-        /// <param name="allowBatching"></param>
-        /// <returns></returns>
+        /// <typeparam name="TApi">The <see cref="ApiBase"/> type.</typeparam>
+        /// <param name="config">The <see cref="HttpConfiguration"/> to register on.</param>
+        /// <param name="routeName">The name for the Route.</param>
+        /// <param name="routePrefix">The rout prefix.</param>
+        /// <param name="allowBatching">Whether to allow batching.</param>
+        /// <returns>The same <see cref="HttpConfiguration"/>.</returns>
         public static HttpConfiguration MapRestier<TApi>(this HttpConfiguration config, string routeName, string routePrefix, bool allowBatching = true)
         {
             var httpServer = GlobalConfiguration.DefaultServer;
             if (httpServer == null)
             {
-                throw new Exception(owinException);
+                throw new Exception(OwinException);
             }
 
             return MapRestier<TApi>(config, routeName, routePrefix, allowBatching, httpServer);
         }
 
         /// <summary>
-        /// 
+        /// Map a Restier route.
         /// </summary>
-        /// <typeparam name="TApi"></typeparam>
-        /// <param name="config"></param>
-        /// <param name="routeName"></param>
-        /// <param name="routePrefix"></param>
-        /// <param name="allowBatching"></param>
-        /// <param name="httpServer"></param>
-        /// <returns></returns>
+        /// <typeparam name="TApi">The <see cref="ApiBase"/> type.</typeparam>
+        /// <param name="config">The <see cref="HttpConfiguration"/> to register on.</param>
+        /// <param name="routeName">The name for the Route.</param>
+        /// <param name="routePrefix">The rout prefix.</param>
+        /// <param name="allowBatching">Whether to allow batching.</param>
+        /// <param name="httpServer">The Owin <see cref="HttpServer"/> instance.</param>
+        /// <returns>The same <see cref="HttpConfiguration"/>.</returns>
         public static HttpConfiguration MapRestier<TApi>(this HttpConfiguration config, string routeName, string routePrefix, bool allowBatching, HttpServer httpServer)
         {
             ODataBatchHandler batchHandler = null;
@@ -100,13 +97,13 @@ namespace System.Web.Http
             {
                 if (httpServer == null)
                 {
-                    throw new ArgumentNullException(nameof(httpServer), owinException);
+                    throw new ArgumentNullException(nameof(httpServer), OwinException);
                 }
 
 #pragma warning disable IDE0067 // Dispose objects before losing scope
                 batchHandler = new RestierBatchHandler(httpServer)
                 {
-                    ODataRouteName = routeName
+                    ODataRouteName = routeName,
                 };
 #pragma warning restore IDE0067 // Dispose objects before losing scope
             }
@@ -116,16 +113,13 @@ namespace System.Web.Http
                 builder.AddService<IEnumerable<IODataRoutingConvention>>(ServiceLifetime.Singleton, sp => conventions);
                 if (batchHandler != null)
                 {
-                    //RWM: DO NOT simplify this generic signature. It HAS to stay this way, otherwise the code breaks.
+                    // RWM: DO NOT simplify this generic signature. It HAS to stay this way, otherwise the code breaks.
                     builder.AddService<ODataBatchHandler>(ServiceLifetime.Singleton, sp => batchHandler);
                 }
             });
 
             return config;
         }
-
-
-        #region Private Methods
 
         /// <summary>
         /// Creates the default routing conventions.
@@ -148,9 +142,5 @@ namespace System.Web.Http
             conventions.Insert(index + 1, new RestierRoutingConvention());
             return conventions;
         }
-
-        #endregion
-
     }
-
 }

@@ -1,39 +1,24 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="RestierContainerBuilder.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Globalization;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.OData;
-using Microsoft.OData.Edm;
-using DIServiceLifetime = Microsoft.Extensions.DependencyInjection.ServiceLifetime;
-using ODataServiceLifetime = Microsoft.OData.ServiceLifetime;
+// </copyright>
 
 namespace Microsoft.Restier.Core
 {
+    using System;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.DependencyInjection.Extensions;
+    using Microsoft.OData;
+    using Microsoft.OData.Edm;
+    using DIServiceLifetime = Microsoft.Extensions.DependencyInjection.ServiceLifetime;
+    using ODataServiceLifetime = Microsoft.OData.ServiceLifetime;
+
     /// <summary>
     /// The default container builder implementation based on the Microsoft dependency injection framework.
     /// </summary>
     public class RestierContainerBuilder : IContainerBuilder
     {
-
-        #region Private Members
-
         private readonly Action<IServiceCollection> configureAction;
-
-        #endregion
-
-        #region Properties
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public ServiceCollection Services { get; private set; }
-
-        #endregion
-
-        #region Constructors
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RestierContainerBuilder" /> class.
@@ -42,12 +27,13 @@ namespace Microsoft.Restier.Core
         public RestierContainerBuilder(Action<IServiceCollection> configureAction = null)
         {
             this.configureAction = configureAction;
-            Services = new ServiceCollection();
+            this.Services = new ServiceCollection();
         }
 
-        #endregion
-
-        #region Public Methods
+        /// <summary>
+        /// Gets the collection of services.
+        /// </summary>
+        public ServiceCollection Services { get; private set; }
 
         /// <summary>
         /// Adds a service of <paramref name="serviceType"/> with an <paramref name="implementationType"/>.
@@ -60,8 +46,8 @@ namespace Microsoft.Restier.Core
         {
             Ensure.NotNull(serviceType, nameof(serviceType));
             Ensure.NotNull(implementationType, nameof(implementationType));
-            
-            Services.Add(new ServiceDescriptor(serviceType, implementationType, TranslateServiceLifetime(lifetime)));
+
+            this.Services.Add(new ServiceDescriptor(serviceType, implementationType, TranslateServiceLifetime(lifetime)));
             return this;
         }
 
@@ -77,7 +63,7 @@ namespace Microsoft.Restier.Core
             Ensure.NotNull(serviceType, nameof(serviceType));
             Ensure.NotNull(implementationFactory, nameof(implementationFactory));
 
-            Services.Add(new ServiceDescriptor(serviceType, implementationFactory, TranslateServiceLifetime(lifetime)));
+            this.Services.Add(new ServiceDescriptor(serviceType, implementationFactory, TranslateServiceLifetime(lifetime)));
             return this;
         }
 
@@ -88,41 +74,11 @@ namespace Microsoft.Restier.Core
         /// <returns>The container built by this builder.</returns>
         public virtual IServiceProvider BuildContainer()
         {
-            configureAction?.Invoke(Services);
-            AddRestierModelFactory();
-            return Services.BuildServiceProvider();
+            this.configureAction?.Invoke(this.Services);
+            this.AddRestierModelFactory();
+            return this.Services.BuildServiceProvider();
         }
 
-        #endregion
-
-        #region Internal methods
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        internal IContainerBuilder AddRestierModelFactory()
-        {
-            IEdmModel modelFactory(IServiceProvider sp)
-            {
-                var api = sp.GetService<ApiBase>();
-                var model = api.GetModelAsync(default).GetAwaiter().GetResult();
-                return model;
-            }
-
-            Services.AddSingleton(modelFactory);
-            return this;
-        }
-
-        #endregion
-
-        #region Private Methods
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="lifetime"></param>
-        /// <returns></returns>
         private static DIServiceLifetime TranslateServiceLifetime(ODataServiceLifetime lifetime)
         {
             switch (lifetime)
@@ -136,6 +92,17 @@ namespace Microsoft.Restier.Core
             }
         }
 
-        #endregion
+        private IContainerBuilder AddRestierModelFactory()
+        {
+            IEdmModel ModelFactory(IServiceProvider sp)
+            {
+                var api = sp.GetService<ApiBase>();
+                var model = api.GetModelAsync(default).GetAwaiter().GetResult();
+                return model;
+            }
+
+            this.Services.AddSingleton(ModelFactory);
+            return this;
+        }
     }
 }

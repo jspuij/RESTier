@@ -1,12 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+﻿// <copyright file="ModelContext.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
-
-using System;
-using System.Collections.Generic;
-using System.Reflection;
+// </copyright>
 
 namespace Microsoft.Restier.Core.Model
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Reflection;
+
     /// <summary>
     /// Represents context under which a model is requested.
     /// </summary>
@@ -18,19 +20,20 @@ namespace Microsoft.Restier.Core.Model
         /// <param name="api">
         /// An Api.
         /// </param>
-        public ModelContext(ApiBase api) : base(api)
+        public ModelContext(ApiBase api)
+            : base(api)
         {
-            ResourceSetTypeMap = new Dictionary<string, Type>();
-            ResourceTypeKeyPropertiesMap = new Dictionary<Type, ICollection<PropertyInfo>>();
+            this.ResourceSetTypeMap = new Dictionary<string, Type>();
+            this.ResourceTypeKeyPropertiesMap = new Dictionary<Type, ICollection<PropertyInfo>>();
         }
 
         /// <summary>
-        /// Gets or sets resource set and resource type map dictionary, it will be used by publisher for model build.
+        /// Gets resource set and resource type map dictionary, it will be used by publisher for model build.
         /// </summary>
         public IDictionary<string, Type> ResourceSetTypeMap { get; }
 
         /// <summary>
-        /// Gets or sets resource type and its key properties map dictionary, and used by publisher for model build.
+        /// Gets resource type and its key properties map dictionary, and used by publisher for model build.
         /// This is useful when key properties does not have key attribute
         /// or follow Web Api OData key property naming convention.
         /// Otherwise, this collection is not needed.

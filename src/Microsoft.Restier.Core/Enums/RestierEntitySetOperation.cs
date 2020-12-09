@@ -1,12 +1,15 @@
-﻿namespace Microsoft.Restier.Core
-{
+﻿// <copyright file="RestierEntitySetOperation.cs" company="Microsoft Corporation">
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Licensed under the MIT License.  See License.txt in the project root for license information.
+// </copyright>
 
+namespace Microsoft.Restier.Core
+{
     /// <summary>
     /// Represents the Restier operations available to an EntitySet.
     /// </summary>
     public enum RestierEntitySetOperation
     {
-
         /// <summary>
         /// Represents a Filter operation.
         /// </summary>
@@ -25,8 +28,6 @@
         /// <summary>
         /// Represents a Delete operation.
         /// </summary>
-        Delete = 4
-
+        Delete = 4,
     }
-
 }

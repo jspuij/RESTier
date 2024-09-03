@@ -52,6 +52,21 @@ namespace Microsoft.Restier.AspNetCore.Batch
             };
             SetChangeSetProperty(changeSetProperty);
 
+            var parallelSubmit = true;
+            foreach (var request in Requests)
+            {
+                var content = await request.Content.ReadAsStringAsync();
+
+                // very hacky way to check if the request is a dependson request,
+                // since we don't have a way to get the dependson attribute from the request
+                // without parsing the content
+                if (content.IndexOf("dependson", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    parallelSubmit = false;
+                    break;
+                }
+            }
+
             var contentIdToLocationMapping = new ConcurrentDictionary<string, string>();
             var responseTasks = new List<Task<Task<HttpContext>>>();
 
@@ -87,14 +102,22 @@ namespace Microsoft.Restier.AspNetCore.Batch
                             TaskContinuationOptions.None,
                             TaskScheduler.Current);
 
+                if (!parallelSubmit)
+                {
+                    await task;
+                }
+
                 responseTasks.Add(task);
             }
 
-            // the responseTasks will be complete after:
-            // - the ChangeSet is submitted
-            // - the responses are created and
-            // - the controller actions have returned
-            await Task.WhenAll(responseTasks).ConfigureAwait(false);
+            if (parallelSubmit)
+            {
+                // the responseTasks will be complete after:
+                // - the ChangeSet is submitted
+                // - the responses are created and
+                // - the controller actions have returned
+                await Task.WhenAll(responseTasks).ConfigureAwait(false);
+            }
 
             var returnContexts = new List<HttpContext>();
 

@@ -55,6 +55,21 @@ namespace Microsoft.Restier.AspNet.Batch
             };
             SetChangeSetProperty(changeSetProperty);
 
+            var parallelSubmit = true;
+            foreach (var request in Requests)
+            {
+                var content = await request.Content.ReadAsStringAsync();
+
+                // very hacky way to check if the request is a dependson request,
+                // since we don't have a way to get the dependson attribute from the request
+                // without parsing the content
+                if (content.IndexOf("dependson", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    parallelSubmit = false;
+                    break;
+                }
+            }
+
             var contentIdToLocationMapping = new ConcurrentDictionary<string, string>();
             var responseTasks = new List<Task<Task<HttpResponseMessage>>>();
 
@@ -65,37 +80,45 @@ namespace Microsoft.Restier.AspNet.Batch
                 // so as to avoid deadlock mentioned in GitHub Issue #82.
                 var tcs = new TaskCompletionSource<HttpResponseMessage>();
                 var task = SendMessageAsync(invoker, request, cancellationToken, contentIdToLocationMapping)
-                        .ContinueWith(t =>
+                    .ContinueWith(t =>
+                        {
+                            if (t.Exception is not null)
                             {
-                                if (t.Exception is not null)
-                                {
-                                    var taskEx = (t.Exception.InnerExceptions is not null &&
-                                                  t.Exception.InnerExceptions.Count == 1)
-                                        ? t.Exception.InnerExceptions.First()
-                                        : t.Exception;
-                                    changeSetProperty.Exceptions.Add(taskEx);
-                                    changeSetProperty.OnChangeSetCompleted();
-                                    tcs.SetException(taskEx.Demystify());
-                                }
-                                else
-                                {
-                                    tcs.SetResult(t.Result);
-                                }
+                                var taskEx = (t.Exception.InnerExceptions is not null &&
+                                              t.Exception.InnerExceptions.Count == 1)
+                                    ? t.Exception.InnerExceptions.First()
+                                    : t.Exception;
+                                changeSetProperty.Exceptions.Add(taskEx);
+                                changeSetProperty.OnChangeSetCompleted();
+                                tcs.SetException(taskEx.Demystify());
+                            }
+                            else
+                            {
+                                tcs.SetResult(t.Result);
+                            }
 
-                                return tcs.Task;
-                            },
-                            cancellationToken,
-                            TaskContinuationOptions.None,
-                            TaskScheduler.Current);
+                            return tcs.Task;
+                        },
+                        cancellationToken,
+                        TaskContinuationOptions.None,
+                        TaskScheduler.Current);
 
+                if (!parallelSubmit)
+                {
+                    await task;
+                }
+                
                 responseTasks.Add(task);
             }
 
-            // the responseTasks will be complete after:
-            // - the ChangeSet is submitted
-            // - the responses are created and
-            // - the controller actions have returned
-            await Task.WhenAll(responseTasks).ConfigureAwait(false);
+            if (parallelSubmit)
+            {
+                // the responseTasks will be complete after:
+                // - the ChangeSet is submitted
+                // - the responses are created and
+                // - the controller actions have returned
+                await Task.WhenAll(responseTasks).ConfigureAwait(false);
+            }
 
             var responses = new List<HttpResponseMessage>();
             try

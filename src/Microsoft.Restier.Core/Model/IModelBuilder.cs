@@ -22,7 +22,7 @@ namespace Microsoft.Restier.Core.Model
         /// A task that represents the asynchronous
         /// operation whose result is the API model.
         /// </returns>
-        IEdmModel GetModel(ModelContext context);
+        Task<IEdmModel> GetModel(ModelContext context);
 
     }
 

@@ -2,14 +2,12 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
@@ -38,106 +36,6 @@ namespace Microsoft.Restier.Core
             .GetMember("GetQueryableSource")
             .Cast<MethodInfo>()
             .Single(m => m.GetParameters().Length == 3);
-
-        #region GetApiService<T>
-
-        /// <summary>
-        /// Gets a service instance.
-        /// </summary>
-        /// <param name="api">
-        /// An API.
-        /// </param>
-        /// <typeparam name="T">The service type.</typeparam>
-        /// <returns>The service instance.</returns>
-        public static T GetApiService<T>(this ApiBase api) where T : class
-        {
-            Ensure.NotNull(api, nameof(api));
-            return api.ServiceProvider.GetService<T>();
-        }
-
-        /// Gets all registered service instances.
-        /// </summary>
-        /// <param name="api">
-        /// An API.
-        /// </param>
-        /// <typeparam name="T">The service type.</typeparam>
-        /// <returns>The ordered collection of service instances.</returns>
-        public static IEnumerable<T> GetApiServices<T>(this ApiBase api) where T : class
-        {
-            Ensure.NotNull(api, nameof(api));
-            return api.ServiceProvider.GetServices<T>();
-        }
-
-        #endregion
-
-        #region PropertyBag
-
-        /// <summary>
-        /// Indicates if this object has a property.
-        /// </summary>
-        /// <param name="api">An API.</param>
-        /// <param name="name"> The name of a property.</param>
-        /// <returns>
-        /// <c>true</c> if this object has the property; otherwise, <c>false</c>.
-        /// </returns>
-        public static bool HasProperty(this ApiBase api, string name) => api.GetPropertyBag().HasProperty(name);
-
-        /// <summary>
-        /// Gets a property.
-        /// </summary>
-        /// <typeparam name="T">The type of the property.
-        /// </typeparam>
-        /// <param name="api">An API.</param>
-        /// <param name="name">The name of a property. </param>
-        /// <returns>
-        /// The value of the property.
-        /// </returns>
-        public static T GetProperty<T>(this ApiBase api, string name) => api.GetPropertyBag().GetProperty<T>(name);
-
-        /// <summary>
-        /// Gets a property.
-        /// </summary>
-        /// <param name="api">An API.</param>
-        /// <param name="name">The name of a property.</param>
-        /// <returns>
-        /// The value of the property.
-        /// </returns>
-        public static object GetProperty(this ApiBase api, string name) => api.GetPropertyBag().GetProperty(name);
-
-        /// <summary>
-        /// Sets a property.
-        /// </summary>
-        /// <param name="api">An API.</param>
-        /// <param name="name">The name of a property.</param>
-        /// <param name="value">A value for the property.</param>
-        public static void SetProperty(this ApiBase api, string name, object value) => api.GetPropertyBag().SetProperty(name, value);
-
-        /// <summary>
-        /// Removes a property.
-        /// </summary>
-        /// <param name="api">An API. </param>
-        /// <param name="name">The name of a property.</param>
-        public static void RemoveProperty(this ApiBase api, string name) => api.GetPropertyBag().RemoveProperty(name);
-
-        #endregion
-
-        #region Model
-
-        /// <summary>
-        /// Retrieves the <see cref="IEdmModel"/> used by this <see cref="ApiBase"/> instance.
-        /// </summary>
-        /// <param name="api">The <see cref="ApiBase"/> instance to extend.</param>
-        /// <returns>
-        /// The <see cref="IEdmModel"/> used by this <see cref="ApiBase"/> instance.
-        /// </returns>
-        public static IEdmModel GetModel(this ApiBase api)
-        {
-            Ensure.NotNull(api, nameof(api));
-
-            return api.GetApiService<IEdmModel>();
-        }
-
-        #endregion
 
         #region GetQueryableSource
 
@@ -307,36 +205,7 @@ namespace Microsoft.Restier.Core
 
         #endregion
 
-        #region Query
 
-        /// <summary>
-        /// Asynchronously queries for data using an API context.
-        /// </summary>
-        /// <param name="api">
-        /// An API.
-        /// </param>
-        /// <param name="request">
-        /// A query request.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// An optional cancellation token.
-        /// </param>
-        /// <returns>
-        /// A task that represents the asynchronous
-        /// operation whose result is a query result.
-        /// </returns>
-        public static async Task<QueryResult> QueryAsync(this ApiBase api, QueryRequest request, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.NotNull(api, nameof(api));
-            Ensure.NotNull(request, nameof(request));
-
-            var queryContext = new QueryContext(api, request);
-            var model = api.GetModel();
-            queryContext.Model = model;
-            return await api.QueryHandler.QueryAsync(queryContext, cancellationToken).ConfigureAwait(false);
-        }
-
-        #endregion
 
         #region GetQueryableSource Private
 
@@ -391,56 +260,13 @@ namespace Microsoft.Restier.Core
             return new QueryableSource<TElement>(Expression.Call(null, sourceMethod.MakeGenericMethod(typeof(TElement)), expressions));
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="api"></param>
-        /// <param name="namespaceName"></param>
-        /// <param name="name"></param>
-        /// <returns></returns>
         private static Type EnsureElementType(this ApiBase api, string namespaceName, string name)
         {
-            Type elementType = null;
-
-            var mapper = api.GetApiService<IModelMapper>();
-            if (mapper is not null)
-            {
-                var modelContext = new ModelContext(api);
-                if (namespaceName is null)
-                {
-                    mapper.TryGetRelevantType(modelContext, name, out elementType);
-                }
-                else
-                {
-                    mapper.TryGetRelevantType(modelContext, namespaceName, name, out elementType);
-                }
-            }
-
-            if (elementType is null)
-            {
-                throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, Resources.ElementTypeNotFound, name));
-            }
-
-            return elementType;
+            var modelContext = new ModelContext(api);
+            return api.QueryHandler.EnsureElementType(modelContext, namespaceName, name);
         }
 
         #endregion
-
-        #region PropertyBag Private
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="api"></param>
-        /// <returns></returns>
-        private static PropertyBag GetPropertyBag(this ApiBase api)
-        {
-            Ensure.NotNull(api, nameof(api));
-            return api.GetApiService<PropertyBag>();
-        }
-
-        #endregion
-
     }
 
 }

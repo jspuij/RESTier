@@ -157,7 +157,7 @@ namespace Microsoft.Restier.Core
         internal static string GetEntityReferenceNameInternal(RestierEntitySetOperation operation, IEdmEntitySet entitySet)
         {
             //RWM: You filter a set, but you Insert/Update/Delete individual items.
-            return GetEntityReferenceNameInternal(operation, entitySet.Name, entitySet.EntityType().Name);
+            return GetEntityReferenceNameInternal(operation, entitySet.Name, entitySet.EntityType.Name);
         }
 
         /// <summary>

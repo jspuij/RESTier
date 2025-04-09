@@ -16,13 +16,11 @@ namespace Microsoft.Restier.Core
 {
 
     /// <summary>
-    /// Represents the API engine and provides a set of static
-    /// (Shared in Visual Basic) methods for interacting with objects
-    /// that implement <see cref="ApiBase"/>.
+    /// Extension methods to return IQueryable sources from an <see cref="ApiBase">.
     /// </summary>
-    public static class ApiBaseExtensions
+    public static class QueryableApiExtensions
     {
-        private static readonly MethodInfo SourceCoreMethod = typeof(ApiBaseExtensions)
+        private static readonly MethodInfo SourceCoreMethod = typeof(QueryableApiExtensions)
             .GetMember("SourceCore", BindingFlags.NonPublic | BindingFlags.Static)
             .Cast<MethodInfo>()
             .Single(m => m.IsGenericMethod);
@@ -209,14 +207,6 @@ namespace Microsoft.Restier.Core
 
         #region GetQueryableSource Private
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="api"></param>
-        /// <param name="namespaceName"></param>
-        /// <param name="name"></param>
-        /// <param name="arguments"></param>
-        /// <returns></returns>
         private static IQueryable SourceCore(this ApiBase api, string namespaceName, string name, object[] arguments)
         {
             var elementType = api.EnsureElementType(namespaceName, name);
@@ -225,14 +215,6 @@ namespace Microsoft.Restier.Core
             return method.Invoke(null, args) as IQueryable;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <typeparam name="TElement"></typeparam>
-        /// <param name="namespaceName"></param>
-        /// <param name="name"></param>
-        /// <param name="arguments"></param>
-        /// <returns></returns>
         private static IQueryable<TElement> SourceCore<TElement>(string namespaceName, string name, object[] arguments)
         {
             MethodInfo sourceMethod;

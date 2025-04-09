@@ -10,11 +10,12 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using NSubstitute;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -22,10 +23,11 @@ namespace Microsoft.Restier.Tests.Core
     /// Unit tests for the <see cref="ConventionBasedChangeSetItemValidator"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    [TestClass]
     public class ConventionBasedChangeSetItemValidatorTests
     {
-        private readonly IServiceProvider serviceProvider;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
         private readonly DataModificationItem dataModificationItem;
         private readonly TestTraceListener testTraceListener = new TestTraceListener();
 
@@ -34,7 +36,9 @@ namespace Microsoft.Restier.Tests.Core
         /// </summary>
         public ConventionBasedChangeSetItemValidatorTests()
         {
-            serviceProvider = new ServiceProviderMock().ServiceProvider.Object;
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
             dataModificationItem = new DataModificationItem(
                 "Test",
                 typeof(object),
@@ -56,7 +60,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks whether the <see cref="ConventionBasedChangeSetItemValidator"/> can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new ConventionBasedChangeSetItemValidator();
@@ -67,11 +71,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that ValidateChangeSetItemAsync can be called.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallValidateChangeSetItemAsync()
         {
             var testClass = new ConventionBasedChangeSetItemValidator();
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             var cancellationToken = CancellationToken.None;
 
             var validationResults = new Collection<ChangeSetItemValidationResult>();
@@ -80,14 +84,14 @@ namespace Microsoft.Restier.Tests.Core
         }
 
         /// <summary>
-        /// Make sure that calling ValidateChangeSetItemAsync actually validates the resoure.
+        /// Make sure that calling ValidateChangeSetItemAsync actually validates the resource.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task ValidateChangeSetItemAsyncValidates()
         {
             var testClass = new ConventionBasedChangeSetItemValidator();
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             var cancellationToken = CancellationToken.None;
             dataModificationItem.Resource = new ValidatableEntity()
             {
@@ -114,7 +118,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that ValidateChangeSetItemAsync throws when the submit context is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallValidateChangeSetItemAsyncWithNullContext()
         {
             var testClass = new ConventionBasedChangeSetItemValidator();
@@ -130,11 +134,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that ValidateChangeSetItemAsync throws when the changesetitem is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallValidateChangeSetItemAsyncWithNullItem()
         {
             var testClass = new ConventionBasedChangeSetItemValidator();
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             Func<Task> act = () => testClass.ValidateChangeSetItemAsync(
                 context,
                 default(ChangeSetItem),
@@ -147,11 +151,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that ValidateChangeSetItemAsync throws when the collection of <see cref="ChangeSetItemValidationResult"/> is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallValidateChangeSetItemAsyncWithNullValidationResults()
         {
             var testClass = new ConventionBasedChangeSetItemValidator();
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             Func<Task> act = () => testClass.ValidateChangeSetItemAsync(
                 context,
                 dataModificationItem,
@@ -162,8 +166,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

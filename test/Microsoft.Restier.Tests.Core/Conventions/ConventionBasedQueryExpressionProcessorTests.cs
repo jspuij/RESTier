@@ -6,12 +6,12 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using FluentAssertions;
+using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -19,30 +19,28 @@ namespace Microsoft.Restier.Tests.Core
     /// Unit tests for the <see cref="ConventionBasedQueryExpressionProcessor"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    [TestClass]
     public class ConventionBasedQueryExpressionProcessorTests
     {
-        private readonly IServiceProvider serviceProvider;
-        private readonly TestTraceListener testTraceListener = new TestTraceListener();
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedQueryExpressionProcessorTests"/> class.
         /// </summary>
         public ConventionBasedQueryExpressionProcessorTests()
         {
-            var serviceProviderFixture = new ServiceProviderMock();
-            serviceProvider = serviceProviderFixture.ServiceProvider.Object;
-            Type type = typeof(Test);
-            serviceProviderFixture.ModelMapper
-                .Setup(x => x.TryGetRelevantType(It.IsAny<ModelContext>(), It.IsAny<string>(), out type))
-                .Returns(true);
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
+
             Trace.Listeners.Add(testTraceListener);
         }
 
         /// <summary>
         /// Checks that we can construct the <see cref="ConventionBasedQueryExpressionProcessor"/> class.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi));
@@ -52,7 +50,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that we cannot construct ConventionBasedQueryExpressionProcessor with a null api type.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullTargetType()
         {
             Action act = () => new ConventionBasedQueryExpressionProcessor(default(Type));
@@ -61,7 +59,7 @@ namespace Microsoft.Restier.Tests.Core
 
         // TODO: more testing.
         /*
-                [TestMethod]
+                [Fact]
                 public void CanCallProcess()
                 {
                     var context = new QueryExpressionContext(new QueryContext(new ApiBase(new Mock<IServiceProvider>().Object), new QueryRequest(new Mock<IQueryable>().Object)));
@@ -73,7 +71,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that processing by the inner processor will bypass the current one.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void InnerProcessorShortCircuits()
         {
             var api = new QueryFilterApi(serviceProvider);
@@ -97,7 +95,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Cannot call the Process method with a null context.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotCallProcessWithNullContext()
         {
             var instance = new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi));
@@ -108,7 +106,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Can get and set the Inner property.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetInner()
         {
             var instance = new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi));

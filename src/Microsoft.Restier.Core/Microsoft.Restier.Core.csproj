@@ -19,7 +19,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Ben.TypeDictionary" Version="[0.*, 2.0.0)" />
 		<PackageReference Include="Microsoft.OData.Core" Version="[8.*, 9.0.0)" />
 		<PackageReference Include="Microsoft.OData.Edm" Version="[8.*, 9.0.0)" />
 		<PackageReference Include="System.ComponentModel.Annotations" Version="[5.*, 10.0.0)" />

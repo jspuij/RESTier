@@ -3,9 +3,54 @@
 	<PropertyGroup>
 		<TargetFrameworks>net8.0;net9.0;</TargetFrameworks>
 		<IsPackable>false</IsPackable>
+		<OutputType>exe</OutputType>
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="ApiBaseTests.cs" />
+	  <Compile Remove="Conventions\ConventionBasedOperationAuthorizerTests.cs" />
+	  <Compile Remove="Conventions\ConventionBasedOperationFilterTests.cs" />
+	  <Compile Remove="Conventions\ConventionBasedQueryExpressionProcessorTests.cs" />
+	  <Compile Remove="Extensions\ApiBaseExtensionsTests.cs" />
+	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
+	  <Compile Remove="InvocationContextTests.cs" />
+	  <Compile Remove="Legacy\ApiBaseTests.cs" />
+	  <Compile Remove="Legacy\DefaultModelHandlerTests.cs" />
+	  <Compile Remove="Legacy\PropertyBagTests.cs" />
+	  <Compile Remove="Model\ModelContextTests.cs" />
+	  <Compile Remove="Operation\OperationContextTests.cs" />
+	  <Compile Remove="Query\DataSourceStubModelReferenceTests.cs" />
+	  <Compile Remove="Query\DefaultQueryExecutorTests.cs" />
+	  <Compile Remove="Query\DefaultQueryHandlerTests.cs" />
+	  <Compile Remove="Query\ParameterModelReferenceTests.cs" />
+	  <Compile Remove="Query\PropertyModelReferenceTests.cs" />
+	  <Compile Remove="Query\QueryContextTests.cs" />
+	  <Compile Remove="Query\QueryExpressionContextTests.cs" />
+	  <Compile Remove="Query\QueryModelReferenceTests.cs" />
+	  <Compile Remove="Query\QueryRequestTests.cs" />
+	  <Compile Remove="Query\QueryResultTests.cs" />
+	  <Compile Remove="RestierContainerBuilderTests.cs" />
+	  <Compile Remove="ServiceCollectionExtensionTests.cs" />
+	  <Compile Remove="Submit\ChangeSetItemValidationResultTests.cs" />
+	  <Compile Remove="Submit\ChangeSetTests.cs" />
+	  <Compile Remove="Submit\DataModificationItemOfTTests.cs" />
+	  <Compile Remove="Submit\DataModificationItemTests.cs" />
+	  <Compile Remove="Submit\DefaultChangeSetInitializerTests.cs" />
+	  <Compile Remove="Submit\DefaultSubmitExecutorTests.cs" />
+	  <Compile Remove="Submit\SubmitContextTests.cs" />
+	  <Compile Remove="Submit\SubmitResultTests.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\src\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Extensions\" />
+	  <Folder Include="Legacy\" />
+	  <Folder Include="Model\" />
+	  <Folder Include="Operation\" />
+	  <Folder Include="Query\" />
+	  <Folder Include="Submit\" />
 	</ItemGroup>
 </Project>

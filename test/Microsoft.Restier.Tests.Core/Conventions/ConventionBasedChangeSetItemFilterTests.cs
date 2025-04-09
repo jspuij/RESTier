@@ -8,10 +8,12 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NSubstitute;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -19,10 +21,11 @@ namespace Microsoft.Restier.Tests.Core
     /// Unit tests for the <see cref="ConventionBasedChangeSetItemFilter"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    [TestClass]
     public class ConventionBasedChangeSetItemFilterTests
     {
-        private readonly IServiceProvider serviceProvider;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
         private readonly DataModificationItem dataModificationItem;
         private readonly TestTraceListener testTraceListener = new TestTraceListener();
 
@@ -31,7 +34,9 @@ namespace Microsoft.Restier.Tests.Core
         /// </summary>
         public ConventionBasedChangeSetItemFilterTests()
         {
-            serviceProvider = new ServiceProviderMock().ServiceProvider.Object;
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
             dataModificationItem = new DataModificationItem(
                 "Test",
                 typeof(object),
@@ -49,7 +54,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks whether the <see cref="ConventionBasedChangeSetItemFilter"/> can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
@@ -59,7 +64,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that the constructor cannot be called with a null type.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullTargetType()
         {
             Action act = () => new ConventionBasedChangeSetItemFilter(default(Type));
@@ -70,11 +75,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync can be called.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallOnChangeSetItemProcessingAsync()
         {
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             var cancellationToken = CancellationToken.None;
             await testClass.OnChangeSetItemProcessingAsync(context, dataModificationItem, cancellationToken);
         }
@@ -83,10 +88,10 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync invokes the OnInsertingObject method according to convention.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessingAsyncInvokesConventionMethod()
         {
-            var api = new InsertApi(serviceProvider);
+            var api = new InsertApi(model, queryHandler, submitHandler);
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(InsertApi));
@@ -98,7 +103,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that OnChangeSetItemProcessingAsync throws when the submit context is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallOnChangeSetItemProcessingAsyncWithNullContext()
         {
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
@@ -113,12 +118,12 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that OnChangeSetItemProcessingAsync throws when the item is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallOnChangeSetItemProcessingAsyncWithNullItem()
         {
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
             Func<Task> act = () => testClass.OnChangeSetItemProcessingAsync(
-                new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet()),
+                new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet()),
                 default(ChangeSetItem),
                 CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentNullException>();
@@ -128,11 +133,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessedAsync can be called.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallOnChangeSetItemProcessedAsync()
         {
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             var cancellationToken = CancellationToken.None;
             await testClass.OnChangeSetItemProcessedAsync(context, dataModificationItem, cancellationToken);
         }
@@ -141,10 +146,10 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessedAsync invokes the OnInsertedObject method according to convention.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessedAsyncInvokesConventionMethod()
         {
-            var api = new InsertApi(serviceProvider);
+            var api = new InsertApi(model, queryHandler, submitHandler);
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(InsertApi));
@@ -156,11 +161,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync does not invoke OnInsertingObject because of an incorrect visibility.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessingAsyncWithPrivateMethod()
         {
             testTraceListener.Clear();
-            var api = new PrivateMethodApi(serviceProvider);
+            var api = new PrivateMethodApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(PrivateMethodApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -173,11 +178,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync does not invoke OnInsertingObject because of a wrong return type.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessingWithWrongReturnType()
         {
             testTraceListener.Clear();
-            var api = new WrongReturnTypeApi(serviceProvider);
+            var api = new WrongReturnTypeApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(WrongReturnTypeApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -190,11 +195,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync does not invoke OnInsertingTest because of a wrong resource name.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessingWithWrongMethod()
         {
             testTraceListener.Clear();
-            var api = new WrongMethodApi(serviceProvider);
+            var api = new WrongMethodApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(WrongMethodApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -207,11 +212,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync does not invoke OnInsertingObject because of a wrong api type.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessingWithWrongApiType()
         {
             testTraceListener.Clear();
-            var api = new PrivateMethodApi(serviceProvider);
+            var api = new PrivateMethodApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(InsertApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -224,11 +229,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that OnChangeSetItemProcessingAsync does not invoke OnInsertingObject because of a wrong number of arguments.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task OnChangeSetItemProcessingWithWrongNumberOfArguments()
         {
             testTraceListener.Clear();
-            var api = new IncorrectArgumentsApi(serviceProvider);
+            var api = new IncorrectArgumentsApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(IncorrectArgumentsApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -241,7 +246,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that OnChangeSetItemProcessedAsync throws when the submit context is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallOnChangeSetItemProcessedAsyncWithNullContext()
         {
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
@@ -256,12 +261,12 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that OnChangeSetItemProcessedAsync throws when the item is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallOnChangeSetItemProcessedAsyncWithNullItem()
         {
             var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
             Func<Task> act = () => testClass.OnChangeSetItemProcessedAsync(
-                new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet()),
+                new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet()),
                 default(ChangeSetItem),
                 CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentNullException>();
@@ -269,16 +274,14 @@ namespace Microsoft.Restier.Tests.Core
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }
 
         private class InsertApi : ApiBase
         {
-            public InsertApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public InsertApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -299,8 +302,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class PrivateMethodApi : ApiBase
         {
-            public PrivateMethodApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public PrivateMethodApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -314,8 +316,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class WrongReturnTypeApi : ApiBase
         {
-            public WrongReturnTypeApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public WrongReturnTypeApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -330,8 +331,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class WrongMethodApi : ApiBase
         {
-            public WrongMethodApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public WrongMethodApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -345,8 +345,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class IncorrectArgumentsApi : ApiBase
         {
-            public IncorrectArgumentsApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public IncorrectArgumentsApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 

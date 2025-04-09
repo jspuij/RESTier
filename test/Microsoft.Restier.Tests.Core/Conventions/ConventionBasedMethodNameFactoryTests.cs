@@ -3,34 +3,36 @@
 
 namespace Microsoft.Restier.Tests.Core
 {
-    using System;
-    using System.Collections;
-    using System.Collections.Generic;
-    using System.Diagnostics.CodeAnalysis;
     using FluentAssertions;
     using Microsoft.OData.Edm;
     using Microsoft.Restier.Core;
     using Microsoft.Restier.Core.Operation;
+    using Microsoft.Restier.Core.Query;
     using Microsoft.Restier.Core.Submit;
-    using Microsoft.Restier.Tests.Shared;
-    using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using Moq;
+    using NSubstitute;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
+    using Xunit;
 
     /// <summary>
     /// Unit tests for the <see cref="ConventionBasedMethodNameFactory"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    [TestClass]
     public class ConventionBasedMethodNameFactoryTests
     {
-        private readonly IServiceProvider serviceProvider;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedMethodNameFactoryTests"/> class.
         /// </summary>
         public ConventionBasedMethodNameFactoryTests()
         {
-            serviceProvider = new ServiceProviderMock().ServiceProvider.Object;
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
         }
 
         /// <summary>
@@ -39,34 +41,33 @@ namespace Microsoft.Restier.Tests.Core
         /// <param name="pipelineState">The pipeline state.</param>
         /// <param name="entitySetOperation">The entity set operation.</param>
         /// <param name="expected">The expected result.</param>
-        [DataTestMethod]
-#pragma warning disable MSTEST0018 // DynamicData should be valid
-        [DynamicData(nameof(GetMethodNameData), DynamicDataSourceType.Method)]
-#pragma warning restore MSTEST0018 // DynamicData should be valid
+        [Theory]
+        [MemberData(nameof(GetMethodNameData))]
         public static void CanCallGetEntitySetMethodNameWithEntitySetAndRestierPipelineStateAndOperation(
             RestierPipelineState pipelineState,
             RestierEntitySetOperation entitySetOperation,
             string expected)
         {
-            var entitySetMock = new Mock<IEdmEntitySet>();
-            var entityCollectionTypeMock = new Mock<IEdmCollectionType>();
-            var entityTypeReferenceMock = new Mock<IEdmEntityTypeReference>();
-            var entityTypeMock = new Mock<IEdmEntityType>();
+            var entitySet = Substitute.For<IEdmEntitySet>();
+            var entityCollectionType = Substitute.For<IEdmCollectionType>();
+            var entityTypeReference = Substitute.For<IEdmEntityTypeReference>();
+            var entityType = Substitute.For<IEdmEntityType>();
 
-            entityTypeMock.Setup(x => x.Name).Returns("Test");
-            entityTypeReferenceMock.Setup(x => x.Definition).Returns(entityTypeMock.Object);
-            entityCollectionTypeMock.Setup(x => x.ElementType).Returns(entityTypeReferenceMock.Object);
-            entitySetMock.Setup(x => x.Name).Returns("Tests");
-            entitySetMock.Setup(x => x.Type).Returns(entityCollectionTypeMock.Object);
+            entityType.Name.Returns("Test");
+            entityTypeReference.Definition.Returns(entityType);
+            entityCollectionType.ElementType.Returns(entityTypeReference);
+            entitySet.Name.Returns("Tests");
+            entitySet.Type.Returns(entityCollectionType);
+            entitySet.EntityType.Returns(entityType);
 
-            var result = ConventionBasedMethodNameFactory.GetEntitySetMethodName(entitySetMock.Object, pipelineState, entitySetOperation);
+            var result = ConventionBasedMethodNameFactory.GetEntitySetMethodName(entitySet, pipelineState, entitySetOperation);
             result.Should().Be(expected);
         }
 
         /// <summary>
         /// Checks that calling GetEntitySetMethodName with a null IEdmEntitySet returns an empty string.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanCallGetEntitySetMethodNameWithEntitySetAndRestierPipelineStateAndOperationWithNullEntitySet()
         {
             var result = ConventionBasedMethodNameFactory.GetEntitySetMethodName(
@@ -82,9 +83,9 @@ namespace Microsoft.Restier.Tests.Core
         /// <param name="pipelineState">The pipeline state.</param>
         /// <param name="entitySetOperation">The entity set operation.</param>
         /// <param name="expected">The expected result.</param>
-        [DataTestMethod]
+        [Theory]
 #pragma warning disable MSTEST0018 // DynamicData should be valid
-        [DynamicData(nameof(GetMethodNameData), DynamicDataSourceType.Method)]
+        [MemberData(nameof(GetMethodNameData))]
 #pragma warning restore MSTEST0018 // DynamicData should be valid
         public static void CanCallGetEntitySetMethodNameWithItemAndRestierPipelineState(
             RestierPipelineState pipelineState,
@@ -96,9 +97,9 @@ namespace Microsoft.Restier.Tests.Core
                 typeof(Test),
                 typeof(Test),
                 entitySetOperation,
-                new Mock<IReadOnlyDictionary<string, object>>().Object,
-                new Mock<IReadOnlyDictionary<string, object>>().Object,
-                new Mock<IReadOnlyDictionary<string, object>>().Object);
+                Substitute.For<IReadOnlyDictionary<string, object>>(),
+                Substitute.For<IReadOnlyDictionary<string, object>>(),
+                Substitute.For<IReadOnlyDictionary<string, object>>());
             var result = ConventionBasedMethodNameFactory.GetEntitySetMethodName(item, pipelineState);
             result.Should().Be(expected);
         }
@@ -106,7 +107,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that calling GetEntitySetMethodName with a null DataModificationItem returns an empty string.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanCallGetEntitySetMethodNameWithItemAndRestierPipelineStateWithNullItem()
         {
             var result = ConventionBasedMethodNameFactory.GetEntitySetMethodName(
@@ -120,29 +121,29 @@ namespace Microsoft.Restier.Tests.Core
         /// </summary>
         /// <param name="pipelineState">The pipeline state.</param>
         /// <param name="expected">The expected result.</param>
-        [DataTestMethod]
-        [DataRow(RestierPipelineState.Authorization, "CanExecuteCalculate")]
-        [DataRow(RestierPipelineState.PostSubmit, "OnExecutedCalculate")]
-        [DataRow(RestierPipelineState.PreSubmit, "OnExecutingCalculate")]
-        [DataRow(RestierPipelineState.Submit, "")]
-        [DataRow(RestierPipelineState.Validation, "")]
+        [Theory]
+        [InlineData(RestierPipelineState.Authorization, "CanExecuteCalculate")]
+        [InlineData(RestierPipelineState.PostSubmit, "OnExecutedCalculate")]
+        [InlineData(RestierPipelineState.PreSubmit, "OnExecutingCalculate")]
+        [InlineData(RestierPipelineState.Submit, "")]
+        [InlineData(RestierPipelineState.Validation, "")]
         public static void CanCallGetFunctionMethodNameWithIEdmOperationImportAndRestierPipelineStateAndRestierOperationMethod(
             RestierPipelineState pipelineState,
             string expected)
         {
-            var operationImportMock = new Mock<IEdmOperationImport>();
-            var operationMock = new Mock<IEdmOperation>();
-            operationMock.Setup(x => x.Name).Returns("Calculate");
-            operationImportMock.Setup(x => x.Operation).Returns(operationMock.Object);
+            var operationImportMock = Substitute.For<IEdmOperationImport>();
+            var operationMock = Substitute.For<IEdmOperation>();
+            operationMock.Name.Returns("Calculate");
+            operationImportMock.Operation.Returns(operationMock);
             var restierOperation = RestierOperationMethod.Execute;
-            var result = ConventionBasedMethodNameFactory.GetFunctionMethodName(operationImportMock.Object, pipelineState, restierOperation);
+            var result = ConventionBasedMethodNameFactory.GetFunctionMethodName(operationImportMock, pipelineState, restierOperation);
             result.Should().Be(expected);
         }
 
         /// <summary>
         /// Checks that calling GetFunctionMethodName with a null IEdmOperationImport returns an empty string.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanCallGetFunctionMethodNameWithIEdmOperationImportAndRestierPipelineStateAndRestierOperationMethodWithNullOperationImport()
         {
             var result = ConventionBasedMethodNameFactory.GetFunctionMethodName(
@@ -155,7 +156,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that calling GetFunctionMethodName with a null OperationContext returns an empty string.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotCallGetFunctionMethodNameWithOperationContextAndRestierPipelineStateAndRestierOperationMethodWithNullOperationImport()
         {
             var result = ConventionBasedMethodNameFactory.GetFunctionMethodName(
@@ -170,49 +171,49 @@ namespace Microsoft.Restier.Tests.Core
         /// </summary>
         /// <param name="pipelineState">The pipeline state.</param>
         /// <param name="expected">The expected result.</param>
-        [DataTestMethod]
-        [DataRow(RestierPipelineState.Authorization, "CanExecuteCalculate")]
-        [DataRow(RestierPipelineState.PostSubmit, "OnExecutedCalculate")]
-        [DataRow(RestierPipelineState.PreSubmit, "OnExecutingCalculate")]
-        [DataRow(RestierPipelineState.Submit, "")]
-        [DataRow(RestierPipelineState.Validation, "")]
+        [Theory]
+        [InlineData(RestierPipelineState.Authorization, "CanExecuteCalculate")]
+        [InlineData(RestierPipelineState.PostSubmit, "OnExecutedCalculate")]
+        [InlineData(RestierPipelineState.PreSubmit, "OnExecutingCalculate")]
+        [InlineData(RestierPipelineState.Submit, "")]
+        [InlineData(RestierPipelineState.Validation, "")]
         public void CanCallGetFunctionMethodNameWithOperationContextAndRestierPipelineStateAndRestierOperationMethod(
             RestierPipelineState pipelineState,
             string expected)
         {
             var operationImport = new OperationContext(
-                new EmptyApi(serviceProvider),
+                new EmptyApi(model, queryHandler, submitHandler),
                 name => this,
                 "Calculate",
                 false,
-                new Mock<IEnumerable>().Object);
+                Substitute.For<IEnumerable>());
             var restierOperation = RestierOperationMethod.Execute;
             var result = ConventionBasedMethodNameFactory.GetFunctionMethodName(operationImport, pipelineState, restierOperation);
             result.Should().Be(expected);
         }
 
-        private IEnumerable<object[]> GetMethodNameData()
+        public static IEnumerable<TheoryDataRow<RestierPipelineState, RestierEntitySetOperation, string>> GetMethodNameData()
         {
-            yield return new object[] { RestierPipelineState.Authorization, RestierEntitySetOperation.Delete, "CanDeleteTest" };
-            yield return new object[] { RestierPipelineState.PostSubmit, RestierEntitySetOperation.Delete, "OnDeletedTest" };
-            yield return new object[] { RestierPipelineState.PreSubmit, RestierEntitySetOperation.Delete, "OnDeletingTest" };
-            yield return new object[] { RestierPipelineState.Submit, RestierEntitySetOperation.Delete, string.Empty };
-            yield return new object[] { RestierPipelineState.Validation, RestierEntitySetOperation.Delete, string.Empty };
-            yield return new object[] { RestierPipelineState.Authorization, RestierEntitySetOperation.Filter, string.Empty };
-            yield return new object[] { RestierPipelineState.PostSubmit, RestierEntitySetOperation.Filter, string.Empty };
-            yield return new object[] { RestierPipelineState.PreSubmit, RestierEntitySetOperation.Filter, string.Empty };
-            yield return new object[] { RestierPipelineState.Submit, RestierEntitySetOperation.Filter, "OnFilterTests" };
-            yield return new object[] { RestierPipelineState.Validation, RestierEntitySetOperation.Filter, string.Empty };
-            yield return new object[] { RestierPipelineState.Authorization, RestierEntitySetOperation.Insert, "CanInsertTest" };
-            yield return new object[] { RestierPipelineState.PostSubmit, RestierEntitySetOperation.Insert, "OnInsertedTest" };
-            yield return new object[] { RestierPipelineState.PreSubmit, RestierEntitySetOperation.Insert, "OnInsertingTest" };
-            yield return new object[] { RestierPipelineState.Submit, RestierEntitySetOperation.Insert, string.Empty };
-            yield return new object[] { RestierPipelineState.Validation, RestierEntitySetOperation.Insert, string.Empty };
-            yield return new object[] { RestierPipelineState.Authorization, RestierEntitySetOperation.Update, "CanUpdateTest" };
-            yield return new object[] { RestierPipelineState.PostSubmit, RestierEntitySetOperation.Update, "OnUpdatedTest" };
-            yield return new object[] { RestierPipelineState.PreSubmit, RestierEntitySetOperation.Update, "OnUpdatingTest" };
-            yield return new object[] { RestierPipelineState.Submit, RestierEntitySetOperation.Update, string.Empty };
-            yield return new object[] { RestierPipelineState.Validation, RestierEntitySetOperation.Update, string.Empty };
+            yield return ( RestierPipelineState.Authorization, RestierEntitySetOperation.Delete, "CanDeleteTest" );
+            yield return ( RestierPipelineState.PostSubmit, RestierEntitySetOperation.Delete, "OnDeletedTest" );
+            yield return ( RestierPipelineState.PreSubmit, RestierEntitySetOperation.Delete, "OnDeletingTest" );
+            yield return ( RestierPipelineState.Submit, RestierEntitySetOperation.Delete, string.Empty );
+            yield return ( RestierPipelineState.Validation, RestierEntitySetOperation.Delete, string.Empty );
+            yield return ( RestierPipelineState.Authorization, RestierEntitySetOperation.Filter, string.Empty );
+            yield return ( RestierPipelineState.PostSubmit, RestierEntitySetOperation.Filter, string.Empty );
+            yield return ( RestierPipelineState.PreSubmit, RestierEntitySetOperation.Filter, string.Empty );
+            yield return ( RestierPipelineState.Submit, RestierEntitySetOperation.Filter, "OnFilterTests" );
+            yield return ( RestierPipelineState.Validation, RestierEntitySetOperation.Filter, string.Empty );
+            yield return ( RestierPipelineState.Authorization, RestierEntitySetOperation.Insert, "CanInsertTest" );
+            yield return ( RestierPipelineState.PostSubmit, RestierEntitySetOperation.Insert, "OnInsertedTest" );
+            yield return ( RestierPipelineState.PreSubmit, RestierEntitySetOperation.Insert, "OnInsertingTest" );
+            yield return ( RestierPipelineState.Submit, RestierEntitySetOperation.Insert, string.Empty );
+            yield return ( RestierPipelineState.Validation, RestierEntitySetOperation.Insert, string.Empty );
+            yield return ( RestierPipelineState.Authorization, RestierEntitySetOperation.Update, "CanUpdateTest" );
+            yield return ( RestierPipelineState.PostSubmit, RestierEntitySetOperation.Update, "OnUpdatedTest" );
+            yield return ( RestierPipelineState.PreSubmit, RestierEntitySetOperation.Update, "OnUpdatingTest" );
+            yield return ( RestierPipelineState.Submit, RestierEntitySetOperation.Update, string.Empty );
+            yield return ( RestierPipelineState.Validation, RestierEntitySetOperation.Update, string.Empty );
         }          
 
         private class Test
@@ -221,8 +222,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

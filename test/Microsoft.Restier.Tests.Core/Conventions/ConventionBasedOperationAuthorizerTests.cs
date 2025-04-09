@@ -1,16 +1,17 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Operation;
+using Microsoft.Restier.Core.Query;
+using NSubstitute;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Operation;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -18,25 +19,27 @@ namespace Microsoft.Restier.Tests.Core
     /// Unit tests for the <see cref="ConventionBasedOperationAuthorizer"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    [TestClass]
     public class ConventionBasedOperationAuthorizerTests
     {
-        private readonly IServiceProvider serviceProvider;
-        private readonly TestTraceListener testTraceListener = new TestTraceListener();
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedOperationAuthorizerTests"/> class.
         /// </summary>
         public ConventionBasedOperationAuthorizerTests()
         {
-            serviceProvider = new ServiceProviderMock().ServiceProvider.Object;
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
             Trace.Listeners.Add(testTraceListener);
         }
 
         /// <summary>
         /// Checks whether the <see cref="ConventionBasedOperationAuthorizer"/> can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new ConventionBasedOperationAuthorizer(typeof(EmptyApi));
@@ -46,7 +49,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that the constructor cannot be called with a null type.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullTargetType()
         {
             Action act = () => new ConventionBasedOperationAuthorizer(default(Type));
@@ -57,7 +60,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync can be called and returns true by default.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallAuthorizeAsync()
         {
             var context = new OperationContext(
@@ -76,7 +79,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync invokes the CanInsertObject method according to convention.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncInvokesConventionMethod()
         {
             var api = new NoPermissionApi(serviceProvider);
@@ -97,7 +100,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of an incorrect visibility.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithPrivateMethod()
         {
             testTraceListener.Clear();
@@ -120,7 +123,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of a wrong return type.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithWrongReturnType()
         {
             testTraceListener.Clear();
@@ -143,7 +146,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of a wrong api type.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithWrongApiType()
         {
             testTraceListener.Clear();
@@ -166,7 +169,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of a wrong number of arguments.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithWrongNumberOfArguments()
         {
             testTraceListener.Clear();
@@ -189,7 +192,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that AuthorizeAsync throws when the submit context is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallAuthorizeAsyncWithNullContext()
         {
             var testClass = new ConventionBasedOperationAuthorizer(typeof(EmptyApi));

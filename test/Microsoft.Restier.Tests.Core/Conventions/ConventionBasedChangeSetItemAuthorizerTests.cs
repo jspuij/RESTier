@@ -1,17 +1,19 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Submit;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -19,10 +21,11 @@ namespace Microsoft.Restier.Tests.Core
     /// Unit tests for the <see cref="ConventionBasedChangeSetItemAuthorizer"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    [TestClass]
     public class ConventionBasedChangeSetItemAuthorizerTests
     {
-        private readonly IServiceProvider serviceProvider;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
         private readonly DataModificationItem dataModificationItem;
         private readonly TestTraceListener testTraceListener = new TestTraceListener();
 
@@ -31,7 +34,9 @@ namespace Microsoft.Restier.Tests.Core
         /// </summary>
         public ConventionBasedChangeSetItemAuthorizerTests()
         {
-            serviceProvider = new ServiceProviderMock().ServiceProvider.Object;
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
             dataModificationItem = new DataModificationItem(
                 "Test",
                 typeof(object),
@@ -46,7 +51,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks whether the <see cref="ConventionBasedChangeSetItemAuthorizer"/> can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi));
@@ -56,7 +61,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <summary>
         /// Checks that the constructor cannot be called with a null type.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullTargetType()
         {
             Action act = () => new ConventionBasedChangeSetItemAuthorizer(default(Type));
@@ -67,10 +72,10 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync can be called and returns true by default.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallAuthorizeAsync()
         {
-            var context = new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet());
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
             var cancellationToken = CancellationToken.None;
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi));
             var result = await testClass.AuthorizeAsync(context, dataModificationItem, cancellationToken);
@@ -81,10 +86,10 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync invokes the CanInsertObject method according to convention.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncInvokesConventionMethod()
         {
-            var api = new NoPermissionApi(serviceProvider);
+            var api = new NoPermissionApi(model, queryHandler, submitHandler);
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(NoPermissionApi));
@@ -97,10 +102,10 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync invokes the CanInsertObject method according to convention.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncInvokesAsyncConventionMethod()
         {
-            var api = new AsyncApi(serviceProvider);
+            var api = new AsyncApi(model, queryHandler, submitHandler);
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(AsyncApi));
@@ -113,11 +118,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of an incorrect visibility.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithPrivateMethod()
         {
             testTraceListener.Clear();
-            var api = new PrivateMethodApi(serviceProvider);
+            var api = new PrivateMethodApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(PrivateMethodApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -131,11 +136,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of a wrong return type.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithWrongReturnType()
         {
             testTraceListener.Clear();
-            var api = new WrongReturnTypeApi(serviceProvider);
+            var api = new WrongReturnTypeApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(WrongReturnTypeApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -149,11 +154,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of a wrong api type.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithWrongApiType()
         {
             testTraceListener.Clear();
-            var api = new WrongReturnTypeApi(serviceProvider);
+            var api = new WrongReturnTypeApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(NoPermissionApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -167,11 +172,11 @@ namespace Microsoft.Restier.Tests.Core
         /// Check that AuthorizeAsync does not invoke CanInsertObject because of a wrong number of arguments.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task AuthorizeAsyncWithWrongNumberOfArguments()
         {
             testTraceListener.Clear();
-            var api = new IncorrectArgumentsApi(serviceProvider);
+            var api = new IncorrectArgumentsApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(IncorrectArgumentsApi));
             var context = new SubmitContext(api, new ChangeSet());
             var cancellationToken = CancellationToken.None;
@@ -185,7 +190,7 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that AuthorizeAsync throws when the submit context is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallAuthorizeAsyncWithNullContext()
         {
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi));
@@ -200,26 +205,24 @@ namespace Microsoft.Restier.Tests.Core
         /// Checks that AuthorizeAsync throws when the item. is null.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallAuthorizeAsyncWithNullItem()
         {
             var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi));
-            Func<Task> act = () => testClass.AuthorizeAsync(new SubmitContext(new EmptyApi(serviceProvider), new ChangeSet()), default(ChangeSetItem), CancellationToken.None);
+            Func<Task> act = () => testClass.AuthorizeAsync(new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet()), default(ChangeSetItem), CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }
 
         private class AsyncApi : ApiBase
         {
-            public AsyncApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public AsyncApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -234,8 +237,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class PrivateMethodApi : ApiBase
         {
-            public PrivateMethodApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public PrivateMethodApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -250,8 +252,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class WrongReturnTypeApi : ApiBase
         {
-            public WrongReturnTypeApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public WrongReturnTypeApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -266,8 +267,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class NoPermissionApi : ApiBase
         {
-            public NoPermissionApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public NoPermissionApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -282,8 +282,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class IncorrectArgumentsApi : ApiBase
         {
-            public IncorrectArgumentsApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public IncorrectArgumentsApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 

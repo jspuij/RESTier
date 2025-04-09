@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="NuGet.Config" />
+    <File Path="README.md" />
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="dotnet-logo.png" />
+  </Folder>
+  <Folder Name="/src/" Id="02ea681e-c7d8-13c7-8484-4ac65e1b71e8">
+    <Project Path="src/Microsoft.Restier.Core/Microsoft.Restier.Core.csproj" />
+  </Folder>
+  <Folder Name="/test/" Id="67e76b39-b345-4061-b1a8-31b95b6f83a8">
+    <Project Path="test/Microsoft.Restier.Tests.Core/Microsoft.Restier.Tests.Core.csproj" />
+  </Folder>
+</Solution>

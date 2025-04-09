@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net8.0;net9.0;</TargetFrameworks>
+		<IsPackable>false</IsPackable>
+		<OutputType>exe</OutputType>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
+	  <Compile Remove="ServiceCollectionExtensionTests.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
+	</ItemGroup>
+</Project>

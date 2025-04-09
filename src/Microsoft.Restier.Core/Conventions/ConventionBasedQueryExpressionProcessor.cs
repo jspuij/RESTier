@@ -89,7 +89,7 @@ namespace Microsoft.Restier.Core
                 }
 
                 // Get the model, query it for the entity set of a given type.
-                var entitySet = context.QueryContext.Model.EntityContainer.EntitySets().FirstOrDefault(c => c.EntityType() == entityType);
+                var entitySet = context.QueryContext.Model.EntityContainer.EntitySets().FirstOrDefault(c => c.EntityType == entityType);
                 if (entitySet is null)
                 {
                     return null;

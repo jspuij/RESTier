@@ -13,7 +13,6 @@ namespace Microsoft.Restier.Core.Operation
     /// </summary>
     public class OperationContext : InvocationContext
     {
-
         /// <summary>
         /// Initializes a new instance of the <see cref="OperationContext" /> class.
         /// </summary>

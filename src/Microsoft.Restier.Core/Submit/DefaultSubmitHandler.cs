@@ -16,7 +16,7 @@ namespace Microsoft.Restier.Core.Submit
     /// <summary>
     /// The default handler for submitting changes through the <see cref="ApiBase"/>.
     /// </summary>
-    internal class DefaultSubmitHandler
+    internal class DefaultSubmitHandler : ISubmitHandler
     {
 
         #region Private Members

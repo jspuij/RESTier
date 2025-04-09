@@ -12,13 +12,14 @@ using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.Model;
 
 namespace Microsoft.Restier.Core.Query
 {
     /// <summary>
     /// Represents the default query handler.
     /// </summary>
-    internal class DefaultQueryHandler
+    internal class DefaultQueryHandler : IQueryHandler
     {
         private const string ExpressionMethodNameOfWhere = "Where";
         private const string ExpressionMethodNameOfSelect = "Select";
@@ -27,26 +28,37 @@ namespace Microsoft.Restier.Core.Query
         private readonly IQueryExpressionAuthorizer authorizer;
         private readonly IQueryExpressionExpander expander;
         private readonly IQueryExpressionProcessor processor;
+        private readonly IQueryExecutor executor;
         private readonly IQueryExpressionSourcer sourcer;
+        private readonly IModelMapper mapper;
 
         /// <summary>
         /// Initializes a new instance of the DefaultQueryHandler class.
         /// </summary>
         /// <param name="sourcer">The query expression sourcer to use.</param>
+        /// <param name="executor">The query executor to use.</param>
+        /// <param name="mapper">The model mapper to use.</param>
         /// <param name="authorizer">The query expression authorizer to use.</param>
         /// <param name="expander">The query expression expander to use.</param>
         /// <param name="processor">The query expression processor to use.</param>
-        public DefaultQueryHandler(IQueryExpressionSourcer sourcer,
+        public DefaultQueryHandler(
+            IQueryExpressionSourcer sourcer,
+            IQueryExecutor executor,
+            IModelMapper mapper,
             IQueryExpressionAuthorizer authorizer = null,
             IQueryExpressionExpander expander = null,
             IQueryExpressionProcessor processor = null)
         {
             Ensure.NotNull(sourcer, nameof(sourcer));
+            Ensure.NotNull(executor, nameof(executor));
+            Ensure.NotNull(mapper, nameof(mapper));
 
             this.authorizer = authorizer;
             this.expander = expander;
             this.processor = processor;
+            this.executor = executor;
             this.sourcer = sourcer;
+            this.mapper = mapper;
         }
 
         /// <summary>
@@ -90,11 +102,6 @@ namespace Microsoft.Restier.Core.Query
 
             // execute query
             QueryResult result;
-            var executor = context.GetApiService<IQueryExecutor>();
-            if (executor is null)
-            {
-                throw new NotSupportedException(Resources.MissingQueryExecutor);
-            }
 
             if (elementType is not null)
             {
@@ -132,6 +139,36 @@ namespace Microsoft.Restier.Core.Query
 
             return result;
         }
+
+        /// <summary>
+        /// Ensures that the Element Type exists in the model.
+        /// </summary>
+        /// <param name="modelContext">The model context to use.</param>
+        /// <param name="namespaceName">The namespace of the element type. Can be null.</param>
+        /// <param name="name">The name of the element type.</param>
+        /// <returns>The element type.</returns>
+        public Type EnsureElementType(ModelContext modelContext, string namespaceName, string name)
+        {
+            Type elementType;
+
+            if (namespaceName is null)
+            {
+                mapper.TryGetRelevantType(modelContext, name, out elementType);
+            }
+            else
+            {
+                mapper.TryGetRelevantType(modelContext, namespaceName, name, out elementType);
+            }
+
+            if (elementType is null)
+            {
+                throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, Resources.ElementTypeNotFound, name));
+            }
+
+            return elementType;
+        }
+
+
 
         private static async Task CheckSubExpressionResult(
             QueryContext context,

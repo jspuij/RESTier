@@ -20,7 +20,10 @@ namespace Microsoft.Restier.Core.Submit
         public virtual Task InitializeAsync(SubmitContext context, CancellationToken cancellationToken)
         {
             Ensure.NotNull(context, nameof(context));
-            context.ChangeSet = new ChangeSet();
+            if (context.ChangeSet == null)
+            {
+                context.ChangeSet = new ChangeSet();
+            }
             return Task.CompletedTask;
         }
 

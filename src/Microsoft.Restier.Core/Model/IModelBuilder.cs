@@ -15,14 +15,10 @@ namespace Microsoft.Restier.Core.Model
         /// <summary>
         /// Asynchronously gets an API model for an API.
         /// </summary>
-        /// <param name="context">
-        /// The context for processing
-        /// </param>
         /// <returns>
-        /// A task that represents the asynchronous
-        /// operation whose result is the API model.
+        /// Constructs the Edm Model for the API.
         /// </returns>
-        IEdmModel GetModel(ModelContext context);
+        IEdmModel GetEdmModel();
 
     }
 

@@ -8,9 +8,6 @@
 
 	<ItemGroup>
 	  <Compile Remove="ApiBaseTests.cs" />
-	  <Compile Remove="Conventions\ConventionBasedOperationAuthorizerTests.cs" />
-	  <Compile Remove="Conventions\ConventionBasedOperationFilterTests.cs" />
-	  <Compile Remove="Conventions\ConventionBasedQueryExpressionProcessorTests.cs" />
 	  <Compile Remove="Extensions\ApiBaseExtensionsTests.cs" />
 	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
 	  <Compile Remove="InvocationContextTests.cs" />

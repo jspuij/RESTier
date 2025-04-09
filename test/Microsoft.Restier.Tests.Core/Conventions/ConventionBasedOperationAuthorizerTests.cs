@@ -6,12 +6,14 @@ using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Operation;
 using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 using NSubstitute;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -24,6 +26,7 @@ namespace Microsoft.Restier.Tests.Core
         private readonly IQueryHandler queryHandler;
         private readonly IEdmModel model;
         private readonly ISubmitHandler submitHandler;
+        private readonly TestTraceListener testTraceListener = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedOperationAuthorizerTests"/> class.
@@ -64,7 +67,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task CanCallAuthorizeAsync()
         {
             var context = new OperationContext(
-                new EmptyApi(serviceProvider),
+                new EmptyApi(model, queryHandler, submitHandler),
                 s => new object(),
                 "Test",
                 true,
@@ -82,7 +85,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task AuthorizeAsyncInvokesConventionMethod()
         {
-            var api = new NoPermissionApi(serviceProvider);
+            var api = new NoPermissionApi(model, queryHandler, submitHandler);
             var context = new OperationContext(
                 api,
                 s => new object(),
@@ -104,7 +107,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task AuthorizeAsyncWithPrivateMethod()
         {
             testTraceListener.Clear();
-            var api = new PrivateMethodApi(serviceProvider);
+            var api = new PrivateMethodApi(model, queryHandler, submitHandler);
             var context = new OperationContext(
                 api,
                 s => new object(),
@@ -127,7 +130,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task AuthorizeAsyncWithWrongReturnType()
         {
             testTraceListener.Clear();
-            var api = new WrongReturnTypeApi(serviceProvider);
+            var api = new WrongReturnTypeApi(model, queryHandler, submitHandler);
             var context = new OperationContext(
                 api,
                 s => new object(),
@@ -150,7 +153,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task AuthorizeAsyncWithWrongApiType()
         {
             testTraceListener.Clear();
-            var api = new WrongReturnTypeApi(serviceProvider);
+            var api = new WrongReturnTypeApi(model, queryHandler, submitHandler);
             var context = new OperationContext(
                 api,
                 s => new object(),
@@ -173,7 +176,7 @@ namespace Microsoft.Restier.Tests.Core
         public async Task AuthorizeAsyncWithWrongNumberOfArguments()
         {
             testTraceListener.Clear();
-            var api = new IncorrectArgumentsApi(serviceProvider);
+            var api = new IncorrectArgumentsApi(model, queryHandler, submitHandler);
             var context = new OperationContext(
                 api,
                 s => new object(),
@@ -204,16 +207,14 @@ namespace Microsoft.Restier.Tests.Core
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }
 
         private class PrivateMethodApi : ApiBase
         {
-            public PrivateMethodApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public PrivateMethodApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -228,8 +229,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class WrongReturnTypeApi : ApiBase
         {
-            public WrongReturnTypeApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public WrongReturnTypeApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -244,8 +244,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class NoPermissionApi : ApiBase
         {
-            public NoPermissionApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public NoPermissionApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -260,8 +259,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class IncorrectArgumentsApi : ApiBase
         {
-            public IncorrectArgumentsApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public IncorrectArgumentsApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 

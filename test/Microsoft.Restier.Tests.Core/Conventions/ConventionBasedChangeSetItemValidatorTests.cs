@@ -29,7 +29,7 @@ namespace Microsoft.Restier.Tests.Core
         private readonly IEdmModel model;
         private readonly ISubmitHandler submitHandler;
         private readonly DataModificationItem dataModificationItem;
-        private readonly TestTraceListener testTraceListener = new TestTraceListener();
+        private readonly TestTraceListener testTraceListener = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedChangeSetItemValidatorTests"/> class.

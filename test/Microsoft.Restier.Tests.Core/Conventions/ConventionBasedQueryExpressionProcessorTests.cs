@@ -12,6 +12,7 @@ using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
 using NSubstitute;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -24,6 +25,7 @@ namespace Microsoft.Restier.Tests.Core
         private readonly IQueryHandler queryHandler;
         private readonly IEdmModel model;
         private readonly ISubmitHandler submitHandler;
+        private readonly TestTraceListener testTraceListener = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedQueryExpressionProcessorTests"/> class.
@@ -74,16 +76,17 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void InnerProcessorShortCircuits()
         {
-            var api = new QueryFilterApi(serviceProvider);
+            queryHandler.EnsureElementType(Arg.Any<ModelContext>(), null, "Tests").Returns(typeof(Test));
+            var api = new QueryFilterApi(model, queryHandler, submitHandler);
             var instance = new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi));
             var queryable = api.GetQueryableSource("Tests");
             var queryRequest = new QueryRequest(queryable);
             var queryContext = new QueryContext(api, queryRequest);
             var queryExpressionContext = new QueryExpressionContext(queryContext);
-            var processorMock = new Mock<IQueryExpressionProcessor>();
+            var processor = Substitute.For<IQueryExpressionProcessor>();
             var expression = Expression.Constant(42);
-            processorMock.Setup(x => x.Process(queryExpressionContext)).Returns(expression);
-            instance.Inner = processorMock.Object;
+            processor.Process(queryExpressionContext).Returns(expression);
+            instance.Inner = processor;
 
             var result = instance.Process(queryExpressionContext);
 
@@ -110,23 +113,21 @@ namespace Microsoft.Restier.Tests.Core
         public void CanSetAndGetInner()
         {
             var instance = new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi));
-            var testValue = new Mock<IQueryExpressionProcessor>().Object;
+            var testValue = Substitute.For<IQueryExpressionProcessor>();
             instance.Inner = testValue;
             instance.Inner.Should().Be(testValue);
         }
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }
 
         private class QueryFilterApi : ApiBase
         {
-            public QueryFilterApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public QueryFilterApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

@@ -5,12 +5,15 @@ using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Operation;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 using NSubstitute;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
@@ -23,6 +26,7 @@ namespace Microsoft.Restier.Tests.Core
         private readonly IQueryHandler queryHandler;
         private readonly IEdmModel model;
         private readonly ISubmitHandler submitHandler;
+        private readonly TestTraceListener testTraceListener = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionBasedOperationFilterTests"/> class.
@@ -64,7 +68,7 @@ namespace Microsoft.Restier.Tests.Core
         {
             var testClass = new ConventionBasedOperationFilter(typeof(EmptyApi));
             var context = new OperationContext(
-                new EmptyApi(serviceProvider),
+                new EmptyApi(model, queryHandler, submitHandler),
                 s => new object(),
                 "Test",
                 true,
@@ -80,7 +84,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutingAsyncInvokesConventionMethod()
         {
-            var api = new ExecuteApi(serviceProvider);
+            var api = new ExecuteApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(ExecuteApi));
             var context = new OperationContext(
                 api,
@@ -100,7 +104,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutingAsyncInvokesAsyncConventionMethod()
         {
-            var api = new ExecuteApi(serviceProvider);
+            var api = new ExecuteApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(ExecuteApi));
             var context = new OperationContext(
                 api,
@@ -134,7 +138,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task CanCallOnOperationExecutedAsync()
         {
-            var api = new EmptyApi(serviceProvider);
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(EmptyApi));
             var context = new OperationContext(
                 api,
@@ -153,7 +157,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutedAsyncInvokesConventionMethod()
         {
-            var api = new ExecuteApi(serviceProvider);
+            var api = new ExecuteApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(ExecuteApi));
             var context = new OperationContext(
                 api,
@@ -173,7 +177,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutedAsyncInvokesAsyncConventionMethod()
         {
-            var api = new ExecuteAsyncApi(serviceProvider);
+            var api = new ExecuteAsyncApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(ExecuteAsyncApi));
             var context = new OperationContext(
                 api,
@@ -193,7 +197,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutingAsyncWithPrivateMethod()
         {
-            var api = new PrivateMethodApi(serviceProvider);
+            var api = new PrivateMethodApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(PrivateMethodApi));
             var context = new OperationContext(
                 api,
@@ -214,7 +218,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutingWithWrongReturnType()
         {
-            var api = new WrongReturnTypeApi(serviceProvider);
+            var api = new WrongReturnTypeApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(WrongReturnTypeApi));
             var context = new OperationContext(
                 api,
@@ -235,7 +239,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutingWithWrongApiType()
         {
-            var api = new PrivateMethodApi(serviceProvider);
+            var api = new PrivateMethodApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(ExecuteApi));
             var context = new OperationContext(
                 api,
@@ -256,7 +260,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task OnOperationExecutingWithWrongNumberOfArguments()
         {
-            var api = new IncorrectArgumentsApi(serviceProvider);
+            var api = new IncorrectArgumentsApi(model, queryHandler, submitHandler);
             var testClass = new ConventionBasedOperationFilter(typeof(IncorrectArgumentsApi));
             var context = new OperationContext(
                 api,
@@ -286,16 +290,14 @@ namespace Microsoft.Restier.Tests.Core
 
         private class EmptyApi : ApiBase
         {
-            public EmptyApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }
 
         private class ExecuteApi : ApiBase
         {
-            public ExecuteApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public ExecuteApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -316,8 +318,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class ExecuteAsyncApi : ApiBase
         {
-            public ExecuteAsyncApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public ExecuteAsyncApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -338,8 +339,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class PrivateMethodApi : ApiBase
         {
-            public PrivateMethodApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public PrivateMethodApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -353,8 +353,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class WrongReturnTypeApi : ApiBase
         {
-            public WrongReturnTypeApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public WrongReturnTypeApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -369,8 +368,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class WrongMethodApi : ApiBase
         {
-            public WrongMethodApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public WrongMethodApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 
@@ -384,8 +382,7 @@ namespace Microsoft.Restier.Tests.Core
 
         private class IncorrectArgumentsApi : ApiBase
         {
-            public IncorrectArgumentsApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public IncorrectArgumentsApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
 

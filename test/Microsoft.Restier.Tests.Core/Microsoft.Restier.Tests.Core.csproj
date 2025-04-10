@@ -8,7 +8,6 @@
 
 	<ItemGroup>
 	  <Compile Remove="ApiBaseTests.cs" />
-	  <Compile Remove="Extensions\ApiBaseExtensionsTests.cs" />
 	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
 	  <Compile Remove="InvocationContextTests.cs" />
 	  <Compile Remove="Legacy\ApiBaseTests.cs" />
@@ -43,7 +42,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Extensions\" />
 	  <Folder Include="Legacy\" />
 	  <Folder Include="Model\" />
 	  <Folder Include="Operation\" />

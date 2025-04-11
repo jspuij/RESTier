@@ -10,8 +10,6 @@
 	  <Compile Remove="ApiBaseTests.cs" />
 	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
 	  <Compile Remove="InvocationContextTests.cs" />
-	  <Compile Remove="Legacy\ApiBaseTests.cs" />
-	  <Compile Remove="Legacy\DefaultModelHandlerTests.cs" />
 	  <Compile Remove="Legacy\PropertyBagTests.cs" />
 	  <Compile Remove="Model\ModelContextTests.cs" />
 	  <Compile Remove="Operation\OperationContextTests.cs" />
@@ -42,7 +40,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Legacy\" />
 	  <Folder Include="Model\" />
 	  <Folder Include="Operation\" />
 	  <Folder Include="Query\" />

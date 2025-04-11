@@ -1,95 +1,107 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Data.Entity;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;
-using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Threading.Tasks;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core
 {
-
-    [TestClass]
+    /// <summary>
+    /// Unit tests for an <see cref="ApiBase"/> instance.
+    /// </summary>
     public partial class ApiBaseTests
-#if NET6_0_OR_GREATER
-        : RestierTestBase<TestableEmptyApi>
-#else
-        : RestierTestBase
-#endif
     {
+        DefaultQueryHandler queryHandler;
+        DefaultSubmitHandler submitHandler;
+        TestModelBuilder modelBuilder = new TestModelBuilder();
 
-        void di(IServiceCollection services)
+        public ApiBaseTests()
         {
-            services.AddChainedService<IModelBuilder>((sp, next) => new TestModelBuilder());
-            services.AddChainedService<IModelMapper>((sp, next) => new TestModelMapper());
-            services.AddChainedService<IQueryExpressionSourcer>((sp, next) => new TestQuerySourcer());
-            diEmpty(services);
-
+            queryHandler = new DefaultQueryHandler(
+                new TestQuerySourcer(),
+                new DefaultQueryExecutor(),
+                new TestModelMapper(),
+                null,
+                null,
+                new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+                );
+            submitHandler = new DefaultSubmitHandler(
+                new DefaultChangeSetInitializer(),
+                new DefaultSubmitExecutor(),
+                new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi)),
+                new ConventionBasedChangeSetItemValidator(),
+                new ConventionBasedChangeSetItemFilter(typeof(EmptyApi))
+                );
         }
 
-        void diEmpty(IServiceCollection services)
+        [Fact]
+        public void DefaultApiBaseCanBeCreatedAndDisposed()
         {
-            services
-                .AddTestDefaultServices();
-        }
-
-        [TestMethod]
-        public async Task DefaultApiBaseCanBeCreatedAndDisposed()
-        {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di);
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
 
             Action exceptionTest = () => { api.Dispose(); };
             exceptionTest.Should().NotThrow<Exception>();
         }
 
-        #region EntitySets
-
-        [TestMethod]
-        public async Task GetQueryableSource_EntitySet_IsConfiguredCorrectly()
+        [Fact]
+        public void GetQueryableSource_EntitySet_IsConfiguredCorrectly()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource("Test", arguments);
 
             CheckQueryable(source, typeof(string), new List<string> { "Test" }, arguments);
         }
-
-        [TestMethod]
-        public async Task GetQueryableSource_OfT_EntitySet_IsConfiguredCorrectly()
+        [Fact]
+        public void GetQueryableSource_OfT_EntitySet_IsConfiguredCorrectly()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource<string>("Test", arguments);
 
             CheckQueryable(source, typeof(string), new List<string> { "Test" }, arguments);
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_EntitySet_ThrowsIfNotMapped()
+        [Fact]
+        public void GetQueryableSource_EntitySet_ThrowsIfNotMapped()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: diEmpty) as ApiBase;
+            queryHandler = new DefaultQueryHandler(
+               new TestQuerySourcer(),
+               new DefaultQueryExecutor(),
+               Substitute.For<IModelMapper>(),
+               null,
+               null,
+               new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+               );
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
             Action exceptionTest = () => { api.GetQueryableSource("Test", arguments); };
             exceptionTest.Should().Throw<NotSupportedException>();
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_OfT_ContainerElementThrowsIfWrongType()
+        [Fact]
+        public void GetQueryableSource_OfT_ContainerElementThrowsIfWrongType()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
             Action exceptionTest = () => { api.GetQueryableSource<object>("Test", arguments); };
@@ -97,149 +109,156 @@ namespace Microsoft.Restier.Tests.Core
 
         }
 
-        #endregion
-
-        #region Functions
-
-        [TestMethod]
-        public async Task GetQueryableSource_ComposableFunction_IsConfiguredCorrectly()
+        [Fact]
+        public void GetQueryableSource_ComposableFunction_IsConfiguredCorrectly()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource("Namespace", "Function", arguments);
 
             CheckQueryable(source, typeof(DateTime), new List<string> { "Namespace", "Function" }, arguments);
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_OfT_ComposableFunction_IsConfiguredCorrectly()
+        [Fact]
+        public void GetQueryableSource_OfT_ComposableFunction_IsConfiguredCorrectly()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource<DateTime>("Namespace", "Function", arguments);
 
             CheckQueryable(source, typeof(DateTime), new List<string> { "Namespace", "Function" }, arguments);
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_ComposableFunction_ThrowsIfNotMapped()
+        [Fact]
+        public void GetQueryableSource_ComposableFunction_ThrowsIfNotMapped()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: diEmpty) as ApiBase;
+            queryHandler = new DefaultQueryHandler(
+               new TestQuerySourcer(),
+               new DefaultQueryExecutor(),
+               Substitute.For<IModelMapper>(),
+               null,
+               null,
+               new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+               );
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
             Action exceptionTest = () => { api.GetQueryableSource("Namespace", "Function", arguments); };
             exceptionTest.Should().Throw<NotSupportedException>();
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_OfT_ComposableFunction_ThrowsIfNotMapped()
+        [Fact]
+        public void GetQueryableSource_OfT_ComposableFunction_ThrowsIfNotMapped()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: diEmpty) as ApiBase;
+            queryHandler = new DefaultQueryHandler(
+               new TestQuerySourcer(),
+               new DefaultQueryExecutor(),
+               Substitute.For<IModelMapper>(),
+               null,
+               null,
+               new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+               );
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
             Action exceptionTest = () => { api.GetQueryableSource<DateTime>("Namespace", "Function", arguments); };
             exceptionTest.Should().Throw<NotSupportedException>();
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_ComposableFunction_ThrowsIfWrongType()
+        [Fact]
+        public void GetQueryableSource_ComposableFunction_ThrowsIfWrongType()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
             Action exceptionTest = () => { api.GetQueryableSource<object>("Namespace", "Function", arguments); };
             exceptionTest.Should().Throw<ArgumentException>();
-
         }
 
-        #endregion
 
-        #region QueryAsync
 
-        [TestMethod]
+        [Fact]
         public async Task QueryAsync_WithQueryReturnsResults()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
 
             var request = new QueryRequest(api.GetQueryableSource<string>("Test"));
-            var result = await api.QueryAsync(request);
+            var result = await api.QueryAsync(request, TestContext.Current.CancellationToken);
             var results = result.Results.Cast<string>();
 
-            results.SequenceEqual(new[] {"Test"}).Should().BeTrue();
+            results.SequenceEqual(new[] { "Test" }).Should().BeTrue();
         }
 
-        [TestMethod]
+        [Fact]
         public async Task QueryAsync_CorrectlyForwardsCall()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var queryRequest = new QueryRequest(api.GetQueryableSource<string>("Test"));
-            var queryResult = await api.QueryAsync(queryRequest);
+            var queryResult = await api.QueryAsync(queryRequest, TestContext.Current.CancellationToken);
 
             queryResult.Results.Cast<string>().SequenceEqual(new[] { "Test" }).Should().BeTrue();
         }
 
-        #endregion
-
-        #region SubmitAsync
-
-        [TestMethod]
+        [Fact]
         public async Task SubmitAsync_CorrectlyForwardsCall()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
-            var submitResult = await api.SubmitAsync();
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
+            var submitResult = await api.SubmitAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             submitResult.CompletedChangeSet.Should().NotBeNull();
         }
 
-        #endregion
-
-        #region Exceptions
-
-        [TestMethod]
-        public async Task GetQueryableSource_CannotEnumerate()
+        [Fact]
+        public void GetQueryableSource_CannotEnumerate()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
             Action exceptionTest = () => { source.GetEnumerator(); };
             exceptionTest.Should().Throw<NotSupportedException>();
-
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_CannotEnumerateIEnumerable()
+        [Fact]
+        public void GetQueryableSource_CannotEnumerateIEnumerable()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
             Action exceptionTest = () => { (source as IEnumerable).GetEnumerator(); };
             exceptionTest.Should().Throw<NotSupportedException>();
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_ProviderCannotGenericExecute()
+        [Fact]
+        public void GetQueryableSource_ProviderCannotGenericExecute()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
             Action exceptionTest = () => { source.Provider.Execute<string>(null); };
             exceptionTest.Should().Throw<NotSupportedException>();
-
         }
 
-        [TestMethod]
-        public async Task GetQueryableSource_ProviderCannotExecute()
+        [Fact]
+        public void GetQueryableSource_ProviderCannotExecute()
         {
-            var api = await RestierTestHelpers.GetTestableApiInstance<TestableEmptyApi>(serviceCollection: di) as ApiBase;
+            var model = modelBuilder.GetEdmModel();
+            var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
             Action exceptionTest = () => { source.Provider.Execute(null); };
             exceptionTest.Should().Throw<NotSupportedException>();
         }
-
-        #endregion
-
-        #region Helpers
 
         /// <summary>
         /// Runs a set of checks against an IQueryable to make sure it has been processed properly.
@@ -248,7 +267,7 @@ namespace Microsoft.Restier.Tests.Core
         /// <param name="elementType">The <see cref="Type"/> returned by the <paramref name="source"/>.</param>
         /// <param name="expressionValues">A <see cref="List{string}"/> containing the parts of the expression to check for.</param>
         /// <param name="arguments">An array of arguments that the <see cref="IQueryable"/> we're testing requires. RWM: In the tests, this is an empty array. Not sure if that is v alid or not.</param>
-        public void CheckQueryable(IQueryable source, Type elementType, List<string> expressionValues, object[] arguments)
+        private void CheckQueryable(IQueryable source, Type elementType, List<string> expressionValues, object[] arguments)
         {
             source.ElementType.Should().Be(elementType);
             (source.Expression is MethodCallExpression).Should().BeTrue();
@@ -272,13 +291,16 @@ namespace Microsoft.Restier.Tests.Core
 
         }
 
-        #endregion
-
-        #region Test Resources
+        private class EmptyApi : ApiBase
+        {
+            public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
+            {
+            }
+        }
 
         private class TestModelBuilder : IModelBuilder
         {
-            public IEdmModel GetModel(ModelContext context)
+            public IEdmModel GetEdmModel()
             {
                 var model = new EdmModel();
                 var dummyType = new EdmEntityType("NS", "Dummy");
@@ -312,9 +334,5 @@ namespace Microsoft.Restier.Tests.Core
                 return Expression.Constant(new[] { "Test" }.AsQueryable());
             }
         }
-
-        #endregion
-
     }
-
 }

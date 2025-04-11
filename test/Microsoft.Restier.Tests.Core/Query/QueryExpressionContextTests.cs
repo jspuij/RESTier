@@ -3,26 +3,29 @@
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
+    using FluentAssertions;
+    using Microsoft.OData.Edm;
+    using Microsoft.Restier.Core;
+    using Microsoft.Restier.Core.Query;
+    using Microsoft.Restier.Core.Submit;
+    using NSubstitute;
     using System;
-    using System.Collections.Generic;
     using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
-    using FluentAssertions;
-    using Microsoft.Restier.Core;
-    using Microsoft.Restier.Core.Query;
-    using Microsoft.Restier.Tests.Shared;
-    using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using Moq;
-  
+    using Xunit;
+
     /// <summary>
     /// Query expression context tests.
     /// </summary>
     [ExcludeFromCodeCoverage]
     public class QueryExpressionContextTests
     {
-        private readonly ServiceProviderMock serviceProviderFixture;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
+
         private readonly QueryExpressionContext testClass;
         private readonly QueryContext queryContext;
         private readonly MethodInfo testGetQuerableSource;
@@ -32,9 +35,12 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// </summary>
         public QueryExpressionContextTests()
         {
-            serviceProviderFixture = new ServiceProviderMock();
-            var api = new TestApi(serviceProviderFixture.ServiceProvider.Object);
-            var queryableSource = new QueryableSource<Test>(Expression.Constant(new Mock<IQueryable>().Object));
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
+
+            var api = new TestApi(model, queryHandler, submitHandler);
+            var queryableSource = new QueryableSource<Test>(Expression.Constant(Substitute.For<IQueryable>()));
             var request = new QueryRequest(queryableSource);
             queryContext = new QueryContext(api, request);
             testClass = new QueryExpressionContext(queryContext);
@@ -46,7 +52,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can construct an instance of the <see cref="QueryExpressionContext"/> class.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new QueryExpressionContext(queryContext);
@@ -56,7 +62,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with a null query context.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullQueryContext()
         {
             Action act = () => new QueryExpressionContext(default(QueryContext));
@@ -66,10 +72,10 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can call PushVisitedNode.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanCallPushVisitedNode()
         {
-            var visitedNode = Expression.Constant(new Mock<IQueryable>().Object);
+            var visitedNode = Expression.Constant(Substitute.For<IQueryable>());
             testClass.PushVisitedNode(visitedNode);
             testClass.VisitedNode.Should().Be(visitedNode);
         }
@@ -77,7 +83,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can call PushVisitedNode and update the model reference.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanCallPushVisitedNodeAndUpdateModelReference()
         {
             var visitedNode = Expression.Call(testGetQuerableSource, new Expression[] { Expression.Constant("Test"), Expression.Constant(new object[0]) });
@@ -91,7 +97,7 @@ namespace Microsoft.Restier.Tests.Core.Query
 
 
 
-                [TestMethod]
+                [Fact]
                 public void CanCallReplaceVisitedNode()
                 {
                     var visitedNode = new BinaryExpression();
@@ -99,20 +105,20 @@ namespace Microsoft.Restier.Tests.Core.Query
                     false, "Create or modify test".Should().BeTrue();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CannotCallReplaceVisitedNodeWithNullVisitedNode()
                 {
                     Action act = () => testClass.ReplaceVisitedNode(default(Expression)); act.Should().Throw<ArgumentNullException>();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CanCallPopVisitedNode()
                 {
                     testClass.PopVisitedNode();
                     false, "Create or modify test".Should().BeTrue();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CanCallGetModelReferenceForNode()
                 {
                     var node = new BinaryExpression();
@@ -120,13 +126,13 @@ namespace Microsoft.Restier.Tests.Core.Query
                     false, "Create or modify test".Should().BeTrue();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CannotCallGetModelReferenceForNodeWithNullNode()
                 {
                     Action act = () => testClass.GetModelReferenceForNode(default(Expression)); act.Should().Throw<ArgumentNullException>();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void GetModelReferenceForNodePerformsMapping()
                 {
                     var node = new BinaryExpression();
@@ -134,27 +140,27 @@ namespace Microsoft.Restier.Tests.Core.Query
                     result.Type.Should().Be(node.Type);
                 }
 
-                [TestMethod]
+                [Fact]
                 public void QueryContextIsInitializedCorrectly()
                 {
                     testClass.QueryContext.Should().Be(queryContext);
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CanGetVisitedNode()
                 {
                     testClass.VisitedNode.Should().BeOfType<Expression>();
                     false, "Create or modify test".Should().BeTrue();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CanGetModelReference()
                 {
                     testClass.ModelReference.Should().BeOfType<QueryModelReference>();
                     false, "Create or modify test".Should().BeTrue();
                 }
 
-                [TestMethod]
+                [Fact]
                 public void CanSetAndGetAfterNestedVisitCallback()
                 {
                     var testValue = default(Action);
@@ -164,8 +170,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         */
         private class TestApi : ApiBase
         {
-            public TestApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public TestApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

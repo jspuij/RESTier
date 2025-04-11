@@ -1,17 +1,17 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Linq.Expressions;
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
+using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Linq.Expressions;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
@@ -19,26 +19,31 @@ namespace Microsoft.Restier.Tests.Core.Query
     /// Unit tests for the <see cref="QueryContext"/> class.
     /// </summary>
     [ExcludeFromCodeCoverage]
+
     public class QueryContextTests
     {
-        private readonly ServiceProviderMock serviceProviderFixture;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QueryContextTests"/> class.
         /// </summary>
         public QueryContextTests()
         {
-            serviceProviderFixture = new ServiceProviderMock();
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
         }
 
         /// <summary>
         /// Can construct a new QueryContext.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
-            var api = new TestApi(serviceProviderFixture.ServiceProvider.Object);
-            var queryableSource = new QueryableSource<Test>(Expression.Constant(new Mock<IQueryable>().Object));
+            var api = new TestApi(model, queryHandler, submitHandler);
+            var queryableSource = new QueryableSource<Test>(Expression.Constant(Substitute.For<IQueryable>()));
             var request = new QueryRequest(queryableSource);
             var instance = new QueryContext(api, request);
             instance.Should().NotBeNull();
@@ -47,10 +52,10 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with a null api.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullApi()
         {
-            var queryableSource = new QueryableSource<Test>(Expression.Constant(new Mock<IQueryable>().Object));
+            var queryableSource = new QueryableSource<Test>(Expression.Constant(Substitute.For<IQueryable>()));
             var request = new QueryRequest(queryableSource);
             Action act = () => new QueryContext(
                 default(ApiBase),
@@ -61,10 +66,10 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with a null request.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullRequest()
         {
-            var api = new TestApi(serviceProviderFixture.ServiceProvider.Object);
+            var api = new TestApi(model, queryHandler, submitHandler);
             Action act = () => new QueryContext(api, default(QueryRequest));
             act.Should().Throw<ArgumentNullException>();
         }
@@ -72,15 +77,15 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get and set the model.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetModel()
         {
-            var api = new TestApi(serviceProviderFixture.ServiceProvider.Object);
-            var queryableSource = new QueryableSource<Test>(Expression.Constant(new Mock<IQueryable>().Object));
+            var api = new TestApi(model, queryHandler, submitHandler);
+            var queryableSource = new QueryableSource<Test>(Expression.Constant(Substitute.For<IQueryable>()));
             var request = new QueryRequest(queryableSource);
             var instance = new QueryContext(api, request);
 
-            var testValue = new Mock<IEdmModel>().Object;
+            var testValue = Substitute.For<IEdmModel>();
             instance.Model = testValue;
             instance.Model.Should().Be(testValue);
         }
@@ -88,11 +93,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Request is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void RequestIsInitializedCorrectly()
         {
-            var api = new TestApi(serviceProviderFixture.ServiceProvider.Object);
-            var queryableSource = new QueryableSource<Test>(Expression.Constant(new Mock<IQueryable>().Object));
+            var api = new TestApi(model, queryHandler, submitHandler);
+            var queryableSource = new QueryableSource<Test>(Expression.Constant(Substitute.For<IQueryable>()));
             var request = new QueryRequest(queryableSource);
             var instance = new QueryContext(api, request);
 
@@ -101,8 +106,7 @@ namespace Microsoft.Restier.Tests.Core.Query
 
         private class TestApi : ApiBase
         {
-            public TestApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public TestApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

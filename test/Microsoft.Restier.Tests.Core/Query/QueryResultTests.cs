@@ -7,8 +7,8 @@ using System.Diagnostics.CodeAnalysis;
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core.Query;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using NSubstitute;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
@@ -28,14 +28,14 @@ namespace Microsoft.Restier.Tests.Core.Query
         public QueryResultTests()
         {
             exception = new Exception();
-            results = new Mock<IEnumerable>().Object;
+            results = Substitute.For<IEnumerable>();
             testClass = new QueryResult(results);
         }
 
         /// <summary>
         /// Can construct the instance.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new QueryResult(exception);
@@ -47,7 +47,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with a null exception argument.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullException()
         {
             Action act = () => new QueryResult(default(Exception));
@@ -57,7 +57,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with a null results argument.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullResults()
         {
             Action act = () => new QueryResult(default(IEnumerable));
@@ -67,7 +67,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Exception argument is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void ExceptionIsInitializedCorrectly()
         {
             var instance = new QueryResult(exception);
@@ -77,7 +77,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get and set the exception.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetException()
         {
             var testValue = new Exception();
@@ -88,10 +88,10 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get and set the results source.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetResultsSource()
         {
-            var testValue = new Mock<IEdmEntitySet>().Object;
+            var testValue = Substitute.For<IEdmEntitySet>();
             testClass.ResultsSource = testValue;
             testClass.ResultsSource.Should().Be(testValue);
         }
@@ -99,7 +99,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Results is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void ResultsIsInitializedCorrectly()
         {
             testClass = new QueryResult(results);
@@ -109,10 +109,10 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can set and get results.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetResults()
         {
-            var testValue = new Mock<IEnumerable>().Object;
+            var testValue = Substitute.For<IEnumerable>();
             testClass.Results = testValue;
             testClass.Results.Should().BeSameAs(testValue);
         }

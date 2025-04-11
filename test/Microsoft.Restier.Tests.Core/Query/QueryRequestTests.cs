@@ -1,15 +1,15 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
+using NSubstitute;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
-using FluentAssertions;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Query;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
@@ -20,7 +20,7 @@ namespace Microsoft.Restier.Tests.Core.Query
     public class QueryRequestTests
     {
         private QueryRequest testClass;
-        private IQueryable query = new Mock<IQueryable>().Object;
+        private IQueryable query = Substitute.For<IQueryable>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QueryRequestTests"/> class.
@@ -34,7 +34,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can construct.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             testClass.Should().NotBeNull();
@@ -43,7 +43,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with null query.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullQuery()
         {
             Action act = () => new QueryRequest(default(IQueryable));
@@ -53,7 +53,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot construct with non-querysource.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNonQuerySource()
         {
             Action act = () => new QueryRequest(query);
@@ -63,7 +63,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can set and get the expression.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetExpression()
         {
             var testValue = Expression.Constant(query);
@@ -74,7 +74,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can set and get ShouldReturnCount.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetShouldReturnCount()
         {
             var testValue = true;

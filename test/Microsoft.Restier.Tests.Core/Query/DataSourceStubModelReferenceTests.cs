@@ -1,18 +1,18 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
-using FluentAssertions;
-using Microsoft.OData.Edm;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
@@ -22,7 +22,10 @@ namespace Microsoft.Restier.Tests.Core.Query
     [ExcludeFromCodeCoverage]
     public class DataSourceStubModelReferenceTests
     {
-        private readonly ServiceProviderMock serviceProviderFixture;
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
+
         private readonly IQueryable<Test> queryable = new List<Test>()
         {
             new Test() { Name = "The" },
@@ -36,17 +39,19 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// </summary>
          public DataSourceStubModelReferenceTests()
         {
-            serviceProviderFixture = new ServiceProviderMock();
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
         }
 
         /// <summary>
         /// Tests whether the DataSourceStubModelReference can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler,submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))));
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -56,11 +61,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Tests whether the DataSourceStubModelReference can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstructWithNamespace()
         {
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))));
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Microsoft.Restier.Tests.Core.Query", "Tests");
@@ -70,25 +75,25 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can Get an EntitySet.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetEntitySet()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            var edmEntitySetMock = entityContainerElementItemMock.As<IEdmEntitySet>();
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement, IEdmEntitySet>();
+            entityContainerElementItem.Name.Returns("Tests");
+            var edmEntitySet = entityContainerElementItem.As<IEdmEntitySet>();
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(this.model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -99,24 +104,25 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot get an EntitySet.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotGetEntitySet()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement>();
+            entityContainerElementItem.Name.Returns("Tests");
+            var edmEntitySet = entityContainerElementItem.As<IEdmEntitySet>();
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -127,28 +133,28 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get the Edm Type from an IEdmNavigationSource.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetTypeIEdmNavigationSource()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            var source = entityContainerElementItemMock.As<IEdmNavigationSource>();
-            var edmType = new Mock<IEdmType>().Object;
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement, IEdmNavigationSource>();
+            entityContainerElementItem.Name.Returns("Tests");
+            var source = entityContainerElementItem.As<IEdmNavigationSource>();
+            var edmType = Substitute.For<IEdmType>();
+            source.Type.Returns(edmType);
 
-            source.Setup(x => x.Type).Returns(edmType);
-            list.Add(entityContainerElementItemMock.Object);
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -160,28 +166,28 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get the Edm Type from an IEdmFunctionImport.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetTypeIEdmFunctionImport()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            var source = entityContainerElementItemMock.As<IEdmFunctionImport>();
-            var edmType = new Mock<IEdmType>().Object;
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement, IEdmFunctionImport>();
+            entityContainerElementItem.Name.Returns("Tests");
+            var source = entityContainerElementItem.As<IEdmFunctionImport>();
+            var edmType = Substitute.For<IEdmType>();
 
-            source.Setup(x => x.Function.ReturnType.Definition).Returns(edmType);
-            list.Add(entityContainerElementItemMock.Object);
+            source.Function.ReturnType.Definition.Returns(edmType);
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -193,28 +199,28 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get the Edm Type from an IEdmFunction.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetTypeIEdmFunction()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmSchemaElement>();
-            var schemaElementMock = new Mock<IEdmSchemaElement>();
-            schemaElementMock.Setup(x => x.Name).Returns("Tests");
-            schemaElementMock.Setup(x => x.Namespace).Returns("Microsoft.Restier.Tests.Core.Query");
-            var source = schemaElementMock.As<IEdmFunction>();
-            var edmType = new Mock<IEdmType>().Object;
+            var schemaElement = Substitute.For<IEdmSchemaElement, IEdmFunction>();
+            schemaElement.Name.Returns("Tests");
+            schemaElement.Namespace.Returns("Microsoft.Restier.Tests.Core.Query");
+            var source = schemaElement.As<IEdmFunction>();
+            var edmType = Substitute.For<IEdmType>();
 
-            source.Setup(x => x.ReturnType.Definition).Returns(edmType);
-            list.Add(schemaElementMock.Object);
+            source.ReturnType.Definition.Returns(edmType);
+            list.Add(schemaElement);
 
-            modelMock.Setup(x => x.SchemaElements).Returns(list);
+            model.SchemaElements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Microsoft.Restier.Tests.Core.Query", "Tests");
@@ -226,24 +232,24 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Cannot get the Edm Type.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotGetType()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement>();
+            entityContainerElementItem.Name.Returns("Tests");
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -254,24 +260,24 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get an element.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetElement()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement>();
+            entityContainerElementItem.Name.Returns("Tests");
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -280,26 +286,26 @@ namespace Microsoft.Restier.Tests.Core.Query
         }
 
         /// <summary>
-        /// Can get an element.
+        /// Cannot get an element.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotGetElement()
         {
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Testing");
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement>();
+            entityContainerElementItem.Name.Returns("Testing");
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
             var testClass = new DataSourceStubModelReference(
                 queryContext, "Tests");
@@ -309,8 +315,7 @@ namespace Microsoft.Restier.Tests.Core.Query
 
         private class TestApi : ApiBase
         {
-            public TestApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public TestApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

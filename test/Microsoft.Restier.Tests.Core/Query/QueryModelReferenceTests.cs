@@ -5,8 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core.Query;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using NSubstitute;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
@@ -19,11 +19,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get the entity set.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetEntitySet()
         {
-            var edmEntitySet = new Mock<IEdmEntitySet>().Object;
-            var edmType = new Mock<IEdmType>().Object;
+            var edmEntitySet = Substitute.For<IEdmEntitySet>();
+            var edmType = Substitute.For<IEdmType>();
             var instance = new QueryModelReference(edmEntitySet, edmType);
             instance.EntitySet.Should().Be(edmEntitySet);
         }
@@ -31,11 +31,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// <summary>
         /// Can get the type.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetType()
         {
-            var edmEntitySet = new Mock<IEdmEntitySet>().Object;
-            var edmType = new Mock<IEdmType>().Object;
+            var edmEntitySet = Substitute.For<IEdmEntitySet>();
+            var edmType = Substitute.For<IEdmType>();
             var instance = new QueryModelReference(edmEntitySet, edmType);
             instance.Type.Should().Be(edmType);
         }

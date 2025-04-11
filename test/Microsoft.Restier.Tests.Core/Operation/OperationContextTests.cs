@@ -1,16 +1,18 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Operation;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using FluentAssertions;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Operation;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Operation
 {
@@ -21,7 +23,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
     public class OperationContextTests
     {
         private OperationContext testClass;
-        private ApiBase api;
+        private TestApi api;
         private Func<string, object> getParameterValueFunc;
         private string operationName;
         private bool isFunction;
@@ -32,7 +34,10 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// </summary>
         public OperationContextTests()
         {
-            api = new TestApi(new ServiceProviderMock().ServiceProvider.Object);
+            api = new TestApi(
+                Substitute.For<IEdmModel>(),
+                Substitute.For<IQueryHandler>(),
+                Substitute.For<ISubmitHandler>()); 
             getParameterValueFunc = name => this;
             operationName = "Insert";
             isFunction = true;
@@ -48,7 +53,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// <summary>
         /// Can construct a new <see cref="OperationContext"/>.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new OperationContext(
@@ -63,7 +68,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// <summary>
         /// Cannot construct the <see cref="OperationContext"/> with a null Api.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullApi()
         {
             Action act = () => new OperationContext(
@@ -71,14 +76,14 @@ namespace Microsoft.Restier.Tests.Core.Operation
                 default(Func<string, object>),
                 "TestValue719188563",
                 true,
-                new Mock<IEnumerable>().Object);
+                Substitute.For<IEnumerable>());
             act.Should().Throw<ArgumentNullException>();
         }
 
         /// <summary>
         /// Cannot construct the <see cref="OperationContext"/> with a null getParameterValueFunc.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullGetParameterValueFunc()
         {
             Action act = () => new OperationContext(
@@ -86,14 +91,14 @@ namespace Microsoft.Restier.Tests.Core.Operation
                 default(Func<string, object>),
                 "TestValue734278354",
                 false,
-                new Mock<IEnumerable>().Object);
+                Substitute.For<IEnumerable>());
             act.Should().Throw<ArgumentNullException>();
         }
 
         /// <summary>
         /// Cannot construct the <see cref="OperationContext"/> with a null bindingParameterValue.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullBindingParameterValue()
         {
             Action act = () => new OperationContext(
@@ -109,10 +114,10 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// Cannot construct the <see cref="OperationContext"/> with an invalid OperationName.
         /// </summary>
         /// <param name="value">OperationName.</param>
-        [DataTestMethod]
-        [DataRow(null)]
-        [DataRow("")]
-        [DataRow("   ")]
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
         public void CannotConstructWithInvalidOperationName(string value)
         {
             Action act = () => new OperationContext(
@@ -120,14 +125,14 @@ namespace Microsoft.Restier.Tests.Core.Operation
                 default(Func<string, object>),
                 value,
                 false,
-                new Mock<IEnumerable>().Object);
+                Substitute.For<IEnumerable>());
             act.Should().Throw<ArgumentNullException>();
         }
 
         /// <summary>
         /// Test that the Operation name is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void OperationNameIsInitializedCorrectly()
         {
             testClass.OperationName.Should().Be(operationName);
@@ -136,7 +141,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// <summary>
         /// Tests that the getParameterValueFunc is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void GetParameterValueFuncIsInitializedCorrectly()
         {
             testClass.GetParameterValueFunc.Should().Be(getParameterValueFunc);
@@ -145,7 +150,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// <summary>
         /// Tests that the isFunction property is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void IsFunctionIsInitializedCorrectly()
         {
             testClass.IsFunction.Should().Be(isFunction);
@@ -154,7 +159,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// <summary>
         /// Tests that the bindingParameterValue is initialized correctly.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void BindingParameterValueIsInitializedCorrectly()
         {
             testClass.BindingParameterValue.Should().BeEquivalentTo(bindingParameterValue);
@@ -163,7 +168,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
         /// <summary>
         /// Tests that ParameterValues can be set and get.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanSetAndGetParameterValues()
         {
             var testValue = new List<object>();
@@ -173,8 +178,7 @@ namespace Microsoft.Restier.Tests.Core.Operation
 
         private class TestApi : ApiBase
         {
-            public TestApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public TestApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

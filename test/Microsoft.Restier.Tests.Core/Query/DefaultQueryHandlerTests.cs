@@ -1,6 +1,14 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Model;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -8,14 +16,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.OData.Edm;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Query
 {
@@ -25,7 +26,16 @@ namespace Microsoft.Restier.Tests.Core.Query
     [ExcludeFromCodeCoverage]
     public class DefaultQueryHandlerTests
     {
-        private readonly ServiceProviderMock serviceProviderFixture;
+        private readonly IQueryExpressionSourcer sourcer = Substitute.For<IQueryExpressionSourcer>();
+        private readonly IQueryExecutor executor = Substitute.For<IQueryExecutor>();
+        private readonly IModelMapper modelMapper = Substitute.For<IModelMapper>();
+        private readonly IQueryExpressionAuthorizer authorizer = Substitute.For<IQueryExpressionAuthorizer>();
+        private readonly IQueryExpressionExpander expander = Substitute.For<IQueryExpressionExpander>();
+        private readonly IQueryExpressionProcessor processor = Substitute.For<IQueryExpressionProcessor>();
+
+        private readonly IQueryHandler queryHandler;
+        private readonly IEdmModel model;
+        private readonly ISubmitHandler submitHandler;
 
         private readonly IQueryable<Test> queryable = new List<Test>()
         {
@@ -40,46 +50,73 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// </summary>
         public DefaultQueryHandlerTests()
         {
-            serviceProviderFixture = new ServiceProviderMock();
+            queryHandler = Substitute.For<IQueryHandler>();
+            model = Substitute.For<IEdmModel>();
+            submitHandler = Substitute.For<ISubmitHandler>();
+            authorizer.Authorize(Arg.Any<QueryExpressionContext>()).Returns(true);
         }
-
-        private IQueryExpressionSourcer Sourcer
-            => serviceProviderFixture.ServiceProvider.Object.GetRequiredService<IQueryExpressionSourcer>();
-
-        private IQueryExpressionAuthorizer Authorizer
-            => serviceProviderFixture.ServiceProvider.Object.GetRequiredService<IQueryExpressionAuthorizer>();
-
-        private IQueryExpressionExpander Expander
-            => serviceProviderFixture.ServiceProvider.Object.GetRequiredService<IQueryExpressionExpander>();
-
-        private IQueryExpressionProcessor Processor
-            => serviceProviderFixture.ServiceProvider.Object.GetRequiredService<IQueryExpressionProcessor>();
 
         /// <summary>
         /// Can construct instance of the <see cref="DefaultQueryHandler"/> class.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new DefaultQueryHandler(
-                Sourcer,
-                Authorizer,
-                Expander,
-                Processor);
+                sourcer,
+                executor,
+                modelMapper,
+                authorizer,
+                expander,
+                processor);
             instance.Should().NotBeNull();
         }
 
         /// <summary>
         /// Cannot construct with a null sourcer.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullSourcer()
         {
             Action act = () => new DefaultQueryHandler(
                 default(IQueryExpressionSourcer),
-                Authorizer,
-                Expander,
-                Processor);
+                executor,
+                modelMapper,
+                authorizer,
+                expander,
+                processor);
+            act.Should().Throw<ArgumentNullException>();
+        }
+
+        /// <summary>
+        /// Cannot construct with a null executor.
+        /// </summary>
+        [Fact]
+        public void CannotConstructWithNullExecutor()
+        {
+            Action act = () => new DefaultQueryHandler(
+                sourcer,
+                default(IQueryExecutor),
+                modelMapper,
+                authorizer,
+                expander,
+                processor);
+            act.Should().Throw<ArgumentNullException>();
+        }
+
+        /// <summary>
+        /// Cannot construct with a null model mapper.
+        /// </summary>
+        [Fact]
+        public void CannotConstructWithNullModelMapper()
+        {
+            Action act = () => new DefaultQueryHandler(
+                sourcer,
+                executor,
+                default(IModelMapper),
+                authorizer,
+                expander,
+                processor);
             act.Should().Throw<ArgumentNullException>();
         }
 
@@ -87,36 +124,43 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// Can call QueryAsync.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallQueryAsync()
         {
             var instance = new DefaultQueryHandler(
-                Sourcer,
-                Authorizer,
-                Expander,
-                Processor);
+                sourcer,
+                executor,
+                modelMapper,
+                authorizer,
+                expander,
+                processor);
 
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement>();
+            entityContainerElementItem.Name.Returns("Tests");
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
-            serviceProviderFixture.QueryExecutor.Setup(x => x.ExecuteQueryAsync<Test>(
-                It.IsAny<QueryContext>(),
-                It.IsAny<IQueryable<Test>>(),
-                It.IsAny<CancellationToken>())).Returns<QueryContext, IQueryable<Test>, CancellationToken>((q, iq, c)
-                    => Task.FromResult(new QueryResult(iq.ToList())));
+            executor
+                .ExecuteQueryAsync<Test>(
+                    Arg.Any<QueryContext>(),
+                    Arg.Any<IQueryable<Test>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var queryable = callInfo.ArgAt<IQueryable<Test>>(1);
+                    return Task.FromResult(new QueryResult(queryable.ToList()));
+                });
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))))
             {
-                Model = modelMock.Object,
+                Model = model,
             };
 
             var cancellationToken = CancellationToken.None;
@@ -128,40 +172,46 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// Can call QueryAsync with count option.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CanCallQueryAsyncWithCount()
         {
             var instance = new DefaultQueryHandler(
-                Sourcer,
-                Authorizer,
-                Expander,
-                Processor);
+                sourcer,
+                executor,
+                modelMapper,
+                authorizer,
+                expander,
+                processor);
 
-            var modelMock = new Mock<IEdmModel>();
-            var entityContainerMock = new Mock<IEdmEntityContainer>();
+            var model = Substitute.For<IEdmModel>();
+            var entityContainer = Substitute.For<IEdmEntityContainer>();
             var list = new List<IEdmEntityContainerElement>();
-            var entityContainerElementItemMock = new Mock<IEdmEntityContainerElement>();
-            entityContainerElementItemMock.Setup(x => x.Name).Returns("Tests");
-            list.Add(entityContainerElementItemMock.Object);
+            var entityContainerElementItem = Substitute.For<IEdmEntityContainerElement>();
+            entityContainerElementItem.Name.Returns("Tests");
+            list.Add(entityContainerElementItem);
 
-            modelMock.Setup(x => x.EntityContainer).Returns(entityContainerMock.Object);
-            entityContainerMock.Setup(x => x.Elements).Returns(list);
+            model.EntityContainer.Returns(entityContainer);
+            entityContainer.Elements.Returns(list);
 
-            serviceProviderFixture.QueryExecutor.Setup(x => x.ExecuteExpressionAsync<long>(
-                It.IsAny<QueryContext>(),
-                It.IsAny<IQueryProvider>(),
-                It.IsAny<Expression>(),
-                It.IsAny<CancellationToken>())).Returns<QueryContext, IQueryProvider, Expression, CancellationToken>(
-                    (q, qp, e, c) => Task.FromResult(new QueryResult(new[] { Expression.Lambda<Func<long>>(e, null).Compile()() })));
+            executor.ExecuteExpressionAsync<long>(
+                Arg.Any<QueryContext>(),
+                Arg.Any<IQueryProvider>(),
+                Arg.Any<Expression>(),
+                Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var expression = callInfo.ArgAt<Expression>(2);
+                    return Task.FromResult(new QueryResult(new[] { Expression.Lambda<Func<long>>(expression, null).Compile()() }));
+                });
 
             var queryContext = new QueryContext(
-                new TestApi(serviceProviderFixture.ServiceProvider.Object),
+                new TestApi(model, queryHandler, submitHandler),
                 new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable)))
                 {
                     ShouldReturnCount = true,
                 })
             {
-                Model = modelMock.Object,
+                Model = model,
             };
 
             var cancellationToken = CancellationToken.None;
@@ -175,14 +225,16 @@ namespace Microsoft.Restier.Tests.Core.Query
         /// Cannot call QueryAsync with a null context.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
-        [TestMethod]
+        [Fact]
         public async Task CannotCallQueryAsyncWithNullContext()
         {
             var instance = new DefaultQueryHandler(
-               Sourcer,
-               Authorizer,
-               Expander,
-               Processor);
+                sourcer,
+                executor,
+                modelMapper,
+                authorizer,
+                expander,
+                processor);
 
             Func<Task> act = () => instance.QueryAsync(default(QueryContext), CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentNullException>();
@@ -190,8 +242,7 @@ namespace Microsoft.Restier.Tests.Core.Query
 
         private class TestApi : ApiBase
         {
-            public TestApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public TestApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

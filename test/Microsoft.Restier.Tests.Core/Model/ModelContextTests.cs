@@ -1,16 +1,18 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using FluentAssertions;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Model;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using FluentAssertions;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Model;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Core.Model
 {
@@ -28,15 +30,17 @@ namespace Microsoft.Restier.Tests.Core.Model
         /// </summary>
          public ModelContextTests()
         {
-            var serviceProvider = new ServiceProviderMock().ServiceProvider.Object;
-            api = new TestApi(serviceProvider);
+            api = new TestApi(
+                Substitute.For<IEdmModel>(),
+                Substitute.For<IQueryHandler>(),
+                Substitute.For<ISubmitHandler>());
             testClass = new ModelContext(api);
         }
 
         /// <summary>
         /// Tests that a model context can be constructed.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanConstruct()
         {
             var instance = new ModelContext(api);
@@ -46,7 +50,7 @@ namespace Microsoft.Restier.Tests.Core.Model
         /// <summary>
         /// Tests that a model context cannot be constructed without an ApiBase.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CannotConstructWithNullApi()
         {
             Action act = () => new ModelContext(default(ApiBase));
@@ -56,7 +60,7 @@ namespace Microsoft.Restier.Tests.Core.Model
         /// <summary>
         /// Tests that the ResourceMap can be retrieved.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetResourceSetTypeMap()
         {
             testClass.ResourceSetTypeMap.Should().BeAssignableTo<IDictionary<string, Type>>();
@@ -65,7 +69,7 @@ namespace Microsoft.Restier.Tests.Core.Model
         /// <summary>
         /// Tests that the ResourceTypeKeyPropertiesMap can be retreived.
         /// </summary>
-        [TestMethod]
+        [Fact]
         public void CanGetResourceTypeKeyPropertiesMap()
         {
             testClass.ResourceTypeKeyPropertiesMap.Should().BeAssignableTo<IDictionary<Type, ICollection<PropertyInfo>>>();
@@ -73,8 +77,7 @@ namespace Microsoft.Restier.Tests.Core.Model
 
         private class TestApi : ApiBase
         {
-            public TestApi(IServiceProvider serviceProvider)
-                : base(serviceProvider)
+            public TestApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)
             {
             }
         }

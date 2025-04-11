@@ -11,18 +11,6 @@
 	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
 	  <Compile Remove="InvocationContextTests.cs" />
 	  <Compile Remove="Legacy\PropertyBagTests.cs" />
-	  <Compile Remove="Model\ModelContextTests.cs" />
-	  <Compile Remove="Operation\OperationContextTests.cs" />
-	  <Compile Remove="Query\DataSourceStubModelReferenceTests.cs" />
-	  <Compile Remove="Query\DefaultQueryExecutorTests.cs" />
-	  <Compile Remove="Query\DefaultQueryHandlerTests.cs" />
-	  <Compile Remove="Query\ParameterModelReferenceTests.cs" />
-	  <Compile Remove="Query\PropertyModelReferenceTests.cs" />
-	  <Compile Remove="Query\QueryContextTests.cs" />
-	  <Compile Remove="Query\QueryExpressionContextTests.cs" />
-	  <Compile Remove="Query\QueryModelReferenceTests.cs" />
-	  <Compile Remove="Query\QueryRequestTests.cs" />
-	  <Compile Remove="Query\QueryResultTests.cs" />
 	  <Compile Remove="RestierContainerBuilderTests.cs" />
 	  <Compile Remove="ServiceCollectionExtensionTests.cs" />
 	  <Compile Remove="Submit\ChangeSetItemValidationResultTests.cs" />
@@ -40,9 +28,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Model\" />
-	  <Folder Include="Operation\" />
-	  <Folder Include="Query\" />
 	  <Folder Include="Submit\" />
 	</ItemGroup>
 </Project>

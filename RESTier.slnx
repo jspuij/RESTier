@@ -9,6 +9,9 @@
   <Folder Name="/src/" Id="02ea681e-c7d8-13c7-8484-4ac65e1b71e8">
     <Project Path="src/Microsoft.Restier.Core/Microsoft.Restier.Core.csproj" />
   </Folder>
+  <Folder Name="/src/Web/" Id="bf61c3f1-7c7e-4515-8b51-14b374a034f9">
+    <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
+  </Folder>
   <Folder Name="/test/" Id="67e76b39-b345-4061-b1a8-31b95b6f83a8">
     <Project Path="test/Microsoft.Restier.Tests.Core/Microsoft.Restier.Tests.Core.csproj" />
   </Folder>

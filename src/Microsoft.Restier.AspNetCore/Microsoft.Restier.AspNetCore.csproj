@@ -20,8 +20,20 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.AspNetCore.OData" Version="7.*" />
-		<PackageReference Include="Microsoft.OData.Core" Version="[7.*, 8.0.0)" />
+	  <Compile Remove="Extensions\PerRouteContainerExtensions.cs" />
+	  <Compile Remove="Extensions\RestierApiBuilderExtensions.cs" />
+	  <Compile Remove="Extensions\RestierApiServiceCollectionExtensions.cs" />
+	  <Compile Remove="Extensions\Restier_HttpRequestExtensions.cs" />
+	  <Compile Remove="Extensions\Restier_IApplicationBuilderExtensions.cs" />
+	  <Compile Remove="Extensions\Restier_IEndpointRouteBuilderExtensions.cs" />
+	  <Compile Remove="Extensions\Restier_IRouteBuilderExtensions.cs" />
+	  <Compile Remove="Extensions\Restier_IServiceCollectionExtensions.cs" />
+	  <Compile Remove="Extensions\Restier_RouteValueDictionaryExtensions.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.OData" Version="[9.*, 10.0.0]" />
+		<PackageReference Include="Microsoft.OData.Core" Version="[8.*, 9.0.0]" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -47,12 +59,4 @@
 			<Generator>ResXFileCodeGenerator</Generator>
 		</EmbeddedResource>
 	</ItemGroup>
-
-	<Import Project="..\Microsoft.Restier.AspNet.Shared\Microsoft.Restier.AspNet.Shared.projitems" Label="Shared" />
-
-	<ItemGroup>
-		<InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNetCorePlusEF6, $(StrongNamePublicKey)" />
-		<InternalsVisibleTo Include="Microsoft.Restier.Breakdance, $(StrongNamePublicKey)" />
-	</ItemGroup>
-
 </Project>

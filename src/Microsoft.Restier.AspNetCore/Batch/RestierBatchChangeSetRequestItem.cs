@@ -1,17 +1,16 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.OData.Batch;
+using Microsoft.AspNetCore.OData.Extensions;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Submit;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNet.OData.Batch;
-using Microsoft.AspNet.OData.Extensions;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Submit;
 
 namespace Microsoft.Restier.AspNetCore.Batch
 {
@@ -74,7 +73,7 @@ namespace Microsoft.Restier.AspNetCore.Batch
                                         : t.Exception;
                                     changeSetProperty.Exceptions.Add(taskEx);
                                     changeSetProperty.OnChangeSetCompleted();
-                                    tcs.SetException(taskEx.Demystify());
+                                    tcs.SetException(taskEx);
                                 }
                                 else
                                 {

@@ -1,13 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.Restier.Core.Submit;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Restier.Core.Submit;
 
 namespace Microsoft.Restier.AspNetCore.Batch
 {
@@ -63,7 +62,7 @@ namespace Microsoft.Restier.AspNetCore.Batch
                                      && t.Exception.InnerExceptions.Count == 1)
                                         ? t.Exception.InnerExceptions.First()
                                         : t.Exception;
-                                changeSetCompletedTaskSource.SetException(taskEx.Demystify());
+                                changeSetCompletedTaskSource.SetException(taskEx);
                             }
                             else
                             {
@@ -74,7 +73,7 @@ namespace Microsoft.Restier.AspNetCore.Batch
                 }
                 else
                 {
-                    changeSetCompletedTaskSource.SetException(Exceptions.Select(c => c.Demystify()));
+                    changeSetCompletedTaskSource.SetException(Exceptions);
                 }
             }
 

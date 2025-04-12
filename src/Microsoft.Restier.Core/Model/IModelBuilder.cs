@@ -18,7 +18,7 @@ namespace Microsoft.Restier.Core.Model
         /// <returns>
         /// Constructs the Edm Model for the API.
         /// </returns>
-        IEdmModel GetEdmModel();
+        IEdmModel GetEdmModel(IModelContext modelContext);
 
     }
 

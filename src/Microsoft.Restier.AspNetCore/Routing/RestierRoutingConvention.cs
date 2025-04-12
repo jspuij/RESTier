@@ -5,15 +5,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using Microsoft.AspNet.OData.Extensions;
-using Microsoft.AspNet.OData.Routing.Conventions;
+using Microsoft.AspNetCore.OData.Extensions;
+using Microsoft.AspNetCore.OData.Routing.Conventions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
-using ODataPath = Microsoft.AspNet.OData.Routing.ODataPath;
 
 namespace Microsoft.Restier.AspNetCore
 {
@@ -63,7 +62,7 @@ namespace Microsoft.Restier.AspNetCore
             }
 
             var method = routeContext.HttpContext.Request.Method;
-            var lastSegment = odataPath.Segments.LastOrDefault();
+            var lastSegment = odataPath.LastOrDefault();
             var isAction = IsAction(lastSegment);
 
             if (string.Equals(method, HttpMethod.Get.Method, StringComparison.OrdinalIgnoreCase) && !IsMetadataPath(odataPath) && !isAction)

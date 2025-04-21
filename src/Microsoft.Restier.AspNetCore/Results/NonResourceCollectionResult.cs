@@ -4,11 +4,7 @@
 using System.Linq;
 using Microsoft.OData.Edm;
 
-#if NET6_0_OR_GREATER
 namespace Microsoft.Restier.AspNetCore
-#else
-namespace Microsoft.Restier.AspNet
-#endif
 {
     /// <summary>
     /// Represents a collection of non-entity or complex values being returned from an action.

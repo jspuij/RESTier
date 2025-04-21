@@ -4,11 +4,7 @@
 using System;
 using Microsoft.OData.Edm;
 
-#if NET6_0_OR_GREATER
 namespace Microsoft.Restier.AspNetCore
-#else
-namespace Microsoft.Restier.AspNet
-#endif
 {
     /// <summary>
     /// Represents the result of an OData query.

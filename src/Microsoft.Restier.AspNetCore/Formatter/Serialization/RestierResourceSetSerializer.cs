@@ -55,7 +55,7 @@ namespace Microsoft.Restier.AspNetCore.Formatter
             await base.WriteObjectAsync(graph, type, messageWriter, writeContext).ConfigureAwait(false);
         }
 
-        private async Task<bool> TryWriteAggregationResult(
+        internal async Task<bool> TryWriteAggregationResult(
             object graph,
             Type type,
             ODataMessageWriter messageWriter,
@@ -69,7 +69,7 @@ namespace Microsoft.Restier.AspNetCore.Formatter
                 {
                     var entitySet = writeContext.NavigationSource as IEdmEntitySetBase;
                     var entityType = elementType.AsEntity();
-                    var writer = messageWriter.CreateODataResourceSetWriter(entitySet, entityType.EntityDefinition());
+                    var writer = await messageWriter.CreateODataResourceSetWriterAsync(entitySet, entityType.EntityDefinition());
                     await WriteObjectInlineAsync(graph, resourceSetType, writer, writeContext);
                     return true;
                 }

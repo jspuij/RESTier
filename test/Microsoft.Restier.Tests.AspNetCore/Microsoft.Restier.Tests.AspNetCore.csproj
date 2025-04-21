@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net8.0;net9.0;</TargetFrameworks>
+		<OutputType>exe</OutputType>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Compile Remove="ClaimsPrincipalAccessorTests\**" />
+	  <Compile Remove="EndpointRouting\**" />
+	  <Compile Remove="FallbackTests\**" />
+	  <Compile Remove="FeatureTests\**" />
+	  <Compile Remove="RegressionTests\**" />
+	  <EmbeddedResource Remove="ClaimsPrincipalAccessorTests\**" />
+	  <EmbeddedResource Remove="EndpointRouting\**" />
+	  <EmbeddedResource Remove="FallbackTests\**" />
+	  <EmbeddedResource Remove="FeatureTests\**" />
+	  <EmbeddedResource Remove="RegressionTests\**" />
+	  <None Remove="ClaimsPrincipalAccessorTests\**" />
+	  <None Remove="EndpointRouting\**" />
+	  <None Remove="FallbackTests\**" />
+	  <None Remove="FeatureTests\**" />
+	  <None Remove="RegressionTests\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Remove="DependencyInjectionTests.cs" />
+	  <Compile Remove="ExceptionHandlerTests.cs" />
+	  <Compile Remove="Model\RestierModelBuilderTests.cs" />
+	  <Compile Remove="Model\RestierModelExtenderTests.cs" />
+	  <Compile Remove="RestierControllerTests.cs" />
+	  <Compile Remove="RestierQueryBuilderTests.cs" />
+	</ItemGroup>
+
+	
+	<ItemGroup>
+	  <ProjectReference Include="..\..\src\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+	  <ProjectReference Include="..\Microsoft.Restier.Tests.Core\Microsoft.Restier.Tests.Core.csproj" />
+	</ItemGroup>
+
+	
+	<ItemGroup>
+	  <Folder Include="Extensions\" />
+	  <Folder Include="Formatter\Deserialization\" />
+	  <Folder Include="Formatter\Serialization\" />
+	  <Folder Include="Model\" />
+	  <Folder Include="MiddleWare\" />
+	</ItemGroup>
+</Project>

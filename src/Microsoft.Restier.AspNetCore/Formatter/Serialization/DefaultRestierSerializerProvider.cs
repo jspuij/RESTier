@@ -25,12 +25,12 @@ namespace Microsoft.Restier.AspNetCore.Formatter
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultRestierSerializerProvider" /> class.
         /// </summary>
-        /// <param name="rootContainer">The container to get the service.</param>
+        /// <param name="serviceProvider">The container to get the service.</param>
         /// <param name="payloadValueConverter">The OData payload value converter to use.</param>
-        public DefaultRestierSerializerProvider(IServiceProvider rootContainer, ODataPayloadValueConverter payloadValueConverter)
-            : base(rootContainer)
+        public DefaultRestierSerializerProvider(IServiceProvider serviceProvider, ODataPayloadValueConverter payloadValueConverter)
+            : base(serviceProvider)
         {
-            Ensure.NotNull(rootContainer, nameof(rootContainer));
+            Ensure.NotNull(serviceProvider, nameof(serviceProvider));
             Ensure.NotNull(payloadValueConverter, nameof(payloadValueConverter));
 
             resourceSetSerializer = new RestierResourceSetSerializer(this);
@@ -44,9 +44,9 @@ namespace Microsoft.Restier.AspNetCore.Formatter
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultRestierSerializerProvider" /> class.
         /// </summary>
-        /// <param name="rootContainer">The container to get the service.</param>
-        public DefaultRestierSerializerProvider(IServiceProvider rootContainer)
-            : this(rootContainer, new RestierPayloadValueConverter())
+        /// <param name="serviceProvider">The container to get the service.</param>
+        public DefaultRestierSerializerProvider(IServiceProvider serviceProvider)
+            : this(serviceProvider, new RestierPayloadValueConverter())
         {
         }
 

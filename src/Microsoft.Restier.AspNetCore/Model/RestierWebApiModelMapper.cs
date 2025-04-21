@@ -3,10 +3,8 @@
 
 using System;
 using System.Linq;
-using Microsoft.AspNetCore.OData;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
-using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 
 namespace Microsoft.Restier.AspNetCore.Model
@@ -43,14 +41,14 @@ namespace Microsoft.Restier.AspNetCore.Model
             if (element is not null)
             {
                 IEdmType entityType = null;
-                if (element is EdmEntitySet entitySet)
+                if (element is IEdmEntitySet entitySet)
                 {
-                    var entitySetType = entitySet.Type as EdmCollectionType;
+                    var entitySetType = entitySet.Type as IEdmCollectionType;
                     entityType = entitySetType.ElementType.Definition;
                 }
                 else
                 {
-                    if (element is EdmSingleton singleton)
+                    if (element is IEdmSingleton singleton)
                     {
                         entityType = singleton.Type;
                     }

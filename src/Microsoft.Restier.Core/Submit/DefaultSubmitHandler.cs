@@ -19,17 +19,11 @@ namespace Microsoft.Restier.Core.Submit
     internal class DefaultSubmitHandler : ISubmitHandler
     {
 
-        #region Private Members
-
         private readonly IChangeSetInitializer initializer;
         private readonly IChangeSetItemAuthorizer authorizer;
         private readonly IChangeSetItemValidator validator;
         private readonly IChangeSetItemFilter filter;
         private readonly ISubmitExecutor executor;
-
-        #endregion
-
-        #region Constructors
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultSubmitHandler"/> class.
@@ -52,10 +46,6 @@ namespace Microsoft.Restier.Core.Submit
             this.filter = filter;
             this.executor = executor;
         }
-
-        #endregion
-
-        #region Public Methods
 
         /// <summary>
         /// Asynchronously executes the submit flow.
@@ -90,19 +80,11 @@ namespace Microsoft.Restier.Core.Submit
 
             await PerformPersist(context, cancellationToken).ConfigureAwait(false);
 
-#if NET48
-            while (context.ChangeSet.Entries.TryDequeue(out _))
-#else
             context.ChangeSet.Entries.Clear();
-#endif
             await PerformPostEvent(context, currentChangeSetItems, cancellationToken).ConfigureAwait(false);
 
             return context.Result;
         }
-
-        #endregion
-
-        #region Private Methods
 
         private static string GetAuthorizeFailedMessage(ChangeSetItem item)
         {
@@ -248,9 +230,5 @@ namespace Microsoft.Restier.Core.Submit
                 await filter.OnChangeSetItemProcessedAsync(context, item, cancellationToken).ConfigureAwait(false);
             }
         }
-
-        #endregion
-
     }
-
 }

@@ -12,17 +12,10 @@ namespace Microsoft.Restier.Core
     /// </summary>
     public class RestierRouteBuilder
     {
-
-        #region Internal Properties
-
         /// <summary>
         /// 
         /// </summary>
         internal Dictionary<string, RestierRouteEntry> Routes { get; private set; }
-
-        #endregion
-
-        #region Constructors
 
         /// <summary>
         /// 
@@ -31,8 +24,6 @@ namespace Microsoft.Restier.Core
         {
             Routes = new();
         }
-
-        #endregion
 
         /// <summary>
         /// Maps the specified Restier API to an ASP.NET OData Route.

@@ -12,7 +12,7 @@ namespace Microsoft.Restier.Tests.Core
     /// A trace listener that can be used to assert trace messages.
     /// </summary>
     [ExcludeFromCodeCoverage]
-    internal class TestTraceListener : TraceListener
+    public class TestTraceListener : TraceListener
     {
         private readonly StringBuilder stringBuilder = new StringBuilder();
 

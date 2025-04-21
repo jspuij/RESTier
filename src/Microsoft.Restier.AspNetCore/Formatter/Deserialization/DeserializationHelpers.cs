@@ -39,11 +39,7 @@ namespace Microsoft.Restier.AspNetCore.Formatter
             Type expectedReturnType,
             IEdmTypeReference propertyType,
             IEdmModel model,
-#if NET6_0_OR_GREATER
             HttpRequest request,
-#else
-            HttpRequestMessage request,
-#endif
             IServiceProvider serviceProvider)
         {
 

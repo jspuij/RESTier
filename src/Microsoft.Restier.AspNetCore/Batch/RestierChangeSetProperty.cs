@@ -58,10 +58,8 @@ namespace Microsoft.Restier.AspNetCore.Batch
                             if (t.Exception is not null)
                             {
                                 var taskEx =
-                                    (t.Exception.InnerExceptions is not null
-                                     && t.Exception.InnerExceptions.Count == 1)
-                                        ? t.Exception.InnerExceptions.First()
-                                        : t.Exception;
+                                    ((t.Exception as AggregateException).InnerExceptions?.Count >= 1)
+                                        ? t.Exception.InnerExceptions.First() : t.Exception;
                                 changeSetCompletedTaskSource.SetException(taskEx);
                             }
                             else

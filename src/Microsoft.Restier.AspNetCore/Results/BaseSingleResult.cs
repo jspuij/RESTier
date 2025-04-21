@@ -6,11 +6,7 @@ using System.Collections;
 using System.Linq;
 using Microsoft.OData.Edm;
 
-#if NET6_0_OR_GREATER
 namespace Microsoft.Restier.AspNetCore
-#else
-namespace Microsoft.Restier.AspNet
-#endif
 {
     /// <summary>
     /// Represents a single object being returned from an action.

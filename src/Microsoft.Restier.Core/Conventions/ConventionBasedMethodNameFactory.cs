@@ -16,9 +16,6 @@ namespace Microsoft.Restier.Core
     /// </summary>
     public static class ConventionBasedMethodNameFactory
     {
-
-        #region Constants
-
         private const string Can = "Can";
 
         private const string On = "On";
@@ -26,10 +23,6 @@ namespace Microsoft.Restier.Core
         private const string Ing = "ing";
 
         private const string Ed = "ed";
-
-        #endregion
-
-        #region Private Members
 
         /// <summary>
         /// The <see cref="RestierPipelineState"/> to exclude from Filter name processing.
@@ -58,10 +51,6 @@ namespace Microsoft.Restier.Core
         {
             RestierOperationMethod.Execute,
         };
-
-        #endregion
-
-        #region Public Methods
 
         /// <summary>
         /// Generates the complete MethodName for a given <see cref="IEdmOperationImport"/>, <see cref="RestierPipelineState"/>, and <see cref="RestierEntitySetOperation"/>.
@@ -143,10 +132,6 @@ namespace Microsoft.Restier.Core
             if (operationImport is null) return string.Empty;
             return GetFunctionMethodNameInternal(operationImport.OperationName, restierPipelineState, restierOperation);
         }
-
-        #endregion
-
-        #region Private Methods
 
         /// <summary>
         /// Generates the right EntityName reference for a given Operation.
@@ -276,9 +261,5 @@ namespace Microsoft.Restier.Core
                     return string.Empty;
             }
         }
-
-        #endregion
-
     }
-
 }

@@ -33,3 +33,4 @@ namespace Microsoft.Restier.AspNetCore.Formatter
     }
 
 }
+

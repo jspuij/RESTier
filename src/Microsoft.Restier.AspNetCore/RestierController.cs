@@ -39,7 +39,6 @@ namespace Microsoft.Restier.AspNetCore
     /// <summary>
     /// The all-in-one controller class to handle API requests.
     /// </summary>
-    [ODataFormatting]
     [RestierExceptionFilter]
     public class RestierController : ODataController
     {

@@ -5,11 +5,7 @@ using System;
 using Microsoft.OData;
 using Microsoft.OData.Edm;
 
-#if NET6_0_OR_GREATER
 namespace Microsoft.Restier.AspNetCore
-#else
-namespace Microsoft.Restier.AspNet
-#endif
 {
     /// <summary>
     /// The default payload value converter in RESTier.

@@ -152,14 +152,14 @@ namespace Microsoft.Restier.AspNetCore
                 var attributes = PropertyAttributes.None;
                 foreach (var annotation in annotations)
                 {
-                    if (!(annotation is EdmVocabularyAnnotation valueAnnotation))
+                    if (!(annotation is IEdmVocabularyAnnotation valueAnnotation))
                     {
                         continue;
                     }
 
                     if (valueAnnotation.Term.IsSameTerm(CoreVocabularyModel.ImmutableTerm))
                     {
-                        if (valueAnnotation.Value is EdmBooleanConstant value && value.Value)
+                        if (valueAnnotation.Value is IEdmBooleanConstantExpression value && value.Value)
                         {
                             attributes |= PropertyAttributes.IgnoreForUpdate;
                         }
@@ -167,7 +167,7 @@ namespace Microsoft.Restier.AspNetCore
 
                     if (valueAnnotation.Term.IsSameTerm(CoreVocabularyModel.ComputedTerm))
                     {
-                        if (valueAnnotation.Value is EdmBooleanConstant value && value.Value)
+                        if (valueAnnotation.Value is IEdmBooleanConstantExpression value && value.Value)
                         {
                             attributes |= PropertyAttributes.IgnoreForUpdate;
                             attributes |= PropertyAttributes.IgnoreForCreation;

@@ -1,15 +1,15 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.Http;
 using System.Net;
 
-namespace Microsoft.AspNetCore.Http
+namespace Microsoft.Restier.AspNetCore
 {
-
     /// <summary>
     /// Extensions for <see cref="HttpRequest"/>.
     /// </summary>
-    public static class Restier_HttpRequestExtensions
+    public static class RestierHttpRequestExtensions
     {
 
         /// <summary>
@@ -41,7 +41,5 @@ namespace Microsoft.AspNetCore.Http
 
             return false;
         }
-
     }
-
 }

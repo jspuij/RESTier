@@ -9,6 +9,11 @@
   <Folder Name="/src/" Id="02ea681e-c7d8-13c7-8484-4ac65e1b71e8">
     <Project Path="src/Microsoft.Restier.Core/Microsoft.Restier.Core.csproj" />
   </Folder>
+  <Folder Name="/src/EntityFramework/" Id="a290b16b-6f9e-4703-8c01-135831ad90df">
+    <Project Path="src/Microsoft.Restier.EntityFramework.Shared/Microsoft.Restier.EntityFramework.Shared.shproj" Id="83ad7aa8-9ed8-4b9f-966a-73ce9cae51c6" />
+    <Project Path="src/Microsoft.Restier.EntityFramework/Microsoft.Restier.EntityFramework.csproj" />
+    <Project Path="src/Microsoft.Restier.EntityFrameworkCore/Microsoft.Restier.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/src/Web/" Id="bf61c3f1-7c7e-4515-8b51-14b374a034f9">
     <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
   </Folder>

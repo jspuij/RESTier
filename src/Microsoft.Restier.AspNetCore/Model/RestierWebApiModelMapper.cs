@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 
 namespace Microsoft.Restier.AspNetCore.Model
@@ -18,23 +19,23 @@ namespace Microsoft.Restier.AspNetCore.Model
         /// <summary>
         /// Gets or sets the inner mapper.
         /// </summary>
-        internal IModelMapper InnerMapper { get; set; }
+        public IModelMapper Inner { get; set; }
 
         /// <summary>
         /// Tries to get the relevant type of an entity
         /// set, singleton, or composable function import.
         /// </summary>
-        /// <param name="context">The context for model mapper.</param>
+        /// <param name="invocationContext">The invocationContext for model mapper.</param>
         /// <param name="name">The name of an entity set, singleton or composable function import.</param>
         /// <param name="relevantType">When this method returns, provides the relevant type of the queryable source.</param>
         /// <returns>
         /// <c>true</c> if the relevant type was provided; otherwise, <c>false</c>.
         /// </returns>
-        public bool TryGetRelevantType(ModelContext context, string name,  out Type relevantType)
+        public bool TryGetRelevantType(InvocationContext invocationContext, string name,  out Type relevantType)
         {
-            Ensure.NotNull(context, nameof(context));
+            Ensure.NotNull(invocationContext, nameof(invocationContext));
 
-            var model = context.Api.Model;
+            var model = invocationContext.Api.Model;
 
             var element = model.EntityContainer.Elements.Where(e => e.Name == name).FirstOrDefault();
 
@@ -65,24 +66,24 @@ namespace Microsoft.Restier.AspNetCore.Model
                 }
             }
 
-            return InnerMapper.TryGetRelevantType(context, name, out relevantType);
+            return Inner.TryGetRelevantType(invocationContext, name, out relevantType);
         }
 
         /// <summary>
         /// Tries to get the relevant type of a composable function.
         /// </summary>
-        /// <param name="context">The context for model mapper.</param>
+        /// <param name="context">The invocationContext for model mapper.</param>
         /// <param name="namespaceName">The name of a namespace containing a composable function.</param>
         /// <param name="name">The name of composable function.</param>
         /// <param name="relevantType">When this method returns, provides the relevant type of the composable function.</param>
         /// <returns>
         /// <c>true</c> if the relevant type was provided; otherwise, <c>false</c>.
         /// </returns>
-        public bool TryGetRelevantType(ModelContext context, string namespaceName, string name, out Type relevantType)
+        public bool TryGetRelevantType(InvocationContext context, string namespaceName, string name, out Type relevantType)
         {
             // TODO GitHubIssue#39 : support composable function imports
             // relevantType = null;
-            return InnerMapper.TryGetRelevantType(context, namespaceName, name, out relevantType);
+            return Inner.TryGetRelevantType(context, namespaceName, name, out relevantType);
         }
     }
 }

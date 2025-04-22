@@ -143,21 +143,21 @@ namespace Microsoft.Restier.Core.Query
         /// <summary>
         /// Ensures that the Element Type exists in the model.
         /// </summary>
-        /// <param name="modelContext">The model context to use.</param>
+        /// <param name="invocationContext">The model context to use.</param>
         /// <param name="namespaceName">The namespace of the element type. Can be null.</param>
         /// <param name="name">The name of the element type.</param>
         /// <returns>The element type.</returns>
-        public Type EnsureElementType(ModelContext modelContext, string namespaceName, string name)
+        public Type EnsureElementType(InvocationContext invocationContext, string namespaceName, string name)
         {
             Type elementType;
 
             if (namespaceName is null)
             {
-                mapper.TryGetRelevantType(modelContext, name, out elementType);
+                mapper.TryGetRelevantType(invocationContext, name, out elementType);
             }
             else
             {
-                mapper.TryGetRelevantType(modelContext, namespaceName, name, out elementType);
+                mapper.TryGetRelevantType(invocationContext, namespaceName, name, out elementType);
             }
 
             if (elementType is null)

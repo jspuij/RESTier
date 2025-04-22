@@ -28,10 +28,10 @@ namespace Microsoft.Restier.Core.Query
         /// <summary>
         /// Ensures that the Element Type exists in the model.
         /// </summary>
-        /// <param name="modelContext">The model context to use.</param>
+        /// <param name="invocationContext">The model context to use.</param>
         /// <param name="namespaceName">The namespace of the element type. Can be null.</param>
         /// <param name="name">The name of the element type.</param>
         /// <returns>The element type.</returns>
-        Type EnsureElementType(ModelContext modelContext, string namespaceName, string name);
+        Type EnsureElementType(InvocationContext invocationContext, string namespaceName, string name);
     }
 }

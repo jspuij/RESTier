@@ -76,7 +76,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void InnerProcessorShortCircuits()
         {
-            queryHandler.EnsureElementType(Arg.Any<ModelContext>(), null, "Tests").Returns(typeof(Test));
+            queryHandler.EnsureElementType(Arg.Any<InvocationContext>(), null, "Tests").Returns(typeof(Test));
             var api = new QueryFilterApi(model, queryHandler, submitHandler);
             var instance = new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi));
             var queryable = api.GetQueryableSource("Tests");

@@ -47,7 +47,7 @@ namespace Microsoft.Restier.EntityFrameworkCore
         /// </summary>
         /// <param name="context"></param>
         /// <returns></returns>
-        public IEdmModel GetModel(ModelContext context)
+        public IEdmModel GetEdmModel(IModelContext context)
         {
             Ensure.NotNull(context, nameof(context));
 
@@ -169,7 +169,7 @@ namespace Microsoft.Restier.EntityFrameworkCore
 #endif
             if (InnerModelBuilder is not null)
             {
-                return InnerModelBuilder.GetModel(context);
+                return InnerModelBuilder.GetEdmModel(context);
             }
 
             //RWM: This doesn't return anything because the RestierModelBuilder in the ASP.NET project is the one that actually returns the model.

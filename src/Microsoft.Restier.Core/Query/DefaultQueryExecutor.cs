@@ -12,8 +12,13 @@ namespace Microsoft.Restier.Core.Query
     /// <summary>
     /// Default implementation for <see cref="IQueryExecutor"/>
     /// </summary>
-    internal class DefaultQueryExecutor : IQueryExecutor
+    public class DefaultQueryExecutor : IQueryExecutor
     {
+        /// <summary>
+        /// Gets or sets the inner query executor.
+        /// </summary>
+        public IQueryExecutor Inner { get; set; }
+
         /// <inheritdoc/>
         public Task<QueryResult> ExecuteQueryAsync<TElement>(
             QueryContext context,

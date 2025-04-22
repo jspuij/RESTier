@@ -51,7 +51,7 @@ namespace Microsoft.Restier.Tests.Core
             var name = "Tests";
             Type expectedType = typeof(Test);
 
-            modelMapper.TryGetRelevantType(Arg.Any<ModelContext>(), name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[2] = expectedType);
+            modelMapper.TryGetRelevantType(Arg.Any<InvocationContext>(), name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[2] = expectedType);
 
             var arguments = new[] { new object(), new object(), new object() };
             var result = api.GetQueryableSource(name, arguments);
@@ -103,7 +103,7 @@ namespace Microsoft.Restier.Tests.Core
             var name = "Tests";
             Type expectedType = typeof(Test);
 
-            modelMapper.TryGetRelevantType(Arg.Any<ModelContext>(), namespaceName, name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[3] = expectedType);
+            modelMapper.TryGetRelevantType(Arg.Any<InvocationContext>(), namespaceName, name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[3] = expectedType);
 
             var arguments = new[] { new object(), new object(), new object() };
             var result = api.GetQueryableSource(namespaceName, name, arguments);
@@ -175,7 +175,7 @@ namespace Microsoft.Restier.Tests.Core
             var name = "Tests";
             Type expectedType = typeof(Test);
 
-            modelMapper.TryGetRelevantType(Arg.Any<ModelContext>(), name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[2] = expectedType);
+            modelMapper.TryGetRelevantType(Arg.Any<InvocationContext>(), name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[2] = expectedType);
 
             var arguments = new[] { new object(), new object(), new object() };
             var result = api.GetQueryableSource<Test>(name, arguments);
@@ -193,7 +193,7 @@ namespace Microsoft.Restier.Tests.Core
             var name = "Tests";
             Type expectedType = typeof(Test);
 
-            modelMapper.TryGetRelevantType(Arg.Any<ModelContext>(), name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[2] = expectedType);
+            modelMapper.TryGetRelevantType(Arg.Any<InvocationContext>(), name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[2] = expectedType);
 
             var arguments = new[] { new object(), new object(), new object() };
 
@@ -243,7 +243,7 @@ namespace Microsoft.Restier.Tests.Core
             var name = "Tests";
             Type expectedType = typeof(Test);
 
-            modelMapper.TryGetRelevantType(Arg.Any<ModelContext>(), namespaceName, name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[3] = expectedType);
+            modelMapper.TryGetRelevantType(Arg.Any<InvocationContext>(), namespaceName, name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[3] = expectedType);
 
             var arguments = new[] { new object(), new object(), new object() };
             var result = api.GetQueryableSource<Test>(namespaceName, name, arguments);
@@ -262,7 +262,7 @@ namespace Microsoft.Restier.Tests.Core
             var name = "Tests";
             Type expectedType = typeof(Test);
 
-            modelMapper.TryGetRelevantType(Arg.Any<ModelContext>(), namespaceName, name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[3] = expectedType);
+            modelMapper.TryGetRelevantType(Arg.Any<InvocationContext>(), namespaceName, name, out Arg.Any<Type>()).Returns(true).AndDoes(x => x[3] = expectedType);
 
             var arguments = new[] { new object(), new object(), new object() };
 

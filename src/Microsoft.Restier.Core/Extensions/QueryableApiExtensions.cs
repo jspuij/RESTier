@@ -239,7 +239,7 @@ namespace Microsoft.Restier.Core
 
         private static Type EnsureElementType(this ApiBase api, string namespaceName, string name)
         {
-            var modelContext = new ModelContext(api);
+            var modelContext = new InvocationContext(api);
             return api.QueryHandler.EnsureElementType(modelContext, namespaceName, name);
         }
 

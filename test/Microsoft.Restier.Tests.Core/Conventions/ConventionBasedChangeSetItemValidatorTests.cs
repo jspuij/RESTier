@@ -164,6 +164,128 @@ namespace Microsoft.Restier.Tests.Core
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
+        /// <summary>
+        /// Validates a resource with multiple validation errors.
+        /// </summary>
+        [Fact]
+        public async Task ValidateChangeSetItemAsync_MultipleValidationErrors()
+        {
+            var testClass = new ConventionBasedChangeSetItemValidator();
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            dataModificationItem.Resource = new ValidatableEntity()
+            {
+                Property = null, // Required property is null
+                Number = 20,     // Out of range
+            };
+
+            var validationResults = new Collection<ChangeSetItemValidationResult>();
+            await testClass.ValidateChangeSetItemAsync(context, dataModificationItem, validationResults, cancellationToken);
+
+            validationResults.Should().HaveCount(2);
+        }
+
+        /// <summary>
+        /// Validates a resource with no validation attributes.
+        /// </summary>
+        [Fact]
+        public async Task ValidateChangeSetItemAsync_NoValidationAttributes()
+        {
+            var testClass = new ConventionBasedChangeSetItemValidator();
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            dataModificationItem.Resource = new object(); // No validation attributes
+
+            var validationResults = new Collection<ChangeSetItemValidationResult>();
+            await testClass.ValidateChangeSetItemAsync(context, dataModificationItem, validationResults, cancellationToken);
+
+            validationResults.Should().BeEmpty();
+        }
+
+        /// <summary>
+        /// Validates a resource with valid data.
+        /// </summary>
+        [Fact]
+        public async Task ValidateChangeSetItemAsync_ValidData()
+        {
+            var testClass = new ConventionBasedChangeSetItemValidator();
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            dataModificationItem.Resource = new ValidatableEntity()
+            {
+                Property = "Valid Data",
+                Number = 5,
+            };
+
+            var validationResults = new Collection<ChangeSetItemValidationResult>();
+            await testClass.ValidateChangeSetItemAsync(context, dataModificationItem, validationResults, cancellationToken);
+
+            validationResults.Should().BeEmpty();
+        }
+
+        /// <summary>
+        /// Validates a resource with a null Resource property.
+        /// </summary>
+        [Fact]
+        public async Task ValidateChangeSetItemAsync_NullResource()
+        {
+            var testClass = new ConventionBasedChangeSetItemValidator();
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            dataModificationItem.Resource = null;
+
+            var validationResults = new Collection<ChangeSetItemValidationResult>();
+            await testClass.ValidateChangeSetItemAsync(context, dataModificationItem, validationResults, cancellationToken);
+
+            validationResults.Should().BeEmpty();
+        }
+
+        /// <summary>
+        /// Validates a resource with custom validation logic.
+        /// </summary>
+        [Fact]
+        public async Task ValidateChangeSetItemAsync_CustomValidationLogic()
+        {
+            var testClass = new ConventionBasedChangeSetItemValidator();
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            dataModificationItem.Resource = new CustomValidatableEntity()
+            {
+                CustomProperty = "Invalid",
+            };
+
+            var validationResults = new Collection<ChangeSetItemValidationResult>();
+            await testClass.ValidateChangeSetItemAsync(context, dataModificationItem, validationResults, cancellationToken);
+
+            validationResults.Should().ContainSingle(result =>
+                result.PropertyName == nameof(CustomValidatableEntity.CustomProperty) &&
+                result.Message.Contains("Custom validation failed"));
+        }
+
+        public class CustomValidatableEntity
+        {
+            [CustomValidation(typeof(CustomValidator), nameof(CustomValidator.Validate))]
+            public string CustomProperty { get; set; }
+        }
+
+        public class CustomValidator
+        {
+            public static ValidationResult Validate(object value, ValidationContext context)
+            {
+                if (value is string str && str == "Invalid")
+                {
+                    return new ValidationResult("Custom validation failed");
+                }
+
+                return ValidationResult.Success;
+            }
+        }
+
         private class EmptyApi : ApiBase
         {
             public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)

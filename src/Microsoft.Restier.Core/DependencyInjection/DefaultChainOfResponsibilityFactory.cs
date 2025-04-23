@@ -3,10 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Microsoft.Restier.Core.DependencyInjection
 {
@@ -21,8 +18,8 @@ namespace Microsoft.Restier.Core.DependencyInjection
     /// For other DI containers, this may not be the case and a different
     /// implementation might be needed.
     /// </remarks>
-    internal class DefaultChainOfResponsibilityFactory<T> : IChainOfResponsibilityFactory<T>
-        where T : class, IChainedService<T>
+    internal class DefaultChainOfResponsibilityFactory<TService> : IChainOfResponsibilityFactory<TService>
+        where TService : class, IChainedService<TService>
     {
         private readonly IServiceProvider serviceProvider;
 
@@ -38,11 +35,11 @@ namespace Microsoft.Restier.Core.DependencyInjection
         /// <summary>
         /// Creates a chain of responsibility.
         /// </summary>
-        /// <returns>The chained service of type <typeparamref name="T"/></returns>
-        public T Create()
+        /// <returns>The chained service of type <typeparamref name="TService"/></returns>
+        public TService Create()
         {
-            T previous = null;
-            foreach (T service in this.serviceProvider.GetServices<IChainedService<T>>())
+            TService previous = null;
+            foreach (TService service in serviceProvider.GetServices<IChainedService<TService>>().Cast<TService>())
             {
                 service.Inner = previous;
                 previous = service;

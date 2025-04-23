@@ -272,6 +272,58 @@ namespace Microsoft.Restier.Tests.Core
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
+        /// <summary>
+        /// Checks that the Inner filter is invoked when set.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task InnerFilterIsInvoked()
+        {
+            var innerFilter = Substitute.For<IChangeSetItemFilter>();
+            var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi))
+            {
+                Inner = innerFilter
+            };
+
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            await testClass.OnChangeSetItemProcessingAsync(context, dataModificationItem, cancellationToken);
+            await innerFilter.Received(1).OnChangeSetItemProcessingAsync(context, dataModificationItem, cancellationToken);
+
+            await testClass.OnChangeSetItemProcessedAsync(context, dataModificationItem, cancellationToken);
+            await innerFilter.Received(1).OnChangeSetItemProcessedAsync(context, dataModificationItem, cancellationToken);
+        }
+
+        /// <summary>
+        /// Checks that OnChangeSetItemProcessingAsync handles multiple ChangeSetItems.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task CanProcessMultipleChangeSetItems()
+        {
+            var testClass = new ConventionBasedChangeSetItemFilter(typeof(EmptyApi));
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet(new[]
+            {
+        dataModificationItem,
+        new DataModificationItem(
+            "Test2",
+            typeof(object),
+            typeof(object),
+            RestierEntitySetOperation.Update,
+            new Dictionary<string, object>(),
+            new Dictionary<string, object>(),
+            new Dictionary<string, object>())
+    }));
+
+            var cancellationToken = CancellationToken.None;
+            foreach (var item in context.ChangeSet.Entries)
+            {
+                await testClass.OnChangeSetItemProcessingAsync(context, item, cancellationToken);
+            }
+        }
+
+
         private class EmptyApi : ApiBase
         {
             public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)

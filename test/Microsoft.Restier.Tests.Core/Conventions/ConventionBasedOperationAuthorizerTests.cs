@@ -204,6 +204,37 @@ namespace Microsoft.Restier.Tests.Core
                 CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
+        /// <summary>
+        /// Check that the inner IOperationAuthorizer is called when AuthorizeAsync is invoked.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task AuthorizeAsyncCallsInnerOperationAuthorizer()
+        {
+            // Arrange
+            var innerAuthorizer = Substitute.For<IOperationAuthorizer>();
+            innerAuthorizer.AuthorizeAsync(Arg.Any<OperationContext>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(true));
+
+            var api = new EmptyApi(model, queryHandler, submitHandler);
+            var context = new OperationContext(
+                api,
+                s => new object(),
+                "Test",
+                true,
+                null);
+            var cancellationToken = CancellationToken.None;
+
+            var testClass = new ConventionBasedOperationAuthorizer(typeof(EmptyApi));
+            testClass.Inner = innerAuthorizer;
+
+            // Act
+            var result = await testClass.AuthorizeAsync(context, cancellationToken);
+
+            // Assert
+            result.Should().BeTrue("the inner IOperationAuthorizer should return true.");
+            await innerAuthorizer.Received(1).AuthorizeAsync(context, cancellationToken);
+        }
 
         private class EmptyApi : ApiBase
         {

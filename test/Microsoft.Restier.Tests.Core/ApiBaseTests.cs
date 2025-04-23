@@ -4,6 +4,7 @@
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
@@ -35,21 +36,28 @@ namespace Microsoft.Restier.Tests.Core
 
         public ApiBaseTests()
         {
+            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            var changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
+            changeSetItemAuthorizerFactory.Create().Returns(new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi)));
+            var changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
+            changesetItemValidatorFactory.Create().Returns(new ConventionBasedChangeSetItemValidator());
+            var changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
+            changeSetItemFilterFactory.Create().Returns(new ConventionBasedChangeSetItemFilter(typeof(EmptyApi)));
             queryHandler = new DefaultQueryHandler(
                 new TestQuerySourcer(),
                 new DefaultQueryExecutor(),
                 new TestModelMapper(),
                 null,
                 null,
-                new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+                processorFactory
                 );
             submitHandler = new DefaultSubmitHandler(
                 new DefaultChangeSetInitializer(),
                 new DefaultSubmitExecutor(),
-                new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi)),
-                new ConventionBasedChangeSetItemValidator(),
-                new ConventionBasedChangeSetItemFilter(typeof(EmptyApi))
-                );
+                changeSetItemAuthorizerFactory,
+                changesetItemValidatorFactory,
+                changeSetItemFilterFactory);
             testClass = new TestApiBase(modelBuilder.GetEdmModel(Substitute.For<IModelContext>()), queryHandler, submitHandler);
         }
 

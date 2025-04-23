@@ -213,6 +213,53 @@ namespace Microsoft.Restier.Tests.Core
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
+        /// <summary>
+        /// Checks that the Inner property is null by default.
+        /// </summary>
+        [Fact]
+        public void InnerPropertyIsNullByDefault()
+        {
+            var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi));
+            testClass.Inner.Should().BeNull("Inner should be null by default.");
+        }
+
+        /// <summary>
+        /// Checks that the Inner property can be set and retrieved.
+        /// </summary>
+        [Fact]
+        public void CanSetAndGetInnerProperty()
+        {
+            var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi));
+            var mockInner = Substitute.For<IChangeSetItemAuthorizer>();
+            testClass.Inner = mockInner;
+            testClass.Inner.Should().BeSameAs(mockInner, "Inner should return the same instance that was set.");
+        }
+
+        /// <summary>
+        /// Checks that the Inner property is invoked during AuthorizeAsync.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task InnerPropertyIsInvokedDuringAuthorizeAsync()
+        {
+            var mockInner = Substitute.For<IChangeSetItemAuthorizer>();
+            mockInner.AuthorizeAsync(Arg.Any<SubmitContext>(), Arg.Any<ChangeSetItem>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(false));
+
+            var testClass = new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi))
+            {
+                Inner = mockInner
+            };
+
+            var context = new SubmitContext(new EmptyApi(model, queryHandler, submitHandler), new ChangeSet());
+            var cancellationToken = CancellationToken.None;
+
+            var result = await testClass.AuthorizeAsync(context, dataModificationItem, cancellationToken);
+
+            result.Should().BeFalse("AuthorizeAsync should return false because Inner returned false.");
+            await mockInner.Received(1).AuthorizeAsync(context, dataModificationItem, cancellationToken);
+        }
+
         private class EmptyApi : ApiBase
         {
             public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)

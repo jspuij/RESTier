@@ -288,6 +288,62 @@ namespace Microsoft.Restier.Tests.Core
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
+        /// <summary>
+        /// Check that OnOperationExecutingAsync invokes the Inner IOperationFilter.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task OnOperationExecutingAsyncInvokesInnerFilter()
+        {
+            // Arrange
+            var innerFilter = Substitute.For<IOperationFilter>();
+            var testClass = new ConventionBasedOperationFilter(typeof(EmptyApi))
+            {
+                Inner = innerFilter
+            };
+            var context = new OperationContext(
+                new EmptyApi(model, queryHandler, submitHandler),
+                s => new object(),
+                "Test",
+                true,
+                null);
+            var cancellationToken = CancellationToken.None;
+
+            // Act
+            await testClass.OnOperationExecutingAsync(context, cancellationToken);
+
+            // Assert
+            await innerFilter.Received(1).OnOperationExecutingAsync(context, cancellationToken);
+        }
+
+        /// <summary>
+        /// Check that OnOperationExecutedAsync invokes the Inner IOperationFilter.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task OnOperationExecutedAsyncInvokesInnerFilter()
+        {
+            // Arrange
+            var innerFilter = Substitute.For<IOperationFilter>();
+            var testClass = new ConventionBasedOperationFilter(typeof(EmptyApi))
+            {
+                Inner = innerFilter
+            };
+            var context = new OperationContext(
+                new EmptyApi(model, queryHandler, submitHandler),
+                s => new object(),
+                "Test",
+                true,
+                null);
+            var cancellationToken = CancellationToken.None;
+
+            // Act
+            await testClass.OnOperationExecutedAsync(context, cancellationToken);
+
+            // Assert
+            await innerFilter.Received(1).OnOperationExecutedAsync(context, cancellationToken);
+        }
+
         private class EmptyApi : ApiBase
         {
             public EmptyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(model, queryHandler, submitHandler)

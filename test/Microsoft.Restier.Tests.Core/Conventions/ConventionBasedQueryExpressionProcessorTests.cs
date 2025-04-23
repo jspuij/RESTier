@@ -71,7 +71,7 @@ namespace Microsoft.Restier.Tests.Core
         */
 
         /// <summary>
-        /// Checks that processing by the inner processor will bypass the current one.
+        /// Checks that processing by the inner processorFactory will bypass the current one.
         /// </summary>
         [Fact]
         public void InnerProcessorShortCircuits()

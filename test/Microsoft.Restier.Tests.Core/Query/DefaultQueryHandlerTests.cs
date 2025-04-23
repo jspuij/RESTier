@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
@@ -31,7 +32,7 @@ namespace Microsoft.Restier.Tests.Core.Query
         private readonly IModelMapper modelMapper = Substitute.For<IModelMapper>();
         private readonly IQueryExpressionAuthorizer authorizer = Substitute.For<IQueryExpressionAuthorizer>();
         private readonly IQueryExpressionExpander expander = Substitute.For<IQueryExpressionExpander>();
-        private readonly IQueryExpressionProcessor processor = Substitute.For<IQueryExpressionProcessor>();
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionProcessor> processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
 
         private readonly IQueryHandler queryHandler;
         private readonly IEdmModel model;
@@ -68,7 +69,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 modelMapper,
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
             instance.Should().NotBeNull();
         }
 
@@ -84,7 +85,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 modelMapper,
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
             act.Should().Throw<ArgumentNullException>();
         }
 
@@ -100,7 +101,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 modelMapper,
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
             act.Should().Throw<ArgumentNullException>();
         }
 
@@ -116,7 +117,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 default(IModelMapper),
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
             act.Should().Throw<ArgumentNullException>();
         }
 
@@ -133,7 +134,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 modelMapper,
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
 
             var model = Substitute.For<IEdmModel>();
             var entityContainer = Substitute.For<IEdmEntityContainer>();
@@ -181,7 +182,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 modelMapper,
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
 
             var model = Substitute.For<IEdmModel>();
             var entityContainer = Substitute.For<IEdmEntityContainer>();
@@ -234,7 +235,7 @@ namespace Microsoft.Restier.Tests.Core.Query
                 modelMapper,
                 authorizer,
                 expander,
-                processor);
+                processorFactory);
 
             Func<Task> act = () => instance.QueryAsync(default(QueryContext), CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentNullException>();

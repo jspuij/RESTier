@@ -12,6 +12,7 @@ using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
 
 namespace Microsoft.Restier.Core.Query
@@ -40,14 +41,14 @@ namespace Microsoft.Restier.Core.Query
         /// <param name="mapper">The model mapper to use.</param>
         /// <param name="authorizer">The query expression authorizer to use.</param>
         /// <param name="expander">The query expression expander to use.</param>
-        /// <param name="processor">The query expression processor to use.</param>
+        /// <param name="processorFactory">The query expression processorFactory to use.</param>
         public DefaultQueryHandler(
             IQueryExpressionSourcer sourcer,
             IQueryExecutor executor,
             IModelMapper mapper,
             IQueryExpressionAuthorizer authorizer = null,
             IQueryExpressionExpander expander = null,
-            IQueryExpressionProcessor processor = null)
+            IChainOfResponsibilityFactory<IQueryExpressionProcessor> processorFactory = null)
         {
             Ensure.NotNull(sourcer, nameof(sourcer));
             Ensure.NotNull(executor, nameof(executor));
@@ -55,7 +56,7 @@ namespace Microsoft.Restier.Core.Query
 
             this.authorizer = authorizer;
             this.expander = expander;
-            this.processor = processor;
+            this.processor = processorFactory?.Create();
             this.executor = executor;
             this.sourcer = sourcer;
             this.mapper = mapper;

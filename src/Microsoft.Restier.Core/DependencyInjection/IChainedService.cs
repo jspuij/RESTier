@@ -13,13 +13,13 @@ namespace Microsoft.Restier.Core.DependencyInjection
     /// Interface implemented by services that are chained 
     /// together to form a chain of responsibility.
     /// </summary>
-    /// <typeparam name="T">The type of the service</typeparam>
-    public interface IChainedService<T>
-        where T : class
+    /// <typeparam name="TService">The type of the service</typeparam>
+    public interface IChainedService<TService>
+        where TService : class
     {
         /// <summary>
         /// Gets a reference to an inner service in case they are chained.
         /// </summary>
-        T Inner { get; set; }
+        TService Inner { get; set; }
     }
 }

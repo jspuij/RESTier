@@ -7,7 +7,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="ApiBaseTests.cs" />
 	  <Compile Remove="Extensions\ServiceCollectionExtensionsTests.cs" />
 	  <Compile Remove="ServiceCollectionExtensionTests.cs" />
 	</ItemGroup>

@@ -29,7 +29,6 @@ namespace Microsoft.Restier.Tests.Core
     public partial class ApiBaseTests
     {
         private TestApiBase testClass;
-
         DefaultQueryHandler queryHandler;
         DefaultSubmitHandler submitHandler;
         TestModelBuilder modelBuilder = new TestModelBuilder();
@@ -58,7 +57,7 @@ namespace Microsoft.Restier.Tests.Core
                 changeSetItemAuthorizerFactory,
                 changesetItemValidatorFactory,
                 changeSetItemFilterFactory);
-            testClass = new TestApiBase(modelBuilder.GetEdmModel(Substitute.For<IModelContext>()), queryHandler, submitHandler);
+            testClass = new TestApiBase(modelBuilder.GetEdmModel(), queryHandler, submitHandler);
         }
 
         /// <summary>
@@ -77,7 +76,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void CannotConstructWithNullQueryHandler()
         {
-            Action act = () => new TestApiBase(modelBuilder.GetEdmModel(Substitute.For<IModelContext>()), default(IQueryHandler), submitHandler);
+            Action act = () => new TestApiBase(modelBuilder.GetEdmModel(), default(IQueryHandler), submitHandler);
             act.Should().Throw<ArgumentNullException>();
         }
 
@@ -87,7 +86,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void CannotConstructWithNullSubmitHandler()
         {
-            Action act = () => new TestApiBase(modelBuilder.GetEdmModel(Substitute.For<IModelContext>()), queryHandler, default(ISubmitHandler));
+            Action act = () => new TestApiBase(modelBuilder.GetEdmModel(), queryHandler, default(ISubmitHandler));
             act.Should().Throw<ArgumentNullException>();
         }
 
@@ -101,13 +100,19 @@ namespace Microsoft.Restier.Tests.Core
             var changeSetItemAuthorizer = Substitute.For<IChangeSetItemAuthorizer>();
             var changeSetItemValidator = Substitute.For<IChangeSetItemValidator>();
             var changeSetItemFilter = Substitute.For<IChangeSetItemFilter>();
+            var changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
+            changeSetItemAuthorizerFactory.Create().Returns(changeSetItemAuthorizer);
+            var changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
+            changesetItemValidatorFactory.Create().Returns(changeSetItemValidator);
+            var changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
+            changeSetItemFilterFactory.Create().Returns(changeSetItemFilter);
 
             submitHandler = new DefaultSubmitHandler(
                 new DefaultChangeSetInitializer(),
                 new DefaultSubmitExecutor(),
-                changeSetItemAuthorizer,
-                changeSetItemValidator,
-                changeSetItemFilter);
+                changeSetItemAuthorizerFactory,
+                changesetItemValidatorFactory,
+                changeSetItemFilterFactory);
 
             var changeSet = new ChangeSet();
             changeSet.Entries.Enqueue(
@@ -167,7 +172,7 @@ namespace Microsoft.Restier.Tests.Core
                     return Task.FromResult(authCalled);
                 });
 
-            testClass = new TestApiBase(modelBuilder.GetEdmModel(Substitute.For<IModelContext>()), queryHandler, submitHandler);
+            testClass = new TestApiBase(modelBuilder.GetEdmModel(), queryHandler, submitHandler);
             var result = await testClass.SubmitAsync(changeSet, cancellationToken);
             authCalled.Should().BeTrue("AuthorizeAsync was not called");
             preFilterCalled.Should().BeTrue("OnChangeSetItemProcessingAsync was not called");
@@ -186,13 +191,19 @@ namespace Microsoft.Restier.Tests.Core
             var changeSetItemValidator = Substitute.For<IChangeSetItemValidator>();
             var changeSetItemFilter = Substitute.For<IChangeSetItemFilter>();
             var changeSetInitializer = Substitute.For<IChangeSetInitializer>();
+            var changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
+            changeSetItemAuthorizerFactory.Create().Returns(changeSetItemAuthorizer);
+            var changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
+            changesetItemValidatorFactory.Create().Returns(changeSetItemValidator);
+            var changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
+            changeSetItemFilterFactory.Create().Returns(changeSetItemFilter);
 
             submitHandler = new DefaultSubmitHandler(
                 changeSetInitializer,
                 new DefaultSubmitExecutor(),
-                changeSetItemAuthorizer,
-                changeSetItemValidator,
-                changeSetItemFilter);
+                changeSetItemAuthorizerFactory,
+                changesetItemValidatorFactory,
+                changeSetItemFilterFactory);
 
             var changeSet = new ChangeSet();
             var cancellationToken = CancellationToken.None;
@@ -208,7 +219,7 @@ namespace Microsoft.Restier.Tests.Core
                     return Task.CompletedTask;
                 });
 
-            testClass = new TestApiBase(modelBuilder.GetEdmModel(Substitute.For<IModelContext>()), queryHandler, submitHandler);
+            testClass = new TestApiBase(modelBuilder.GetEdmModel(), queryHandler, submitHandler);
             var result = await testClass.SubmitAsync(changeSet, cancellationToken);
             result.Should().Be(submitResult);
         }
@@ -226,7 +237,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void DefaultApiBaseCanBeCreatedAndDisposed()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
 
             Action exceptionTest = () => { api.Dispose(); };
@@ -236,7 +247,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_EntitySet_IsConfiguredCorrectly()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource("Test", arguments);
@@ -246,7 +257,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_OfT_EntitySet_IsConfiguredCorrectly()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource<string>("Test", arguments);
@@ -257,15 +268,18 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_EntitySet_ThrowsIfNotMapped()
         {
+            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+
             queryHandler = new DefaultQueryHandler(
                new TestQuerySourcer(),
                new DefaultQueryExecutor(),
                Substitute.For<IModelMapper>(),
                null,
                null,
-               new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+               processorFactory
                );
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
@@ -276,7 +290,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_OfT_ContainerElementThrowsIfWrongType()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
@@ -288,7 +302,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_ComposableFunction_IsConfiguredCorrectly()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource("Namespace", "Function", arguments);
@@ -299,7 +313,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_OfT_ComposableFunction_IsConfiguredCorrectly()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
             var source = api.GetQueryableSource<DateTime>("Namespace", "Function", arguments);
@@ -310,15 +324,18 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_ComposableFunction_ThrowsIfNotMapped()
         {
+            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+
             queryHandler = new DefaultQueryHandler(
                new TestQuerySourcer(),
                new DefaultQueryExecutor(),
                Substitute.For<IModelMapper>(),
                null,
                null,
-               new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+               processorFactory
                );
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
@@ -329,15 +346,18 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_OfT_ComposableFunction_ThrowsIfNotMapped()
         {
+            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+
             queryHandler = new DefaultQueryHandler(
                new TestQuerySourcer(),
                new DefaultQueryExecutor(),
                Substitute.For<IModelMapper>(),
                null,
                null,
-               new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi))
+               processorFactory
                );
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
@@ -348,7 +368,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_ComposableFunction_ThrowsIfWrongType()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var arguments = new object[0];
 
@@ -361,7 +381,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task QueryAsync_WithQueryReturnsResults()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
 
             var request = new QueryRequest(api.GetQueryableSource<string>("Test"));
@@ -374,7 +394,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task QueryAsync_CorrectlyForwardsCall()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var queryRequest = new QueryRequest(api.GetQueryableSource<string>("Test"));
             var queryResult = await api.QueryAsync(queryRequest, TestContext.Current.CancellationToken);
@@ -385,7 +405,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public async Task SubmitAsync_CorrectlyForwardsCall()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var submitResult = await api.SubmitAsync(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -395,7 +415,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_CannotEnumerate()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
@@ -406,7 +426,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_CannotEnumerateIEnumerable()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
@@ -417,7 +437,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_ProviderCannotGenericExecute()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
@@ -428,7 +448,7 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_ProviderCannotExecute()
         {
-            var model = modelBuilder.GetEdmModel(Substitute.For<IModelContext>());
+            var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
             var source = api.GetQueryableSource<string>("Test");
 
@@ -476,7 +496,10 @@ namespace Microsoft.Restier.Tests.Core
 
         private class TestModelBuilder : IModelBuilder
         {
-            public IEdmModel GetEdmModel(IModelContext context)
+            /// <inheritdoc />
+            public IModelBuilder Inner { get; set; }
+
+            public IEdmModel GetEdmModel()
             {
                 var model = new EdmModel();
                 var dummyType = new EdmEntityType("NS", "Dummy");
@@ -490,13 +513,16 @@ namespace Microsoft.Restier.Tests.Core
 
         private class TestModelMapper : IModelMapper
         {
-            public bool TryGetRelevantType(ModelContext context, string name, out Type relevantType)
+            /// <inheritdoc />
+            public IModelMapper Inner { get; set; }
+
+            public bool TryGetRelevantType(InvocationContext context, string name, out Type relevantType)
             {
                 relevantType = typeof(string);
                 return true;
             }
 
-            public bool TryGetRelevantType(ModelContext context, string namespaceName, string name, out Type relevantType)
+            public bool TryGetRelevantType(InvocationContext context, string namespaceName, string name, out Type relevantType)
             {
                 relevantType = typeof(DateTime);
                 return true;

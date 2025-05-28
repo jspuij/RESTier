@@ -18,6 +18,7 @@ using Microsoft.Restier.AspNetCore.Model;
 using AspNetResources = Microsoft.Restier.AspNetCore.Resources;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Operation;
+using Microsoft.AspNetCore.OData.Extensions;
 
 namespace Microsoft.Restier.AspNetCore.Operation
 {
@@ -112,7 +113,7 @@ namespace Microsoft.Restier.AspNetCore.Operation
                         parameterTypeRef,
                         model,
                         restierOperationContext.Request,
-                        restierOperationContext.Request.GetRequestContainer());
+                        restierOperationContext.Request.GetRouteServices());
                 }
                 else
                 {

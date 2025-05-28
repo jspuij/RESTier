@@ -47,5 +47,6 @@
 	  <Folder Include="Formatter\Serialization\" />
 	  <Folder Include="Model\" />
 	  <Folder Include="MiddleWare\" />
+	  <Folder Include="Operation\" />
 	</ItemGroup>
 </Project>

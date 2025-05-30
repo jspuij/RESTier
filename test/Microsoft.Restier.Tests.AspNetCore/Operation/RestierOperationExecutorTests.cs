@@ -96,7 +96,7 @@ public class RestierOperationExecutorTests
         await _filter.Received(1).OnOperationExecutedAsync(context, Arg.Any<CancellationToken>());
     }
 
-    // DummyApi for testing reflection
+    // TestApi for testing reflection
     public class DummyApi : ApiBase
     {
         public DummyApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)

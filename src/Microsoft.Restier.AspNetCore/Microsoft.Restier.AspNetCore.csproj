@@ -32,8 +32,6 @@
 	  <Compile Remove="Model\RestierWebApiModelBuilder.cs" />
 	  <Compile Remove="Model\RestierWebApiModelExtender.cs" />
 	  <Compile Remove="Model\RestierWebApiOperationModelBuilder.cs" />
-	  <Compile Remove="Query\RestierQueryBuilder.cs" />
-	  <Compile Remove="Query\RestierQueryExecutor.cs" />
 	  <Compile Remove="RestierController.cs" />
 	</ItemGroup>
 

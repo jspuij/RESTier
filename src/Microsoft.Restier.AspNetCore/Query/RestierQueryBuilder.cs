@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.OData.Routing.Template;
 using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
 using Microsoft.Restier.AspNetCore.Model;
@@ -92,16 +93,19 @@ namespace Microsoft.Restier.AspNetCore.Query
 
         internal static IReadOnlyDictionary<string, object> GetPathKeyValues(ODataPath path)
         {
-            if (path.PathTemplate == "~/entityset/key" ||
-                path.PathTemplate == "~/entityset/key/cast")
+            var segments = path as IList<ODataPathSegment>;
+
+            if (segments.Count == 2 && segments[0] is EntitySetSegment && segments[1] is KeySegment keySegment)
             {
-                var keySegment = (KeySegment)path[1];
                 return GetPathKeyValues(keySegment);
             }
-            else if (path.PathTemplate == "~/entityset/cast/key")
+            else if (segments.Count == 3 && segments[0] is EntitySetSegment && segments[1] is KeySegment keySegment2 && segments[2] is TypeSegment)
             {
-                var keySegment = (KeySegment)path[2];
-                return GetPathKeyValues(keySegment);
+                return GetPathKeyValues(keySegment2);
+            }
+            else if (segments.Count == 3 && segments[0] is EntitySetSegment && segments[1] is TypeSegment && segments[2] is KeySegment keySegment3)
+            {
+                return GetPathKeyValues(keySegment3);
             }
             else
             {

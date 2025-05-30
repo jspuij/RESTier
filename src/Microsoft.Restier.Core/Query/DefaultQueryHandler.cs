@@ -82,7 +82,7 @@ namespace Microsoft.Restier.Core.Query
             Ensure.NotNull(context, nameof(context));
 
             // process query expression
-            var expression = context.Request.Expression;
+            var expression = context.Request.Query.Expression;
             var visitor = new QueryExpressionVisitor(context, sourcer, authorizer, expander, processor);
             expression = visitor.Visit(expression);
 

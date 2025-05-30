@@ -22,16 +22,37 @@ namespace Microsoft.Restier.Tests.AspNetCore.Query;
 public class RestierQueryExecutorTests
 {
     [Fact]
-    public async Task ExecuteQueryAsync_DelegatesToInner()
+    public async Task ExecuteQueryAsync_WhenIncludeTotalCountIsSet_DelegatesToInnerAndSetsTotalCount()
     {
         // Arrange
         var inner = Substitute.For<IQueryExecutor>();
         var executor = new RestierQueryExecutor { Inner = inner };
-        var context = new QueryContext(new TestApi(Substitute.For<IEdmModel>(), Substitute.For<IQueryHandler>(), Substitute.For<ISubmitHandler>()), new QueryRequest(new TestQueryableSource()));
-        var query = new[] { 1, 2, 3 }.AsQueryable();
-        var cancellationToken = new CancellationToken();
-        var expectedResult = new QueryResult(new[] { 1, 2, 3 });
+        var setTotalCountCalled = false;
+        long? totalCountValue = null;
 
+        var queryRequest = new QueryRequest(new TestQueryableSource())
+        {
+            IncludeTotalCount = true,
+            SetTotalCount = count =>
+            {
+                setTotalCountCalled = true;
+                totalCountValue = count;
+            }
+        };
+
+        var context = new QueryContext(
+            new TestApi(Substitute.For<IEdmModel>(), Substitute.For<IQueryHandler>(), Substitute.For<ISubmitHandler>()),
+            queryRequest);
+
+        var query = new[] { new object(), new object(), new object() }.AsQueryable();
+        var cancellationToken = new CancellationToken();
+        var expectedCountResult = new QueryResult(new long[] { 3 }.AsQueryable());
+
+        // Simulate the inner executor returning the expected result
+        inner.ExecuteExpressionAsync<long>(Arg.Any<QueryContext>(), Arg.Any<IQueryProvider>(), Arg.Any<Expression>(), Arg.Any<CancellationToken>())
+            .Returns(expectedCountResult);
+
+        var expectedResult = new QueryResult(query);
         inner.ExecuteQueryAsync(context, query, cancellationToken)
             .Returns(Task.FromResult(expectedResult));
 
@@ -41,6 +62,10 @@ public class RestierQueryExecutorTests
         // Assert
         result.Should().BeSameAs(expectedResult);
         await inner.Received(1).ExecuteQueryAsync(context, query, cancellationToken);
+
+        // Since the counting logic is not implemented, SetTotalCount should not be called
+        setTotalCountCalled.Should().BeTrue();
+        totalCountValue.Should().Be(3);
     }
 
     [Fact]
@@ -91,7 +116,7 @@ public class RestierQueryExecutorTests
 
     internal class TestQueryableSource : QueryableSource
     {
-        public TestQueryableSource() : base(Expression.Constant(0))
+        public TestQueryableSource() : base(new object[] { new object(), new object(), new object() }.AsQueryable().Expression)
         {
         }
 

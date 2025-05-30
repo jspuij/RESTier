@@ -61,14 +61,14 @@ namespace Microsoft.Restier.Tests.Core.Query
         }
 
         /// <summary>
-        /// Can set and get the expression.
+        /// Can set and get the IQueryable.
         /// </summary>
         [Fact]
-        public void CanSetAndGetExpression()
+        public void CanSetAndGetIQuerable()
         {
-            var testValue = Expression.Constant(query);
-            testClass.Expression = testValue;
-            testClass.Expression.Should().Be(testValue);
+            var testValue = Substitute.For<IQueryable>();
+            testClass.Query = testValue;
+            testClass.Query.Should().Be(testValue);
         }
 
         /// <summary>

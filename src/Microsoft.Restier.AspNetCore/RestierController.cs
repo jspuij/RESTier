@@ -79,6 +79,12 @@ namespace Microsoft.Restier.AspNetCore
             var queryable = GetQuery(path);
             ETag etag;
 
+            var queryRequest = new QueryRequest(queryable)
+            {
+                ShouldReturnCount = shouldReturnCount,
+            };
+
+
             // TODO #365 Do not support additional path segment after function call now
             if (lastSegment is OperationImportSegment unboundSegment)
             {
@@ -86,9 +92,8 @@ namespace Microsoft.Restier.AspNetCore
                 Func<string, object> getParaValueFunc = p => unboundSegment.Parameters.FirstOrDefault(c => c.Name == p).Value;
                 result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, true, null, cancellationToken).ConfigureAwait(false);
 
-                var applied = ApplyQueryOptions(result, path, true);
-                result = applied.Queryable;
-                etag = applied.Etag;
+                etag = ApplyQueryOptions(queryRequest, path, true);
+                result = queryRequest.Query;
             }
             else
             {
@@ -99,21 +104,19 @@ namespace Microsoft.Restier.AspNetCore
 
                 if (lastSegment is OperationSegment segment)
                 {
-                    result = await ExecuteQuery(queryable, cancellationToken).ConfigureAwait(false);
+                    result = await ExecuteQuery(queryRequest, cancellationToken).ConfigureAwait(false);
 
                     var operation = segment.Operations.FirstOrDefault();
                     Func<string, object> getParaValueFunc = p => segment.Parameters.FirstOrDefault(c => c.Name == p).Value;
                     result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, true, result, cancellationToken).ConfigureAwait(false);
 
-                    var applied = ApplyQueryOptions(result, path, true);
-                    result = applied.Queryable;
-                    etag = applied.Etag;
+                    etag = ApplyQueryOptions(queryRequest, path, true);
+                    result = queryRequest.Query;
                 }
                 else
                 {
-                    var applied = ApplyQueryOptions(queryable, path, false);
-                    result = await ExecuteQuery(applied.Queryable, cancellationToken).ConfigureAwait(false);
-                    etag = applied.Etag;
+                    etag = ApplyQueryOptions(queryRequest, path, false);
+                    result = await ExecuteQuery(queryRequest, cancellationToken).ConfigureAwait(false);
                 }
             }
 
@@ -308,6 +311,12 @@ namespace Microsoft.Restier.AspNetCore
             {
                 // Get queryable path builder to builder
                 var queryable = GetQuery(path);
+
+                var queryRequest = new QueryRequest(queryable)
+                {
+                    ShouldReturnCount = shouldReturnCount,
+                };
+
                 if (queryable is null)
                 {
                     return NotFound(Resources.ResourceNotFound);
@@ -316,7 +325,7 @@ namespace Microsoft.Restier.AspNetCore
                 if (lastSegment is OperationSegment operationSegment)
                 {
                     var operation = operationSegment.Operations.FirstOrDefault();
-                    var queryResult = await ExecuteQuery(queryable, cancellationToken).ConfigureAwait(false);
+                    var queryResult = await ExecuteQuery(queryRequest, cancellationToken).ConfigureAwait(false);
                     result = await ExecuteOperationAsync(GetParaValueFunc, operation.Name, false, queryResult, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -522,19 +531,19 @@ namespace Microsoft.Restier.AspNetCore
             return queryable;
         }
 
-        private (IQueryable Queryable, ETag Etag) ApplyQueryOptions(IQueryable queryable, ODataPath path, bool applyCount)
+        private ETag ApplyQueryOptions(QueryRequest queryRequest, ODataPath path, bool applyCount)
         {
             ETag etag = null;
 
             if (shouldWriteRawValue)
             {
                 // Query options don't apply to $value.
-                return (queryable, null);
+                return null;
             }
 
             var feature = HttpContext.ODataFeature();
             var model = api.Model;
-            var queryContext = new ODataQueryContext(model, queryable.ElementType, path);
+            var queryContext = new ODataQueryContext(model, queryRequest.Query.ElementType, path);
             var queryOptions = new ODataQueryOptions(queryContext, Request);
 
             // Get etag for query request
@@ -551,15 +560,14 @@ namespace Microsoft.Restier.AspNetCore
             if (shouldReturnCount)
             {
                 // Query options other than $filter and $search don't apply to $count.
-                queryable = queryOptions.ApplyTo(queryable, querySettings, AllowedQueryOptions.All ^ AllowedQueryOptions.Filter);
-                return (queryable, etag);
+                queryRequest.Query = queryOptions.ApplyTo(queryRequest.Query, querySettings, AllowedQueryOptions.All ^ AllowedQueryOptions.Filter);
+                return etag;
             }
 
             if (queryOptions.Count is not null && !applyCount)
             {
-                var queryExecutorOptions = api.GetApiService<RestierQueryExecutorOptions>();
-                queryExecutorOptions.IncludeTotalCount = queryOptions.Count.Value;
-                queryExecutorOptions.SetTotalCount = value => feature.TotalCount = value;
+                queryRequest.IncludeTotalCount = queryOptions.Count.Value;
+                queryRequest.SetTotalCount = value => feature.TotalCount = value;
             }
 
             // Validate query before apply, and query setting like MaxExpansionDepth can be customized here
@@ -569,23 +577,18 @@ namespace Microsoft.Restier.AspNetCore
             // expression is just a placeholder to be replaced by the expression sourcer.
             if (!applyCount)
             {
-                queryable = queryOptions.ApplyTo(queryable, querySettings, AllowedQueryOptions.Count);
+                queryRequest.Query = queryOptions.ApplyTo(queryRequest.Query, querySettings, AllowedQueryOptions.Count);
             }
             else
             {
-                queryable = queryOptions.ApplyTo(queryable, querySettings);
+                queryRequest.Query = queryOptions.ApplyTo(queryRequest.Query, querySettings);
             }
 
-            return (queryable, etag);
+            return etag;
         }
 
-        private async Task<IQueryable> ExecuteQuery(IQueryable queryable, CancellationToken cancellationToken)
+        private async Task<IQueryable> ExecuteQuery(QueryRequest queryRequest, CancellationToken cancellationToken)
         {
-            var queryRequest = new QueryRequest(queryable)
-            {
-                ShouldReturnCount = shouldReturnCount,
-            };
-
             var queryResult = await api.QueryAsync(queryRequest, cancellationToken).ConfigureAwait(false);
             var result = queryResult.Results.AsQueryable();
             return result;
@@ -688,7 +691,7 @@ namespace Microsoft.Restier.AspNetCore
 
         private void EnsureInitialized()
         {
-            var container = HttpContext.Request.GetRequestContainer();
+            var container = HttpContext.Request.GetRouteServices();
             api = container.GetRequiredService<ApiBase>();
             querySettings = container.GetRequiredService<ODataQuerySettings>();
             validationSettings = container.GetRequiredService<ODataValidationSettings>();

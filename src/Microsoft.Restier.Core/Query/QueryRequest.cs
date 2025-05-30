@@ -27,13 +27,13 @@ namespace Microsoft.Restier.Core.Query
                     Resources.QueryableSourceCannotBeUsedAsQuery);
             }
 
-            Expression = query.Expression;
+            this.Query = query;
         }
 
         /// <summary>
         /// Gets or sets the composed query expression.
         /// </summary>
-        public Expression Expression { get; set; }
+        public Expression Expression => Query.Expression;
 
         /// <summary>
         /// Gets or sets a value indicating whether the number
@@ -41,5 +41,26 @@ namespace Microsoft.Restier.Core.Query
         /// items themselves.
         /// </summary>
         public bool ShouldReturnCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the total
+        /// number of items should be retrieved when the
+        /// result has been filtered using paging operators.
+        /// </summary>
+        /// <remarks>
+        /// Setting this to <c>true</c> may have a performance impact as
+        /// the data provider may need to execute two independent queries.
+        /// </remarks>
+        public bool IncludeTotalCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets an action to set the total count.
+        /// </summary>
+        public Action<long> SetTotalCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Query.
+        /// </summary>
+        public IQueryable Query{ get; internal set; }
     }
 }

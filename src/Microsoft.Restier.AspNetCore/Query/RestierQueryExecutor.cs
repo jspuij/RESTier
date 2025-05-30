@@ -30,17 +30,15 @@ namespace Microsoft.Restier.AspNetCore.Query
         /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
         public async Task<QueryResult> ExecuteQueryAsync<TElement>(QueryContext context, IQueryable<TElement> query, CancellationToken cancellationToken)
         {
-            // TODO: Fix counting logic
-            //var countOption = context.GetApiService<RestierQueryExecutorOptions>();
-            //if (countOption.IncludeTotalCount)
-            //{
-            //    var countQuery = ExpressionHelpers.GetCountableQuery(query);
-            //    var expression = ExpressionHelpers.Count(countQuery.Expression, countQuery.ElementType);
-            //    var result = await ExecuteExpressionAsync<long>(context, countQuery.Provider, expression, cancellationToken).ConfigureAwait(false);
-            //    var totalCount = result.Results.Cast<long>().Single();
+            if (context.Request.IncludeTotalCount)
+            {
+                var countQuery = ExpressionHelpers.GetCountableQuery(query);
+                var expression = ExpressionHelpers.Count(countQuery.Expression, countQuery.ElementType);
+                var result = await ExecuteExpressionAsync<long>(context, countQuery.Provider, expression, cancellationToken).ConfigureAwait(false);
+                var totalCount = result.Results.Cast<long>().Single();
 
-            //    countOption.SetTotalCount(totalCount);
-            //}
+                context.Request.SetTotalCount(totalCount);
+            }
 
             return await Inner.ExecuteQueryAsync(context, query, cancellationToken).ConfigureAwait(false);
         }

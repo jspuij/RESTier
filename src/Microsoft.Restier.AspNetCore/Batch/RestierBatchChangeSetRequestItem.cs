@@ -51,7 +51,8 @@ namespace Microsoft.Restier.AspNetCore.Batch
             };
             SetChangeSetProperty(changeSetProperty);
 
-            var contentIdToLocationMapping = new ConcurrentDictionary<string, string>();
+            IDictionary<string, string> contentIdToLocationMapping = this.ContentIdToLocationMapping ?? new ConcurrentDictionary<string, string>();
+
             var responseTasks = new List<Task<Task<HttpContext>>>();
 
             foreach (var context in Contexts)

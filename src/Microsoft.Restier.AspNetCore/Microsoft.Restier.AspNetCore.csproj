@@ -20,7 +20,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="Batch\RestierBatchHandler.cs" />
 	  <Compile Remove="Extensions\PerRouteContainerExtensions.cs" />
 	  <Compile Remove="Extensions\RestierApiBuilderExtensions.cs" />
 	  <Compile Remove="Extensions\RestierApiServiceCollectionExtensions.cs" />
@@ -62,4 +61,8 @@
 			<Generator>ResXFileCodeGenerator</Generator>
 		</EmbeddedResource>
 	</ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNetCore, $(StrongNamePublicKey)" />
+  </ItemGroup>
 </Project>

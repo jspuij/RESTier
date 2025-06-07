@@ -3,12 +3,16 @@
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OData.Batch;
+using Microsoft.AspNetCore.OData.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData;
 using Microsoft.Restier.Core;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Microsoft.Restier.AspNetCore.Batch
 {
@@ -26,38 +30,45 @@ namespace Microsoft.Restier.AspNetCore.Batch
         {
             Ensure.NotNull(context, nameof(context));
 
-            var requestContainer = context.Request.CreateRequestContainer(ODataRouteName);
-            requestContainer.GetRequiredService<ODataMessageReaderSettings>().BaseUri = GetBaseUri(context.Request);
+            HttpRequest request = context.Request;
+            IServiceProvider requestContainer = request.CreateRouteServices(PrefixName);
+            requestContainer.GetRequiredService<ODataMessageReaderSettings>().BaseUri = GetBaseUri(request);
 
             // TODO: JWS: needs to be a constructor dependency probably, but that's impossible now.
             var api = requestContainer.GetRequiredService<ApiBase>();
 
-#pragma warning disable CA1062 // Validate public arguments
-            using var reader = context.Request.GetODataMessageReader(requestContainer);
-#pragma warning restore CA1062 // Validate public arguments
+            using var reader = request.GetODataMessageReader(requestContainer);
 
+            CancellationToken cancellationToken = context.RequestAborted;
             var requests = new List<ODataBatchRequestItem>();
             var batchReader = await reader.CreateODataBatchReaderAsync().ConfigureAwait(false);
             var batchId = Guid.NewGuid();
+            IDictionary<string, string> contentToLocationMapping = new ConcurrentDictionary<string, string>();
+
             while (await batchReader.ReadAsync().ConfigureAwait(false))
             {
                 if (batchReader.State == ODataBatchReaderState.ChangesetStart)
                 {
-                    var changeSetContexts = await batchReader.ReadChangeSetRequestAsync(context, batchId, context.RequestAborted).ConfigureAwait(false);
-                    foreach (var changeSetContext in changeSetContexts)
+                    IList<HttpContext> changeSetContexts = await batchReader.ReadChangeSetRequestAsync(context, batchId, cancellationToken).ConfigureAwait(false);
+                    foreach (HttpContext changeSetContext in changeSetContexts)
                     {
-                        changeSetContext.Request.CopyBatchRequestProperties(context.Request);
-                        changeSetContext.Request.DeleteRequestContainer(false);
+                        // changeSetContext.Request.CopyBatchRequestProperties(context.Request);
+                        changeSetContext.Request.ClearRouteServices();
                     }
 
-                    requests.Add(CreateRestierBatchChangeSetRequestItem(api, changeSetContexts));
+                    ChangeSetRequestItem requestItem = CreateRestierBatchChangeSetRequestItem(api, changeSetContexts);
+                    requestItem.ContentIdToLocationMapping = contentToLocationMapping;
+                    requests.Add(requestItem);
                 }
                 else if (batchReader.State == ODataBatchReaderState.Operation)
                 {
-                    var operationContext = await batchReader.ReadOperationRequestAsync(context, batchId, true, context.RequestAborted).ConfigureAwait(false);
-                    operationContext.Request.CopyBatchRequestProperties(context.Request);
-                    operationContext.Request.DeleteRequestContainer(false);
-                    requests.Add(new OperationRequestItem(operationContext));
+                    // JWS: TODO: Is this correct? Shouldn't we use the api to send the operation requests to?
+                    HttpContext operationContext = await batchReader.ReadOperationRequestAsync(context, batchId, cancellationToken).ConfigureAwait(false);
+                    // operationContext.Request.CopyBatchRequestProperties(context.Request);
+                    operationContext.Request.ClearRouteServices();
+                    OperationRequestItem requestItem = new OperationRequestItem(operationContext);
+                    requestItem.ContentIdToLocationMapping = contentToLocationMapping;
+                    requests.Add(requestItem);
                 }
             }
 

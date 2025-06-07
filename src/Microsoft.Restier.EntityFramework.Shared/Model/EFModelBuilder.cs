@@ -30,41 +30,48 @@ namespace Microsoft.Restier.EntityFrameworkCore
     /// <summary>
     /// Represents a model producer that uses the metadata workspace accessible from a <see cref="DbContext" />.
     /// </summary>
-    internal class EFModelBuilder : IModelBuilder
+    public class EFModelBuilder : IModelBuilder
     {
+        private readonly DbContext dbContext;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EFModelBuilder"/> class with the specified DbContext.
+        /// </summary>
+        /// <param name="dbContext">The DbContext to use for model building.</param>
+        public EFModelBuilder(DbContext dbContext)
+        {
+            Ensure.NotNull(dbContext, nameof(dbContext));
+            this.dbContext = dbContext;
+        }
         #region Properties
 
         /// <summary>
         /// A way to chain ModelBuilders together.
         /// </summary>
-        public IModelBuilder InnerModelBuilder { get; set; }
+        public IModelBuilder Inner { get; set; }
 
         #endregion
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        public IEdmModel GetEdmModel(IModelContext context)
+        /// <inheritdoc />
+        public IEdmModel GetEdmModel()
         {
-            Ensure.NotNull(context, nameof(context));
+            Microsoft.OData.Edm.EdmModel edmModel = default;
 
-            if (context.Api is not IEntityFrameworkApi frameworkApi)
+            if (Inner is not null)
             {
-                // @robertmclaws: This isn't an EF context, don't build anything.
-                return null;
+                IEdmModel innerModel = Inner.GetEdmModel();
+                if (innerModel is not Microsoft.OData.Edm.EdmModel)
+                {
+                    // unfortunately, we can't chain the models together, so we just return the inner model.
+                    return innerModel;
+                }
+                edmModel = innerModel as Microsoft.OData.Edm.EdmModel;
             }
 
-            if (frameworkApi.DbContext is null)
+            if (edmModel is null)
             {
-                throw new NullReferenceException("The Restier API inherits from EntityFrameworkApi, but the API instance " +
-                    "is not populated with the correct DbContext. This could be because you tried to pass in " +
-                    "a subclassed DbContext, and the DI container can't match it up.");
+                edmModel = new Microsoft.OData.Edm.EdmModel();
             }
-
-            var dbContext = frameworkApi.DbContext;
 
 #if EFCore
 
@@ -77,6 +84,8 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 throw new EdmModelValidationException($"The '{dbContext.GetType().Name}' DbContext has 'Owned Types' (the EFCore equivalent of EF6's 'Complex Types') mapped to DbSets. " +
                     $"You must remove the following DbSet mappings for EFCore to function properly with Restier: {string.Join(",", dbSetMappedTypes.Select(c => c.ShortName()))}");
             }
+
+            
 
             // @caldwell0414: This code is looking for all of the DBSets on the context and generating a dictionary of DbSet Name and the Entity type.
             AddRange(context.ResourceSetTypeMap, dbContext.GetType().GetProperties()
@@ -167,9 +176,9 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 }
             }
 #endif
-            if (InnerModelBuilder is not null)
+            if (Inner is not null)
             {
-                return InnerModelBuilder.GetEdmModel(context);
+                return Inner.GetEdmModel(context);
             }
 
             //RWM: This doesn't return anything because the RestierModelBuilder in the ASP.NET project is the one that actually returns the model.

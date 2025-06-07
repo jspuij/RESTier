@@ -25,10 +25,10 @@ namespace Microsoft.Restier.AspNetCore.Model
         private readonly ICollection<PropertyInfo> singletonProperties = new List<PropertyInfo>();
         private readonly ICollection<EdmNavigationSource> addedNavigationSources = new List<EdmNavigationSource>();
 
-        private readonly IDictionary<IEdmEntityType, IEdmEntitySet[]> entitySetCache =
+        private readonly IDictionary<IEdmEntityType, IEdmEntitySet[]> entitySetextender =
             new Dictionary<IEdmEntityType, IEdmEntitySet[]>();
 
-        private readonly IDictionary<IEdmEntityType, IEdmSingleton[]> singletonCache =
+        private readonly IDictionary<IEdmEntityType, IEdmSingleton[]> singletonextender =
             new Dictionary<IEdmEntityType, IEdmSingleton[]>();
 
         /// <summary>
@@ -217,10 +217,10 @@ namespace Microsoft.Restier.AspNetCore.Model
 
         private IEdmEntitySet[] GetMatchingEntitySets(IEdmEntityType entityType, IEdmModel model)
         {
-            if (!entitySetCache.TryGetValue(entityType, out var matchingEntitySets))
+            if (!entitySetextender.TryGetValue(entityType, out var matchingEntitySets))
             {
                 matchingEntitySets = model.EntityContainer.EntitySets().Where(s => s.EntityType == entityType).ToArray();
-                entitySetCache.Add(entityType, matchingEntitySets);
+                entitySetextender.Add(entityType, matchingEntitySets);
             }
 
             return matchingEntitySets;
@@ -228,10 +228,10 @@ namespace Microsoft.Restier.AspNetCore.Model
 
         private IEdmSingleton[] GetMatchingSingletons(IEdmEntityType entityType, IEdmModel model)
         {
-            if (!singletonCache.TryGetValue(entityType, out var matchingSingletons))
+            if (!singletonextender.TryGetValue(entityType, out var matchingSingletons))
             {
                 matchingSingletons =  model.EntityContainer.Singletons().Where(s => s.EntityType == entityType).ToArray();
-                singletonCache.Add(entityType, matchingSingletons);
+                singletonextender.Add(entityType, matchingSingletons);
             }
 
             return matchingSingletons;
@@ -286,15 +286,15 @@ namespace Microsoft.Restier.AspNetCore.Model
             /// <summary>
             /// Initializes a new instance of the <see cref="ModelBuilder"/> class.
             /// </summary>
-            /// <param name="modelCache">The model cache.</param>
-            public ModelBuilder(RestierWebApiModelExtender modelCache) => ModelCache = modelCache;
+            /// <param name="modelExtender">The model extender.</param>
+            public ModelBuilder(RestierWebApiModelExtender modelExtender) => ModelExtender = modelExtender;
 
             /// <summary>
             /// Gets a reference to the inner model builder.
             /// </summary>
             public IModelBuilder InnerModelBuilder { get; private set; }
 
-            private RestierWebApiModelExtender ModelCache { get; set; }
+            private RestierWebApiModelExtender ModelExtender { get; set; }
 
             /// <inheritdoc/>
             public IEdmModel GetEdmModel(IModelContext context)
@@ -306,7 +306,7 @@ namespace Microsoft.Restier.AspNetCore.Model
                 {
                     // There is no model returned so return an empty model.
                     var emptyModel = new EdmModel();
-                    emptyModel.EnsureEntityContainer(ModelCache.targetApiType);
+                    emptyModel.EnsureEntityContainer(ModelExtender.targetApiType);
                     return emptyModel;
                 }
 
@@ -317,9 +317,9 @@ namespace Microsoft.Restier.AspNetCore.Model
                     return modelReturned;
                 }
 
-                ModelCache.ScanForDeclaredPublicProperties();
-                ModelCache.BuildEntitySetsAndSingletons(edmModel);
-                ModelCache.AddNavigationPropertyBindings(edmModel);
+                ModelExtender.ScanForDeclaredPublicProperties();
+                ModelExtender.BuildEntitySetsAndSingletons(edmModel);
+                ModelExtender.AddNavigationPropertyBindings(edmModel);
                 return edmModel;
             }
 
@@ -342,12 +342,12 @@ namespace Microsoft.Restier.AspNetCore.Model
             /// <summary>
             /// Initializes a new instance of the <see cref="ModelMapper"/> class.
             /// </summary>
-            /// <param name="modelCache">The model cache.</param>
-            public ModelMapper(RestierWebApiModelExtender modelCache) => ModelCache = modelCache;
+            /// <param name="modelExtender">The model extender.</param>
+            public ModelMapper(RestierWebApiModelExtender modelExtender) => ModelExtender = modelExtender;
 
             /// <summary>
-            /// Gets the model Cache.
-            public RestierWebApiModelExtender ModelCache { get; set; }
+            /// Gets the model extender.
+            public RestierWebApiModelExtender ModelExtender { get; set; }
 
             private IModelMapper InnerModelMapper { get; set; }
 
@@ -361,7 +361,7 @@ namespace Microsoft.Restier.AspNetCore.Model
                 }
 
                 relevantType = null;
-                var entitySetProperty = ModelCache.entitySetProperties.SingleOrDefault(p => p.Name == name);
+                var entitySetProperty = ModelExtender.entitySetProperties.SingleOrDefault(p => p.Name == name);
                 if (entitySetProperty is not null)
                 {
                     relevantType = entitySetProperty.PropertyType.GetGenericArguments()[0];
@@ -369,7 +369,7 @@ namespace Microsoft.Restier.AspNetCore.Model
 
                 if (relevantType is null)
                 {
-                    var singletonProperty = ModelCache.singletonProperties.SingleOrDefault(p => p.Name == name);
+                    var singletonProperty = ModelExtender.singletonProperties.SingleOrDefault(p => p.Name == name);
                     if (singletonProperty is not null)
                     {
                         relevantType = singletonProperty.PropertyType;
@@ -405,15 +405,15 @@ namespace Microsoft.Restier.AspNetCore.Model
             /// <summary>
             /// Initializes a new instance of the <see cref="QueryExpressionExpander"/> class.
             /// </summary>
-            /// <param name="modelCache">The model cache.</param>
-            public QueryExpressionExpander(RestierWebApiModelExtender modelCache) => ModelCache = modelCache;
+            /// <param name="modelExtender">The model extender.</param>
+            public QueryExpressionExpander(RestierWebApiModelExtender modelExtender) => ModelExtender = modelExtender;
 
             /// <summary>
             /// Gets or sets the inner handler.
             /// </summary>
             public IQueryExpressionExpander InnerHandler { get; set; }
 
-            private RestierWebApiModelExtender ModelCache { get; set; }
+            private RestierWebApiModelExtender ModelExtender { get; set; }
 
             /// <inheritdoc/>
             public Expression Expand(QueryExpressionContext context)
@@ -430,7 +430,7 @@ namespace Microsoft.Restier.AspNetCore.Model
                 if (context.ModelReference is DataSourceStubModelReference)
                 {
                     // Only expand entity set query which returns IQueryable<T>.
-                    var query = ModelCache.GetEntitySetQuery(context);
+                    var query = ModelExtender.GetEntitySetQuery(context);
                     if (query is not null)
                     {
                         return query.Expression;
@@ -455,15 +455,15 @@ namespace Microsoft.Restier.AspNetCore.Model
             /// <summary>
             /// Initializes a new instance of the <see cref="QueryExpressionSourcer"/> class.
             /// </summary>
-            /// <param name="modelCache">The model cache.</param>
-            public QueryExpressionSourcer(RestierWebApiModelExtender modelCache) => ModelCache = modelCache;
+            /// <param name="modelExtender">The model extender.</param>
+            public QueryExpressionSourcer(RestierWebApiModelExtender modelExtender) => ModelExtender = modelExtender;
 
             /// <summary>
             /// Gets or sets the inner handler.
             /// </summary>
             public IQueryExpressionSourcer InnerHandler { get; set; }
 
-            private RestierWebApiModelExtender ModelCache { get; set; }
+            private RestierWebApiModelExtender ModelExtender { get; set; }
 
             /// <inheritdoc/>
             public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
@@ -477,7 +477,7 @@ namespace Microsoft.Restier.AspNetCore.Model
 
                 // This sourcer ONLY deals with queries that cannot be addressed by the provider
                 // such as a singleton query that cannot be sourced by the EF provider, etc.
-                var query = ModelCache.GetEntitySetQuery(context) ?? ModelCache.GetSingletonQuery(context);
+                var query = ModelExtender.GetEntitySetQuery(context) ?? ModelExtender.GetSingletonQuery(context);
                 if (query is not null)
                 {
                     return Expression.Constant(query);

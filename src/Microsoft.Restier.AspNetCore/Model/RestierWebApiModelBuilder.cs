@@ -47,7 +47,7 @@ namespace Microsoft.Restier.AspNetCore.Model
                 // This namespace is used by container
                 Namespace = entitySetTypeMap.First().Value.Namespace
             };
-
+            
             var method = typeof(ODataConventionModelBuilder).GetMethod("EntitySet", BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
 
             foreach (var pair in entitySetTypeMap)

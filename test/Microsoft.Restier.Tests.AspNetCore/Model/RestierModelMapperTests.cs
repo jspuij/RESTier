@@ -17,9 +17,9 @@ using Xunit;
 namespace Microsoft.Restier.Tests.AspNetCore.Model;
 
 /// <summary>
-/// Unit tests for <see cref="RestierWebApiModelMapper"/>.
+/// Unit tests for <see cref="RestierModelMapper"/>.
 /// </summary>
-public class RestierWebApiModelMapperTests
+public class RestierModelMapperTests
 {
     [Fact]
     public void TryGetRelevantType_ShouldReturnTrue_WhenEntitySetIsFound()
@@ -40,7 +40,7 @@ public class RestierWebApiModelMapperTests
         var mockApi = Substitute.For<ApiBase>(mockModel, Substitute.For<IQueryHandler>(), Substitute.For<ISubmitHandler>());
 
         var context = new InvocationContext(mockApi);
-        var mapper = new RestierWebApiModelMapper { Inner = mockInnerMapper };
+        var mapper = new RestierModelMapper { Inner = mockInnerMapper };
 
         // Act
         var result = mapper.TryGetRelevantType(context, "TestEntitySet", out var relevantType);
@@ -63,7 +63,7 @@ public class RestierWebApiModelMapperTests
         mockEntityContainer.Elements.Returns(Enumerable.Empty<IEdmEntityContainerElement>());
 
         var context = new InvocationContext(mockApi);
-        var mapper = new RestierWebApiModelMapper { Inner = mockInnerMapper };
+        var mapper = new RestierModelMapper { Inner = mockInnerMapper };
 
         // Act
         var result = mapper.TryGetRelevantType(context, "NonExistentEntitySet", out var relevantType);
@@ -86,7 +86,7 @@ public class RestierWebApiModelMapperTests
         mockEntityContainer.Elements.Returns(Enumerable.Empty<IEdmEntityContainerElement>());
 
         var context = new InvocationContext(mockApi);
-        var mapper = new RestierWebApiModelMapper { Inner = mockInnerMapper };
+        var mapper = new RestierModelMapper { Inner = mockInnerMapper };
 
         Type expectedType = typeof(int);
         mockInnerMapper.TryGetRelevantType(context, "NonExistentEntitySet", out Arg.Any<Type>())
@@ -110,7 +110,7 @@ public class RestierWebApiModelMapperTests
         // Arrange
         var mockInnerMapper = Substitute.For<IModelMapper>();
         var context = Substitute.For<InvocationContext>(Substitute.For<ApiBase>(Substitute.For<IEdmModel>(), Substitute.For<IQueryHandler>(), Substitute.For<ISubmitHandler>()));
-        var mapper = new RestierWebApiModelMapper { Inner = mockInnerMapper };
+        var mapper = new RestierModelMapper { Inner = mockInnerMapper };
 
         Type expectedType = typeof(int);
         mockInnerMapper.TryGetRelevantType(context, "Namespace", "FunctionName", out Arg.Any<Type>())

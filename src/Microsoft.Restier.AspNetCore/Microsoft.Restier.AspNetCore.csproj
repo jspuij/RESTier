@@ -29,8 +29,6 @@
 	  <Compile Remove="Extensions\Restier_IServiceCollectionExtensions.cs" />
 	  <Compile Remove="Extensions\Restier_RouteValueDictionaryExtensions.cs" />
 	  <Compile Remove="Model\RestierWebApiModelBuilder.cs" />
-	  <Compile Remove="Model\RestierWebApiModelExtender.cs" />
-	  <Compile Remove="Model\RestierWebApiOperationModelBuilder.cs" />
 	</ItemGroup>
 
 	<ItemGroup>

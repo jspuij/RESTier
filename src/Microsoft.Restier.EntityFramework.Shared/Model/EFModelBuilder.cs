@@ -2,26 +2,22 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core.Model;
+using Microsoft.OData.ModelBuilder;
+using System.Collections.Generic;
+
 
 #if EF6
 using System.Data.Entity;
-using System.Data.Entity.Core.Metadata.Edm;
-using System.Data.Entity.Infrastructure;
 
 namespace Microsoft.Restier.EntityFramework
 #endif
 
 #if EFCore
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Restier.Core;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Microsoft.Restier.EntityFrameworkCore
 #endif
@@ -30,195 +26,106 @@ namespace Microsoft.Restier.EntityFrameworkCore
     /// <summary>
     /// Represents a model producer that uses the metadata workspace accessible from a <see cref="DbContext" />.
     /// </summary>
-    public class EFModelBuilder : IModelBuilder
+    public partial class EFModelBuilder : IModelBuilder
     {
-        private readonly DbContext dbContext;
+        private readonly DbContext _dbContext;
+        private readonly ModelMerger _modelMerger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EFModelBuilder"/> class with the specified DbContext.
         /// </summary>
         /// <param name="dbContext">The DbContext to use for model building.</param>
-        public EFModelBuilder(DbContext dbContext)
+        /// <param name="modelMerger">The model merger to use.</param>
+        public EFModelBuilder(DbContext dbContext, ModelMerger modelMerger)
         {
             Ensure.NotNull(dbContext, nameof(dbContext));
-            this.dbContext = dbContext;
+            Ensure.NotNull(modelMerger, nameof(modelMerger));
+            this._dbContext = dbContext;
+            this._modelMerger = modelMerger;
         }
-        #region Properties
 
         /// <summary>
         /// A way to chain ModelBuilders together.
         /// </summary>
         public IModelBuilder Inner { get; set; }
 
-        #endregion
-
         /// <inheritdoc />
         public IEdmModel GetEdmModel()
         {
-            Microsoft.OData.Edm.EdmModel edmModel = default;
-
-            if (Inner is not null)
-            {
-                IEdmModel innerModel = Inner.GetEdmModel();
-                if (innerModel is not Microsoft.OData.Edm.EdmModel)
-                {
-                    // unfortunately, we can't chain the models together, so we just return the inner model.
-                    return innerModel;
-                }
-                edmModel = innerModel as Microsoft.OData.Edm.EdmModel;
-            }
-
-            if (edmModel is null)
-            {
-                edmModel = new Microsoft.OData.Edm.EdmModel();
-            }
-
+            // Get the Entity set maps from the respective EF versions.
 #if EFCore
 
-            // @robertmclaws: Validate that no Owned Types are mapped to DbSet<>. If there are, EFCore calls to GetModel will fail.
-            var ownedTypes = dbContext.Model.GetEntityTypes().Where(c => c.IsOwned()).ToList();
-            var dbSetMappedTypes = ownedTypes.Where(c => dbContext.IsDbSetMapped(c.ClrType)).ToList();
-
-            if (dbSetMappedTypes.Count > 0)
-            {
-                throw new EdmModelValidationException($"The '{dbContext.GetType().Name}' DbContext has 'Owned Types' (the EFCore equivalent of EF6's 'Complex Types') mapped to DbSets. " +
-                    $"You must remove the following DbSet mappings for EFCore to function properly with Restier: {string.Join(",", dbSetMappedTypes.Select(c => c.ShortName()))}");
-            }
-
-            
-
-            // @caldwell0414: This code is looking for all of the DBSets on the context and generating a dictionary of DbSet Name and the Entity type.
-            AddRange(context.ResourceSetTypeMap, dbContext.GetType().GetProperties()
-                .Where(e => e.PropertyType.FindGenericType(typeof(DbSet<>)) is not null)
-                .ToDictionary(e => e.Name, e => e.PropertyType.GetGenericArguments()[0]));
-
-#pragma warning disable EF1001 // Internal EF Core API usage.
-
-            // @caldwell0414: This code goes through all of the Entity types in the model, and where not marked as "owned" builds a dictionary of name and primary-key type.
-#if EFCORE6_0_OR_GREATER
-
-            var keys = dbContext.Model.GetEntityTypes().Where(c => !c.IsOwned() && !IsImplicitManyToManyJoinEntity(c)).ToDictionary(
-                            e => e.ClrType,
-                            e => ((ICollection<PropertyInfo>)e.FindPrimaryKey()?.Properties.Select(p => e.ClrType?.GetProperty(p.Name)).ToList()));
-#else
-            var keys = dbContext.Model.GetEntityTypes().Where(c => !c.IsOwned() && !(c as EntityType).IsImplicitlyCreatedJoinEntityType).ToDictionary(
-                            e => e.ClrType,
-                            e => ((ICollection<PropertyInfo>)e.FindPrimaryKey()?.Properties.Select(p => e.ClrType?.GetProperty(p.Name)).ToList()));
+            EntityFrameworkCoreGetEntities(out var entitySetMap, out var entitySetKeyMap);
 #endif
-
-#pragma warning restore EF1001 // Internal EF Core API usage.
-
-            AddRange(context.ResourceTypeKeyPropertiesMap, keys);
-#endif
-
 #if EF6
-
-            var efModel = (dbContext as IObjectContextAdapter).ObjectContext.MetadataWorkspace;
-
-            // @robertmclaws: The query below actually returns all registered Containers
-            // across all registered DbContexts.
-            // It is likely a bug in some other part of OData. But we can roll with it.
-            var efEntityContainers = efModel.GetItems<EntityContainer>(DataSpace.CSpace);
-
-            // @robertmclaws: Because of the bug above, we should not make any assumptions about what is returned,
-            // and get the specific container we want to use. Even if the bug gets fixed, the next line should still
-            // continue to work.
-            var efEntityContainer = efEntityContainers.FirstOrDefault(c => c.Name == dbContext.GetType().Name);
-
-            // @robertmclaws: Now that we're doing a proper FirstOrDefault() instead of a Single(),
-            // we won't crash if more than one is returned, and we can check for null
-            // and inform the user specifically what happened.
-            if (efEntityContainer is null)
-            {
-                if (efEntityContainers.Count > 1)
-                {
-                    // @robertmclaws: In this case, we have multiple DbContexts available, but none of them match up.
-                    //                Tell the user what we have, and what we were expecting, so they can fix it.
-                    var containerNames = efEntityContainers.Aggregate(
-                        string.Empty, (current, next) => next.Name + ", ");
-                    throw new Exception(string.Format(
-                        CultureInfo.InvariantCulture,
-                        Resources.MultipleDbContextsExpectedException,
-                        containerNames.Substring(0, containerNames.Length - 2),
-                        efEntityContainer.Name));
-                }
-
-                // @robertmclaws: In this case, we only had one DbContext available, and if wasn't the right one.
-                throw new Exception(string.Format(
-                    CultureInfo.InvariantCulture,
-                    Resources.DbContextCouldNotBeFoundException,
-                    dbContext.GetType().Name,
-                    efEntityContainer.Name));
-            }
-
-            var itemCollection = (ObjectItemCollection)efModel.GetItemCollection(DataSpace.OSpace);
-
-            foreach (var efEntitySet in efEntityContainer.EntitySets)
-            {
-                var efEntityType = efEntitySet.ElementType;
-                var objectSpaceType = efModel.GetObjectSpaceType(efEntityType);
-                var clrType = itemCollection.GetClrType(objectSpaceType);
-
-                // RWM: We should not have to do this, and should not be getting here more than once.
-                if (!context.ResourceSetTypeMap.ContainsKey(efEntitySet.Name))
-                {
-
-                    // As entity set name and type map
-                    context.ResourceSetTypeMap.Add(efEntitySet.Name, clrType);
-
-                    ICollection<PropertyInfo> keyProperties = new List<PropertyInfo>();
-                    foreach (var property in efEntityType.KeyProperties)
-                    {
-                        keyProperties.Add(clrType.GetProperty(property.Name));
-                    }
-
-                    context.ResourceTypeKeyPropertiesMap.Add(clrType, keyProperties);
-                }
-            }
+            EntityFramework6GetEntitySets(out var entitySetMap, out var entitySetKeyMap);
 #endif
-            if (Inner is not null)
+            // Get the inner model if it exists.
+            var innerModel = Inner?.GetEdmModel();
+
+            // Build the model from the Entity Framework Entity Sets.
+            var result = BuildEdmModelFromEntitySetMaps(entitySetMap, entitySetKeyMap);
+
+            // merge the inner model into the result.
+            if (innerModel is not null)
             {
-                return Inner.GetEdmModel(context);
+                _modelMerger.Merge(innerModel, result);
             }
 
-            //RWM: This doesn't return anything because the RestierModelBuilder in the ASP.NET project is the one that actually returns the model.
-            return null;
-
+            return result;
         }
 
-#if EFCORE6_0_OR_GREATER
-
-        /// <summary>
-        /// A replacement for IsImplicitlyCreatedJoinEntityType, since on EF Core 6.0 Model.GetEntityTypes() returns RuntimeEntityTypes instead of EntityTypes.
-        /// </summary>
-        /// <param name="entity"></param>
-        /// <returns></returns>
-        public bool IsImplicitManyToManyJoinEntity(IEntityType entity) =>
-            entity.ClrType == typeof(Dictionary<string, object>) && entity.GetForeignKeys().Count() == 2 && entity.GetProperties().Count() == 2;
-
-#endif
-
-        private static void AddRange<TKey, TValue>(
-          IDictionary<TKey, TValue> source,
-          IDictionary<TKey, TValue> collection)
+        private static EdmModel BuildEdmModelFromEntitySetMaps(Dictionary<string, Type> entitySetMap, Dictionary<Type, ICollection<PropertyInfo>> entitySetKeyMap)
         {
-            if (source is null)
+            if (!entitySetMap.Any())
             {
-                throw new ArgumentNullException(nameof(source));
+                return new EdmModel();
             }
 
-            if (collection is null)
+            // Collection of entity type and set name is set by EF now,
+            // and EF model producer will not build model any more
+            // Web Api OData conversion model built is been used here,
+            // refer to Web Api OData document for the detail conversions been used for model built.
+            var builder = new ODataConventionModelBuilder
             {
-                throw new ArgumentNullException(nameof(collection));
-            }
+                // This namespace is used by container
+                Namespace = entitySetMap.First().Value.Namespace
+            };
 
-            foreach (var item in collection)
+            var method = typeof(ODataConventionModelBuilder).GetMethod("EntitySet", BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+
+            foreach (var pair in entitySetMap)
             {
-                if (!source.ContainsKey(item.Key))
+                // Build a method with the specific type argument
+                var specifiedMethod = method.MakeGenericMethod(pair.Value);
+                var parameters = new object[]
                 {
-                    source.Add(item.Key, item.Value);
+                    pair.Key,
+                };
+
+                specifiedMethod.Invoke(builder, parameters);
+            }
+
+            foreach (var pair in entitySetKeyMap)
+            {
+                if (builder.GetTypeConfigurationOrNull(pair.Key) is not EntityTypeConfiguration edmTypeConfiguration)
+                {
+                    continue;
+                }
+
+                if (pair.Value is null)
+                {
+                    throw new InvalidOperationException($"The entity '{pair.Key}' does not have a key specified. Entities tagged with the [Keyless] attribute " +
+                                                        $"(or otherwise do not have a key specified) are not supported in either OData or Restier. Please map the object as a ComplexType and " +
+                                                        $"implement as an [UnboundOperation] on your API instead.");
+                }
+
+                foreach (var property in pair.Value)
+                {
+                    edmTypeConfiguration.HasKey(property);
                 }
             }
+            return (EdmModel)builder.GetEdmModel();
         }
     }
 }

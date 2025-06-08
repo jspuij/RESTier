@@ -11,9 +11,9 @@ using Microsoft.Restier.Core.Model;
 namespace Microsoft.Restier.AspNetCore.Model
 {
     /// <summary>
-    /// Represents a model mapper based on a DbContext.
+    /// Represents a model mapper based on the types added to the EdmModel.
     /// </summary>
-    public class RestierWebApiModelMapper : IModelMapper
+    public class RestierModelMapper : IModelMapper
     {
 
         /// <summary>

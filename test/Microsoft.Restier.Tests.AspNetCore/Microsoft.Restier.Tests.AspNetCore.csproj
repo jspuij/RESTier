@@ -45,7 +45,6 @@
 	  <Folder Include="Extensions\" />
 	  <Folder Include="Formatter\Deserialization\" />
 	  <Folder Include="Formatter\Serialization\" />
-	  <Folder Include="Model\" />
 	  <Folder Include="MiddleWare\" />
 	  <Folder Include="Query\" />
 	  <Folder Include="Operation\" />

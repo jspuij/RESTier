@@ -15,6 +15,8 @@ namespace Microsoft.Restier.Tests.Core.Model;
 
 public class ModelMergerTests
 {
+    private ModelMerger _modelMerger = new ModelMerger();
+
     [Fact]
     public void Merge_Should_Add_SchemaElements_Except_EntityContainer()
     {
@@ -29,7 +31,7 @@ public class ModelMergerTests
         sourceModel.AddElement(entityType);
 
         // Act
-        ModelMerger.Merge(sourceModel, targetModel);
+        _modelMerger.Merge(sourceModel, targetModel);
 
         // Assert
         targetModel.SchemaElements.Should().ContainSingle().Which.Should().Be(entityType);
@@ -46,7 +48,7 @@ public class ModelMergerTests
         sourceModel.AddVocabularyAnnotation(annotation);
 
         // Act
-        ModelMerger.Merge(sourceModel, targetModel);
+        _modelMerger.Merge(sourceModel, targetModel);
 
         // Assert
         targetModel.VocabularyAnnotations.Should().ContainSingle().Which.Should().Be(annotation);
@@ -72,7 +74,7 @@ public class ModelMergerTests
         sourceModel.VocabularyAnnotations.Returns(new IEdmVocabularyAnnotation[0]);
 
         // Act
-        ModelMerger.Merge(sourceModel, targetModel);
+        _modelMerger.Merge(sourceModel, targetModel);
 
         // Assert
         targetContainer.FindEntitySet("Entities").Should().NotBeNull();
@@ -98,7 +100,7 @@ public class ModelMergerTests
         sourceModel.VocabularyAnnotations.Returns(new IEdmVocabularyAnnotation[0]);
 
         // Act
-        ModelMerger.Merge(sourceModel, targetModel);
+        _modelMerger.Merge(sourceModel, targetModel);
 
         // Assert
         targetContainer.FindSingleton("Single").Should().NotBeNull();
@@ -120,11 +122,11 @@ public class ModelMergerTests
 
         sourceModel.EntityContainer.Returns(sourceContainer);
         
-        sourceModel.SchemaElements.Returns(new IEdmSchemaElement[0]);
-        sourceModel.VocabularyAnnotations.Returns(new IEdmVocabularyAnnotation[0]);
+        sourceModel.SchemaElements.Returns([]);
+        sourceModel.VocabularyAnnotations.Returns([]);
 
         // Act
-        ModelMerger.Merge(sourceModel, targetModel);
+        _modelMerger.Merge(sourceModel, targetModel);
 
         // Assert
         targetContainer.FindOperationImports("Func").Should().NotBeNull();
@@ -140,7 +142,7 @@ public class ModelMergerTests
         sourceModel.EntityContainer.Returns((IEdmEntityContainer)null);
 
         // Act
-        var act = () => ModelMerger.Merge(sourceModel, targetModel);
+        var act = () => _modelMerger.Merge(sourceModel, targetModel);
         act.Should().NotThrow();
 
     }

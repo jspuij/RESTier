@@ -21,7 +21,7 @@ public class ModelMerger
     /// </summary>
     /// <param name="sourceModel">The source model.</param>
     /// <param name="targetModel"></param>
-    public static void Merge(IEdmModel sourceModel, EdmModel targetModel)
+    public void Merge(IEdmModel sourceModel, EdmModel targetModel)
     {
         foreach (var element in sourceModel.SchemaElements)
         {

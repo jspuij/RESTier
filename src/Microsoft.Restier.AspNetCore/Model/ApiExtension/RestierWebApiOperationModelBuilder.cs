@@ -15,34 +15,33 @@ namespace Microsoft.Restier.AspNetCore.Model
     /// <summary>
     /// Builds operations based on the model.
     /// </summary>
-    internal class RestierWebApiOperationModelBuilder : IModelBuilder
+    public class RestierWebApiOperationModelBuilder : IModelBuilder
     {
         private readonly Type targetApiType;
         private readonly List<OperationMethodInfo> operationInfos = new();
 
         /// <summary>
-        /// Gets the inner model builder.
+        /// Gets or sets the inner model builder.
         /// </summary>
-        private IModelBuilder InnerModelBuilder { get; }
+        public IModelBuilder Inner { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RestierWebApiOperationModelBuilder"/> class.
         /// </summary>
         /// <param name="targetApiType">/The target type.</param>
-        /// <param name="innerModelBuilder">The inner model Builder.</param>
-        internal RestierWebApiOperationModelBuilder(Type targetApiType, IModelBuilder innerModelBuilder)
+        public RestierWebApiOperationModelBuilder(Type targetApiType)
         {
+            Ensure.NotNull(targetApiType, nameof(targetApiType));
             this.targetApiType = targetApiType;
-            InnerModelBuilder = innerModelBuilder;
         }
 
         /// <inheritdoc />
-        public IEdmModel GetEdmModel(IModelContext context)
+        public IEdmModel GetEdmModel()
         {
             EdmModel model = null;
-            if (InnerModelBuilder is not null)
+            if (Inner is not null)
             {
-                model = InnerModelBuilder.GetEdmModel(context) as EdmModel;
+                model = Inner.GetEdmModel() as EdmModel;
             }
 
             if (model is null)
@@ -236,7 +235,6 @@ namespace Microsoft.Restier.AspNetCore.Model
 
             public OperationType OperationType => OperationAttribute.OperationType;
         }
-
     }
 
 }

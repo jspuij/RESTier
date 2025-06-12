@@ -52,5 +52,6 @@
 		<InternalsVisibleTo Include="Microsoft.Restier.EntityFramework, $(StrongNamePublicKey)" />
 		<InternalsVisibleTo Include="Microsoft.Restier.EntityFrameworkCore, $(StrongNamePublicKey)" />
     <InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNetCore, $(StrongNamePublicKey)" />
+    <InternalsVisibleTo Include="Microsoft.Restier.Tests.Shared, $(StrongNamePublicKey)" />
   </ItemGroup>
 </Project>

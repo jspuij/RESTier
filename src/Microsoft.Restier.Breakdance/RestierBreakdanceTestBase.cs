@@ -1,8 +1,5 @@
-﻿#if NET6_0_OR_GREATER
-
-using CloudNimble.Breakdance.AspNetCore;
+﻿using CloudNimble.Breakdance.AspNetCore;
 using CloudNimble.EasyAF.Http.OData;
-using Microsoft.AspNet.OData.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -216,5 +213,3 @@ namespace Microsoft.Restier.Breakdance
 
     }
 }
-
-#endif

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.Restier.Core;
 using System;
 using Microsoft.Restier.Core.Model;
 
@@ -8,7 +9,7 @@ namespace Microsoft.Restier.Tests.Shared
 {
     public class StoreModelMapper : IModelMapper
     {
-        public bool TryGetRelevantType(ModelContext context, string name, out Type relevantType)
+        public bool TryGetRelevantType(InvocationContext context, string name, out Type relevantType)
         {
             if (name == "Products")
             {
@@ -30,10 +31,12 @@ namespace Microsoft.Restier.Tests.Shared
             return true;
         }
 
-        public bool TryGetRelevantType(ModelContext context, string namespaceName, string name, out Type relevantType)
+        public bool TryGetRelevantType(InvocationContext context, string namespaceName, string name, out Type relevantType)
         {
             relevantType = typeof(Product);
             return true;
         }
+
+        public IModelMapper Inner { get; set; }
     }
 }

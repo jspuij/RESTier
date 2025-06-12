@@ -3,6 +3,7 @@
 	<PropertyGroup>
 		<IsBenchmarkProject Condition="$(MSBuildProjectName.EndsWith('.Performance'))">true</IsBenchmarkProject>
 		<IsTestProject Condition="$(MSBuildProjectName.ToLower().Contains('.tests.'))">true</IsTestProject>
+    <IsTestSharedProject Condition="$(MSBuildProjectName.ToLower().Contains('.tests.shared'))">true</IsTestSharedProject>
 		<IsTestAssetProject Condition="$(RepoRelativeProjectDir.ToLower().Contains('testassets'))">true</IsTestAssetProject>
 		<IsSampleProject Condition="$(MSBuildProjectName.ToLower().Contains('.samples.'))">true</IsSampleProject>
 		<IsTemplateProject Condition="$(MSBuildProjectName.ToLower().Contains('.templates.'))">true</IsTemplateProject>
@@ -107,7 +108,7 @@
 		<InternalsVisibleTo Include="$(AssemblyName.Replace('Microsoft.Restier.', 'Microsoft.Restier.Tests.')), $(StrongNamePublicKey)" />
 	</ItemGroup>
 
-	<ItemGroup Condition=" $(IsTestProject) == 'true' and $(IsSampleProject) != 'true'">
+	<ItemGroup Condition=" $(IsTestProject) == 'true' and $(IsSampleProject) != 'true' and $(IsTestSharedProject) != 'true'">
 		<PackageReference Include="coverlet.collector" Version="6.*" />
 		<PackageReference Include="AwesomeAssertions" Version="8.*" PrivateAssets="All" />
 		<PackageReference Include="AwesomeAssertions.Analyzers" Version="0.*" PrivateAssets="All" />

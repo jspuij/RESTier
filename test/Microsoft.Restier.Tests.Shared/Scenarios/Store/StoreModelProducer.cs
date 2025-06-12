@@ -17,9 +17,11 @@ namespace Microsoft.Restier.Tests.Shared
             this.model = model;
         }
 
-        public IEdmModel GetModel(ModelContext context)
+        public IEdmModel GetEdmModel()
         {
             return model;
         }
+
+        public IModelBuilder Inner { get; set; }
     }
 }

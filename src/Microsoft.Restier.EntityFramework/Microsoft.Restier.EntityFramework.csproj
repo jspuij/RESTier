@@ -40,4 +40,8 @@
 		<InternalsVisibleTo Include="Microsoft.Restier.Tests.EntityFramework, $(StrongNamePublicKey)" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Extensions\" />
+	</ItemGroup>
+
 </Project>

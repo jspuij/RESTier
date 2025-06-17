@@ -9,10 +9,10 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using CloudNimble.EasyAF.Http.OData;
 using Flurl;
-using Microsoft.AspNet.OData.Extensions;
-using Microsoft.AspNet.OData.Query;
+using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;
+using Microsoft.OData.ModelBuilder.Config;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 using System.IO;
@@ -305,7 +305,7 @@ namespace Microsoft.Restier.Breakdance
             where TApi : ApiBase
         {
             var api = await GetTestableApiInstance<TApi>(routeName, routePrefix, serviceCollection: serviceCollection, useEndpointRouting).ConfigureAwait(false);
-            return api.GetModel();
+            return api.Model;
         }
 
         #endregion

@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.OData;
+using Microsoft.AspNetCore.OData.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,7 +33,7 @@ namespace Microsoft.Restier.Breakdance
         /// <summary>
         /// 
         /// </summary>
-        public Action<RestierApiBuilder> AddRestierAction { get; set; }
+        public Action<ODataOptions> AddRestierAction { get; set; }
 
         /// <summary>
         /// 
@@ -51,14 +53,12 @@ namespace Microsoft.Restier.Breakdance
         /// <summary>
         /// Creates a new instance of the <see cref="RestierBreakdanceTestBase{TApi}"/>.
         /// </summary>
-        /// <param name="useEndpointRouting">Whether to use endpoint routing or not.</param>
         /// <remarks>
         /// To properly configure these tests, please set your <see cref="AddRestierAction"/> and <see cref="MapRestierAction"/> actions before
         /// calling <see cref="AspNetCoreBreakdanceTestBase.AssemblySetup"/> or <see cref="AspNetCoreBreakdanceTestBase.TestSetup"/>.
         /// </remarks>
-        public RestierBreakdanceTestBase(bool useEndpointRouting = false)
+        public RestierBreakdanceTestBase()
         {
-            UseEndpointRouting = useEndpointRouting;
             TestHostBuilder.ConfigureServices(services =>
             {
                 services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -69,14 +69,9 @@ namespace Microsoft.Restier.Breakdance
                                 return Task.CompletedTask;
                             };
                         });
-
                 services
-                    .AddRestier(apiBuilder =>
-                    {
-                        AddRestierAction?.Invoke(apiBuilder);
-                    },
-                    useEndpointRouting)
-
+                    .AddControllers()
+                    .AddRestier(options => AddRestierAction?.Invoke(options))
                     .AddApplicationPart(typeof(TApi).Assembly)
                     .AddApplicationPart(typeof(RestierController).Assembly);
             })
@@ -86,41 +81,21 @@ namespace Microsoft.Restier.Breakdance
                 ApplicationBuilderAction?.Invoke(builder);
 
 
-                if (useEndpointRouting)
+                builder.UseRestierBatching();
+
+                builder.UseRouting();
+                builder.UseAuthorization();
+
+                builder.UseDeveloperExceptionPage();
+                builder.UseEndpoints(endpoints =>
                 {
-                    builder.UseRestierBatching();
-
-                    builder.UseRouting();
-                    builder.UseAuthorization();
-
-                    builder.UseDeveloperExceptionPage();
-                    builder.UseEndpoints(endpoints =>
-                    {
-                        endpoints
-                            .Select().Expand().Filter().OrderBy().MaxTop(null).Count().SetTimeZoneInfo(TimeZoneInfo.Utc)               
-                            .MapRestier(restierRouteBuilder =>
-                            {
-                                MapRestierAction?.Invoke(restierRouteBuilder);
-                            });
-                    });
-                }
-                else
-                {
-                    builder.UseAuthorization();
-                    builder.UseDeveloperExceptionPage();
-
-                    builder.UseRestierBatching();
-                    builder.UseMvc(routeBuilder =>
-                    {
-                        routeBuilder
-                            .Select().Expand().Filter().OrderBy().MaxTop(null).Count().SetTimeZoneInfo(TimeZoneInfo.Utc)
-                            .MapRestier(restierRouteBuilder =>
-                            {
-                                MapRestierAction?.Invoke(restierRouteBuilder);
-                            })
-                            .MapRoute("default", "{controller=Home}/{action=Index}/{id?}");
-                    });
-                }
+                    endpoints
+                        .Select().Expand().Filter().OrderBy().MaxTop(null).Count().SetTimeZoneInfo(TimeZoneInfo.Utc)               
+                        .MapRestier(restierRouteBuilder =>
+                        {
+                            MapRestierAction?.Invoke(restierRouteBuilder);
+                        });
+                });
             });
         }
 
@@ -185,10 +160,8 @@ namespace Microsoft.Restier.Breakdance
                 routeName = Restier_IEndpointRouteBuilderExtensions.GetCleanRouteName(routeName);
             }
             
-            context.ODataFeature().RouteName = routeName;
-            context.Request.CreateRequestContainer(routeName);
-
-            return context.Request.ODataFeature().RequestScope.ServiceProvider;
+            context.ODataFeature().RoutePrefix = routeName;
+            return context.Request.GetRouteServices();
         }
 
         /// <summary>
@@ -209,7 +182,6 @@ namespace Microsoft.Restier.Breakdance
         /// </param>
         /// <param name="useEndpointRouting">Specifies whether or not to use Endpoint Routing. Defaults to false for backwards compatibility, but will change in Restier 2.0.</param>
         /// <returns>The <see cref="IEdmModel"/> instance from <typeparamref name="TApi"/> for the specified route.</returns>
-        public IEdmModel GetModel(string routeName = WebApiConstants.RouteName, bool useEndpointRouting = false) => GetApiInstance(routeName, useEndpointRouting).GetModel();
-
+        public IEdmModel GetModel(string routeName = WebApiConstants.RouteName, bool useEndpointRouting = false) => GetApiInstance(routeName, useEndpointRouting).Model;
     }
 }

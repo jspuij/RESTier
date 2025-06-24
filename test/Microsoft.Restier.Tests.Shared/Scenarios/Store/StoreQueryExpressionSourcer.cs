@@ -10,6 +10,11 @@ namespace Microsoft.Restier.Tests.Shared
 {
     internal class StoreQueryExpressionSourcer : IQueryExpressionSourcer
     {
+        /// <summary>
+        /// Gets or sets the inner handler.
+        /// </summary>
+        public IQueryExpressionSourcer Inner { get; set; }
+
         public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
         {
             var a = new[] {

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.OData.Batch;
 using Microsoft.AspNetCore.OData.Formatter.Deserialization;
@@ -10,11 +11,13 @@ using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OData;
+using Microsoft.OData.Edm;
 using Microsoft.Restier.AspNetCore.Batch;
 using Microsoft.Restier.AspNetCore.Formatter;
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Restier.AspNetCore.Operation;
 using Microsoft.Restier.AspNetCore.Query;
+using Microsoft.Restier.AspNetCore.Routing;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
@@ -78,16 +81,38 @@ public static class RestierODataOptionsExtensions
         // It might make sense to redesign the model builder to 
         var modelBuildingServices = new ServiceCollection();
         modelBuildingServices.TryAddSingleton<IChainOfResponsibilityFactory<IModelBuilder>, DefaultChainOfResponsibilityFactory<IModelBuilder>>();
+        modelBuildingServices.TryAddSingleton<ModelMerger>();
         configureRouteServices.Invoke(modelBuildingServices);
-        modelBuildingServices.AddSingleton<IModelBuilder, RestierWebApiModelBuilder>()
+        modelBuildingServices.AddSingleton< IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
             .AddSingleton(new RestierWebApiModelExtender(type))
-            .AddSingleton<IModelBuilder>(sp => new RestierWebApiOperationModelBuilder(type));
+            .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type));
 
-        var modelBuildingServiceProvider = modelBuildingServices.BuildServiceProvider();
-        var modelBuilderFactory = modelBuildingServiceProvider.GetRequiredService<IChainOfResponsibilityFactory<IModelBuilder>>();
-        var modelBuilder = modelBuilderFactory.Create();
-        var model = modelBuilder.GetEdmModel();
-        var modelExtender = modelBuildingServiceProvider.GetRequiredService<RestierWebApiModelExtender>();
+        IEdmModel model;
+        RestierWebApiModelExtender modelExtender;
+        ServiceProvider modelBuildingServiceProvider = null;
+
+        try
+        {
+            modelBuildingServiceProvider = modelBuildingServices.BuildServiceProvider();
+            var modelBuilderFactory = modelBuildingServiceProvider
+                .GetRequiredService<IChainOfResponsibilityFactory<IModelBuilder>>();
+            var modelBuilder = modelBuilderFactory.Create();
+            model = modelBuilder.GetEdmModel();
+            modelExtender = modelBuildingServiceProvider.GetRequiredService<RestierWebApiModelExtender>();
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException($"Model building failed with exception {exception.Message}", exception);
+        }
+        finally
+        {
+            modelBuildingServiceProvider?.Dispose();
+        }
+
+//        var extType = Type.GetType("Microsoft.AspNetCore.OData.Edm.EdmModelExtensions, Microsoft.AspNetCore.OData");
+//;
+//        var method = extType.GetMethod("ResolveNavigationSource", BindingFlags.Static | BindingFlags.Public, new[] { typeof(IEdmModel), typeof(string), typeof(bool) });
+//        method.Invoke(null, [model, "Test", true]);
 
         oDataOptions.AddRouteComponents(routePrefix, model, services =>
         {
@@ -103,12 +128,12 @@ public static class RestierODataOptionsExtensions
 
             configureRouteServices.Invoke(services);
 
-            services.AddSingleton<IModelBuilder, RestierWebApiModelBuilder>()
+            services.AddSingleton<IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
                 .AddSingleton(modelExtender)
-                .AddSingleton<IModelBuilder>(sp => new RestierWebApiOperationModelBuilder(type))
-                .AddSingleton<IModelMapper, RestierWebApiModelMapper>()
-                .AddSingleton<IQueryExpressionExpander, RestierQueryExpressionExpander>()
-                .AddSingleton<IQueryExpressionSourcer, RestierQueryExpressionSourcer>();
+                .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type))
+                .AddSingleton<IChainedService<IModelMapper>, RestierWebApiModelMapper>()
+                .AddSingleton<IChainedService<IQueryExpressionExpander>, RestierQueryExpressionExpander>()
+                .AddSingleton<IChainedService<IQueryExpressionSourcer>, RestierQueryExpressionSourcer>();
 
             // Only add if none are there. We have removed the default OData one before.
             services.TryAddScoped((sp) => new ODataQuerySettings
@@ -122,16 +147,16 @@ public static class RestierODataOptionsExtensions
 
             // OData already registers the ODataSerializerProvider, so if we have 2, either the developer
             // added one, or we already did. OData resolves the right one so multiple can be registered.
-            if (services.HasServiceCount<ODataSerializerProvider>() < 2)
+            if (services.HasServiceCount<IODataSerializerProvider>() < 2)
             {
-                services.AddSingleton<ODataSerializerProvider, DefaultRestierSerializerProvider>();
+                services.AddSingleton<IODataSerializerProvider, DefaultRestierSerializerProvider>();
             }
 
             // OData already registers the ODataDeserializerProvider, so if we have 2, either the developer
             // added one, or we already did. OData resolves the right one so multiple can be registered.
-            if (services.HasServiceCount<ODataDeserializerProvider>() < 2)
+            if (services.HasServiceCount<IODataSerializerProvider>() < 2)
             {
-                services.AddSingleton<ODataDeserializerProvider, DefaultRestierDeserializerProvider>();
+                services.AddSingleton<IODataDeserializerProvider, DefaultRestierDeserializerProvider>();
             }
 
             services.TryAddSingleton<IOperationExecutor, RestierOperationExecutor>();
@@ -143,8 +168,8 @@ public static class RestierODataOptionsExtensions
                 services.AddSingleton<ODataPayloadValueConverter, RestierPayloadValueConverter>();
             }
 
-            services.AddSingleton<IModelMapper, RestierModelMapper>();
-            services.AddSingleton<IQueryExecutor, RestierQueryExecutor>();
+            services.AddSingleton<IChainedService<IModelMapper>, RestierModelMapper>();
+            services.AddSingleton<IChainedService<IQueryExecutor>, RestierQueryExecutor>();
 
             if (useRestierBatching)
             {
@@ -154,9 +179,13 @@ public static class RestierODataOptionsExtensions
                 });
             }
 
-            // Dispose the model building service provider when the route is configured.
-            modelBuildingServiceProvider.Dispose();
+            //services.TryAddEnumerable(
+            //    ServiceDescriptor.Transient<IApplicationModelProvider, RestierApplicationModelProvider>());
+
         });
+
+        // Add the Restier routing convention to the OData options.
+        oDataOptions.Conventions.Add(new RestierRoutingConvention(-50));
 
         return oDataOptions;
     }

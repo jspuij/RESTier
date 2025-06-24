@@ -1,4 +1,6 @@
-﻿#if EF6
+﻿
+    using Microsoft.Restier.EntityFramework;
+#if EF6
     using System.Data.Entity;
 #endif
 #if EFCore

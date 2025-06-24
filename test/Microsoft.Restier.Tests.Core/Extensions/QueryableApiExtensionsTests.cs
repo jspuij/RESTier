@@ -4,6 +4,7 @@
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
@@ -36,7 +37,19 @@ namespace Microsoft.Restier.Tests.Core
         {
             modelMapper = Substitute.For<IModelMapper>();
             queryExecutor = Substitute.For<IQueryExecutor>();
-            queryHandler = new DefaultQueryHandler(Substitute.For<IQueryExpressionSourcer>(), queryExecutor, modelMapper);
+            var executorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExecutor>>();
+            executorFactory.Create().Returns(queryExecutor);
+            var mapperFactory = Substitute.For<IChainOfResponsibilityFactory<IModelMapper>>();
+            mapperFactory.Create().Returns(modelMapper);
+            var sourcerFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionSourcer>>();
+            sourcerFactory.Create().Returns(Substitute.For<IQueryExpressionSourcer>());
+            var authorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionAuthorizer>>();
+            authorizerFactory.Create().Returns(default(IQueryExpressionAuthorizer));
+            var expanderFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionExpander>>();
+            expanderFactory.Create().Returns(default(IQueryExpressionExpander));
+            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            processorFactory.Create().Returns(default(IQueryExpressionProcessor));
+            queryHandler = new DefaultQueryHandler(sourcerFactory, executorFactory, mapperFactory, authorizerFactory, expanderFactory, processorFactory);
             model = Substitute.For<IEdmModel>();
             submitHandler = Substitute.For<ISubmitHandler>();
         }

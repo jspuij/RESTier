@@ -20,9 +20,9 @@ public class RestierQueryExpressionExpander : IQueryExpressionExpander
     public RestierQueryExpressionExpander(RestierWebApiModelExtender modelExtender) => ModelExtender = modelExtender;
 
     /// <summary>
-    /// Gets or sets the inner handler.
+    /// Gets or sets the inner expander.
     /// </summary>
-    public IQueryExpressionExpander InnerHandler { get; set; }
+    public IQueryExpressionExpander Inner { get; set; }
 
     private RestierWebApiModelExtender ModelExtender { get; set; }
 
@@ -54,6 +54,6 @@ public class RestierQueryExpressionExpander : IQueryExpressionExpander
 
     private Expression CallInner(QueryExpressionContext context)
     {
-        return InnerHandler?.Expand(context);
+        return Inner?.Expand(context);
     }
 }

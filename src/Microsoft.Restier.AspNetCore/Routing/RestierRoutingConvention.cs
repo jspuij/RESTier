@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.OData.Extensions;
 using Microsoft.AspNetCore.OData.Routing.Conventions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.OData.Routing.Template;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OData.Edm;
@@ -51,67 +52,7 @@ namespace Microsoft.Restier.AspNetCore
                 /// <returns>An enumerable of ControllerActionDescriptors.</returns>
                 public IEnumerable<ControllerActionDescriptor> SelectAction(RouteContext routeContext)
                 {
-                    Ensure.NotNull(routeContext, nameof(routeContext));
-
-                    var odataPath = routeContext.HttpContext.ODataFeature().Path ?? 
-                        throw new InvalidOperationException(Resources.InvalidEmptyPathInRequest);
-
-                    var services = routeContext.HttpContext.RequestServices;
-
-                    var actionCollectionProvider = services.GetRequiredService<IActionDescriptorCollectionProvider>();
-
-                    if (TryFindMatchingODataActions(routeContext, out var actions))
-                    {
-                        return actions;
-                    }
-
-                    var restierControllerActionDescriptors = actionCollectionProvider
-                        .ActionDescriptors.Items.OfType<ControllerActionDescriptor>()
-                        .Where(c => string.Equals(c.ControllerName, RestierControllerName, StringComparison.OrdinalIgnoreCase));
-
-                    if (!restierControllerActionDescriptors.Any())
-                    {
-                        // RESTier cannot select action on controller which is not RestierController.
-                        return null;
-                    }
-
-                    var method = routeContext.HttpContext.Request.Method;
-                    var lastSegment = odataPath.LastOrDefault();
-                    var isAction = IsAction(lastSegment);
-
-                    if (string.Equals(method, HttpMethod.Get.Method, StringComparison.OrdinalIgnoreCase) && !IsMetadataPath(odataPath) && !isAction)
-                    {
-                        return restierControllerActionDescriptors.Where(x => string.Equals(MethodNameOfGet, x.ActionName, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (string.Equals(method, HttpMethod.Post.Method, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (isAction)
-                        {
-                            return restierControllerActionDescriptors.Where(x => string.Equals(MethodNameOfPostAction, x.ActionName, StringComparison.OrdinalIgnoreCase));
-                        }
-                        else
-                        {
-                            return restierControllerActionDescriptors.Where(x => string.Equals(MethodNameOfPost, x.ActionName, StringComparison.OrdinalIgnoreCase));
-                        }
-                    }
-
-                    if (string.Equals(method, HttpMethod.Delete.Method, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return restierControllerActionDescriptors.Where(x => string.Equals(MethodNameOfDelete, x.ActionName, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (string.Equals(method, HttpMethod.Put.Method, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return restierControllerActionDescriptors.Where(x => string.Equals(MethodNameOfPut, x.ActionName, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (string.Equals(method, HttpMethod.Patch.Method, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return restierControllerActionDescriptors.Where(x => string.Equals(MethodNameOfPatch, x.ActionName, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    return null;
+                    
                 }
 
                 private bool TryFindMatchingODataActions(RouteContext context, out IEnumerable<ControllerActionDescriptor> actions)
@@ -168,6 +109,7 @@ namespace Microsoft.Restier.AspNetCore
         {
             Ensure.NotNull(context, nameof(context));
             var controller = context.Controller;
+            var model = context.Model;
             return string.Equals(controller.ControllerName, RestierControllerName, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -177,9 +119,16 @@ namespace Microsoft.Restier.AspNetCore
             Ensure.NotNull(context, nameof(context));
             var controller = context.Controller;
             var action = context.Action;
+            var model = context.Model;
 
-            // We need to reimplement this, but only after it compiles.
-            return true;
+            action.AddSelector("Get",  "api/tests", model, new ODataPathTemplate(new EntitySetSegmentTemplate(model.FindDeclaredEntitySet("Books"))), null);
+
+            return string.Equals(action.ActionName, MethodNameOfDelete, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(action.ActionName, MethodNameOfGet, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(action.ActionName, MethodNameOfPatch, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(action.ActionName, MethodNameOfPost, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(action.ActionName, MethodNameOfPostAction, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(action.ActionName, MethodNameOfPut, StringComparison.OrdinalIgnoreCase);
         }
     }
 

@@ -26,17 +26,18 @@ namespace Microsoft.Restier.EntityFrameworkCore
     /// <summary>
     /// Represents a model producer that uses the metadata workspace accessible from a <see cref="DbContext" />.
     /// </summary>
-    public partial class EFModelBuilder : IModelBuilder
+    public partial class EFModelBuilder<TDbContext> : IModelBuilder
+        where TDbContext : DbContext
     {
-        private readonly DbContext _dbContext;
+        private readonly TDbContext _dbContext;
         private readonly ModelMerger _modelMerger;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="EFModelBuilder"/> class with the specified DbContext.
+        /// Initializes a new instance of the <see cref="EFModelBuilder{TDbContext}"/> class.
         /// </summary>
         /// <param name="dbContext">The DbContext to use for model building.</param>
         /// <param name="modelMerger">The model merger to use.</param>
-        public EFModelBuilder(DbContext dbContext, ModelMerger modelMerger)
+        public EFModelBuilder(TDbContext dbContext, ModelMerger modelMerger)
         {
             Ensure.NotNull(dbContext, nameof(dbContext));
             Ensure.NotNull(modelMerger, nameof(modelMerger));

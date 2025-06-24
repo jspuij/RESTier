@@ -2,7 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 
-namespace Microsoft.Restier.Tests.Core
+namespace Microsoft.Restier.Tests.Shared
 {
     using System.Diagnostics;
     using System.Diagnostics.CodeAnalysis;

@@ -13,5 +13,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
+		<ProjectReference Include="..\Microsoft.Restier.Tests.Shared\Microsoft.Restier.Tests.Shared.csproj" />
 	</ItemGroup>
 </Project>

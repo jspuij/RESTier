@@ -19,6 +19,7 @@ using AspNetResources = Microsoft.Restier.AspNetCore.Resources;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Operation;
 using Microsoft.AspNetCore.OData.Extensions;
+using Microsoft.Restier.Core.DependencyInjection;
 
 namespace Microsoft.Restier.AspNetCore.Operation
 {
@@ -33,12 +34,16 @@ namespace Microsoft.Restier.AspNetCore.Operation
         /// <summary>
         /// Initializes a new instance of the <see cref="RestierOperationExecutor"/> class.
         /// </summary>
-        /// <param name="operationAuthorizer">The operation authorizer to be used for authorization.</param>
-        /// <param name="operationFilter">The operation filter to be used for filtering.</param>
-        public RestierOperationExecutor(IOperationAuthorizer operationAuthorizer, IOperationFilter operationFilter)
+        /// <param name="operationAuthorizerFactory">The operation authorizer factory to be used for authorization.</param>
+        /// <param name="operationFilterFactory">The operation filter factory to be used for filtering.</param>
+        public RestierOperationExecutor(IChainOfResponsibilityFactory<IOperationAuthorizer> operationAuthorizerFactory,
+            IChainOfResponsibilityFactory<IOperationFilter> operationFilterFactory)
         {
-            this.operationAuthorizer = operationAuthorizer;
-            this.operationFilter = operationFilter;
+            Ensure.NotNull(operationAuthorizerFactory, nameof(operationAuthorizerFactory));
+            Ensure.NotNull(operationFilterFactory, nameof(operationFilterFactory));
+
+            this.operationAuthorizer = operationAuthorizerFactory.Create();
+            this.operationFilter = operationFilterFactory.Create();
         }
 
         /// <summary>

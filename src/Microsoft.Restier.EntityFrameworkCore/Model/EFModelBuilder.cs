@@ -8,13 +8,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Restier.Core.Model;
 
 namespace Microsoft.Restier.EntityFrameworkCore;
 
 /// <summary>
 /// Represents a model producer that uses the metadata workspace accessible from a <see cref="DbContext" />.
 /// </summary>
-public partial class EFModelBuilder
+public partial class EFModelBuilder<TDbContext> : IModelBuilder
+    where TDbContext : DbContext
 {
     private void EntityFrameworkCoreGetEntities(out Dictionary<string, Type> entitySetMap, out Dictionary<Type, ICollection<PropertyInfo>> entitySetKeyMap)
     {

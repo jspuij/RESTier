@@ -10,23 +10,32 @@
 	  <Compile Remove="ClaimsPrincipalAccessorTests\**" />
 	  <Compile Remove="EndpointRouting\**" />
 	  <Compile Remove="FallbackTests\**" />
-	  <Compile Remove="FeatureTests\**" />
 	  <Compile Remove="RegressionTests\**" />
 	  <EmbeddedResource Remove="ClaimsPrincipalAccessorTests\**" />
 	  <EmbeddedResource Remove="EndpointRouting\**" />
 	  <EmbeddedResource Remove="FallbackTests\**" />
-	  <EmbeddedResource Remove="FeatureTests\**" />
 	  <EmbeddedResource Remove="RegressionTests\**" />
 	  <None Remove="ClaimsPrincipalAccessorTests\**" />
 	  <None Remove="EndpointRouting\**" />
 	  <None Remove="FallbackTests\**" />
-	  <None Remove="FeatureTests\**" />
 	  <None Remove="RegressionTests\**" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <Compile Remove="DependencyInjectionTests.cs" />
 	  <Compile Remove="ExceptionHandlerTests.cs" />
+	  <Compile Remove="FeatureTests\AuthorizationTests.cs" />
+	  <Compile Remove="FeatureTests\BatchTests.cs" />
+	  <Compile Remove="FeatureTests\ExpandTests.cs" />
+	  <Compile Remove="FeatureTests\FunctionTests.cs" />
+	  <Compile Remove="FeatureTests\InsertTests.cs" />
+	  <Compile Remove="FeatureTests\InTests.cs" />
+	  <Compile Remove="FeatureTests\MetadataTests.cs" />
+	  <Compile Remove="FeatureTests\NavigationPropertyTests.cs" />
+	  <Compile Remove="FeatureTests\PagingTests.cs" />
+	  <Compile Remove="FeatureTests\QueryTests.cs" />
+	  <Compile Remove="FeatureTests\UpdateTests.cs" />
+	  <Compile Remove="FeatureTests\ValidationTests.cs" />
 	  <Compile Remove="Model\RestierModelBuilderTests.cs" />
 	  <Compile Remove="Model\RestierModelExtenderTests.cs" />
 	  <Compile Remove="Model\RestierWebApiOperationModelBuilderTests.cs" />
@@ -38,6 +47,8 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
 	  <ProjectReference Include="..\Microsoft.Restier.Tests.Core\Microsoft.Restier.Tests.Core.csproj" />
+	  <ProjectReference Include="..\Microsoft.Restier.Tests.Shared.EntityFramework\Microsoft.Restier.Tests.Shared.EntityFramework.csproj" />
+	  <ProjectReference Include="..\Microsoft.Restier.Tests.Shared\Microsoft.Restier.Tests.Shared.csproj" />
 	</ItemGroup>
 
 	
@@ -48,5 +59,10 @@
 	  <Folder Include="MiddleWare\" />
 	  <Folder Include="Query\" />
 	  <Folder Include="Operation\" />
+	</ItemGroup>
+
+	
+	<ItemGroup>
+	  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
 	</ItemGroup>
 </Project>

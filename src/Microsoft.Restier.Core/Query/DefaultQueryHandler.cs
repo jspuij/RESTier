@@ -36,30 +36,37 @@ namespace Microsoft.Restier.Core.Query
         /// <summary>
         /// Initializes a new instance of the DefaultQueryHandler class.
         /// </summary>
-        /// <param name="sourcer">The query expression sourcer to use.</param>
-        /// <param name="executor">The query executor to use.</param>
-        /// <param name="mapper">The model mapper to use.</param>
-        /// <param name="authorizer">The query expression authorizer to use.</param>
-        /// <param name="expander">The query expression expander to use.</param>
-        /// <param name="processorFactory">The query expression processorFactory to use.</param>
+        /// <param name="sourcerFactory">The query expression sourcer factory to use.</param>
+        /// <param name="executorFactory">The query executor factory to use.</param>
+        /// <param name="mapperFactory">The model mapper factory to use.</param>
+        /// <param name="authorizerFactory">The query expression authorizer factory to use.</param>
+        /// <param name="expanderFactory">The query expression expander factory to use.</param>
+        /// <param name="processorFactory">The query expression processor factory to use.</param>
         public DefaultQueryHandler(
-            IQueryExpressionSourcer sourcer,
-            IQueryExecutor executor,
-            IModelMapper mapper,
-            IQueryExpressionAuthorizer authorizer = null,
-            IQueryExpressionExpander expander = null,
-            IChainOfResponsibilityFactory<IQueryExpressionProcessor> processorFactory = null)
+            IChainOfResponsibilityFactory<IQueryExpressionSourcer> sourcerFactory,
+            IChainOfResponsibilityFactory<IQueryExecutor> executorFactory,
+            IChainOfResponsibilityFactory<IModelMapper> mapperFactory,
+            IChainOfResponsibilityFactory<IQueryExpressionAuthorizer> authorizerFactory,
+            IChainOfResponsibilityFactory<IQueryExpressionExpander> expanderFactory,
+            IChainOfResponsibilityFactory<IQueryExpressionProcessor> processorFactory)
         {
-            Ensure.NotNull(sourcer, nameof(sourcer));
-            Ensure.NotNull(executor, nameof(executor));
-            Ensure.NotNull(mapper, nameof(mapper));
+            Ensure.NotNull(sourcerFactory, nameof(sourcerFactory));
+            Ensure.NotNull(executorFactory, nameof(executorFactory));
+            Ensure.NotNull(mapperFactory, nameof(mapperFactory));
+            Ensure.NotNull(authorizerFactory, nameof(authorizerFactory));
+            Ensure.NotNull(expanderFactory, nameof(expanderFactory));
+            Ensure.NotNull(processorFactory, nameof(processorFactory));
 
-            this.authorizer = authorizer;
-            this.expander = expander;
-            this.processor = processorFactory?.Create();
-            this.executor = executor;
-            this.sourcer = sourcer;
-            this.mapper = mapper;
+            this.authorizer = authorizerFactory.Create();
+            this.expander = expanderFactory.Create();
+            this.processor = processorFactory.Create();
+            this.executor = executorFactory.Create() ??
+                           throw new InvalidOperationException("The IChainOfResponsibilityFactory for IQueryExecutor should return at least one implementation.");
+            this.sourcer = sourcerFactory.Create() ??
+                           throw new InvalidOperationException("The IChainOfResponsibilityFactory for IQueryExpressionSourcer should return at least one implementation.");
+            this.mapper = mapperFactory.Create() ??
+                          throw new InvalidOperationException("The IChainOfResponsibilityFactory for IModelMapper should return at least one implementation.");
+
         }
 
         /// <summary>

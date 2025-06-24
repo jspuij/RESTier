@@ -25,6 +25,11 @@ namespace Microsoft.Restier.EntityFramework
     internal class EFQueryExpressionSourcer : IQueryExpressionSourcer
     {
         /// <summary>
+        /// Gets or sets the inner handler.
+        /// </summary>
+        public IQueryExpressionSourcer Inner { get; set; }
+
+        /// <summary>
         /// Sources an expression.
         /// </summary>
         /// <param name="context">
@@ -39,6 +44,13 @@ namespace Microsoft.Restier.EntityFramework
         public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
         {
             Ensure.NotNull(context, nameof(context));
+
+            var result = Inner?.ReplaceQueryableSource(context, embedded);
+            if (result != null)
+            {
+                // If the inner handler has produced a result, return it.
+                return result;
+            }
 
             if (context.ModelReference.EntitySet is null)
             {

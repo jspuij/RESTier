@@ -27,11 +27,13 @@ namespace Microsoft.Restier.Tests.Core.Query
     [ExcludeFromCodeCoverage]
     public class DefaultQueryHandlerTests
     {
-        private readonly IQueryExpressionSourcer sourcer = Substitute.For<IQueryExpressionSourcer>();
-        private readonly IQueryExecutor executor = Substitute.For<IQueryExecutor>();
-        private readonly IModelMapper modelMapper = Substitute.For<IModelMapper>();
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionSourcer> sourcerFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionSourcer>>();
+        private readonly IChainOfResponsibilityFactory<IQueryExecutor> executorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExecutor>>();
+        private readonly IChainOfResponsibilityFactory<IModelMapper> modelMapperFactory = Substitute.For< IChainOfResponsibilityFactory<IModelMapper>>();
         private readonly IQueryExpressionAuthorizer authorizer = Substitute.For<IQueryExpressionAuthorizer>();
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionAuthorizer> authorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionAuthorizer>>();
         private readonly IQueryExpressionExpander expander = Substitute.For<IQueryExpressionExpander>();
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionExpander> expanderFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionExpander>>();
         private readonly IChainOfResponsibilityFactory<IQueryExpressionProcessor> processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
 
         private readonly IQueryHandler queryHandler;
@@ -46,6 +48,8 @@ namespace Microsoft.Restier.Tests.Core.Query
             new Test() { Name = "Fox" },
         }.AsQueryable();
 
+        private IQueryExecutor executor = Substitute.For<IQueryExecutor>();
+
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultQueryHandlerTests"/> class.
         /// </summary>
@@ -54,7 +58,12 @@ namespace Microsoft.Restier.Tests.Core.Query
             queryHandler = Substitute.For<IQueryHandler>();
             model = Substitute.For<IEdmModel>();
             submitHandler = Substitute.For<ISubmitHandler>();
+            authorizerFactory.Create().Returns(authorizer);
             authorizer.Authorize(Arg.Any<QueryExpressionContext>()).Returns(true);
+            sourcerFactory.Create().Returns(Substitute.For<IQueryExpressionSourcer>());
+            executorFactory.Create().Returns(executor);
+            expanderFactory.Create().Returns(expander);
+            modelMapperFactory.Create().Returns(Substitute.For<IModelMapper>());
         }
 
         /// <summary>
@@ -64,11 +73,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         public void CanConstruct()
         {
             var instance = new DefaultQueryHandler(
-                sourcer,
-                executor,
-                modelMapper,
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
             instance.Should().NotBeNull();
         }
@@ -79,14 +88,15 @@ namespace Microsoft.Restier.Tests.Core.Query
         [Fact]
         public void CannotConstructWithNullSourcer()
         {
+            sourcerFactory.Create().Returns(default(IQueryExpressionSourcer));
             Action act = () => new DefaultQueryHandler(
-                default(IQueryExpressionSourcer),
-                executor,
-                modelMapper,
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
-            act.Should().Throw<ArgumentNullException>();
+            act.Should().Throw<InvalidOperationException>();
         }
 
         /// <summary>
@@ -95,14 +105,15 @@ namespace Microsoft.Restier.Tests.Core.Query
         [Fact]
         public void CannotConstructWithNullExecutor()
         {
+            executorFactory.Create().Returns(default(IQueryExecutor));
             Action act = () => new DefaultQueryHandler(
-                sourcer,
-                default(IQueryExecutor),
-                modelMapper,
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
-            act.Should().Throw<ArgumentNullException>();
+            act.Should().Throw<InvalidOperationException>();
         }
 
         /// <summary>
@@ -111,14 +122,15 @@ namespace Microsoft.Restier.Tests.Core.Query
         [Fact]
         public void CannotConstructWithNullModelMapper()
         {
+            modelMapperFactory.Create().Returns(default(IModelMapper));
             Action act = () => new DefaultQueryHandler(
-                sourcer,
-                executor,
-                default(IModelMapper),
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
-            act.Should().Throw<ArgumentNullException>();
+            act.Should().Throw<InvalidOperationException>();
         }
 
         /// <summary>
@@ -129,11 +141,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         public async Task CanCallQueryAsync()
         {
             var instance = new DefaultQueryHandler(
-                sourcer,
-                executor,
-                modelMapper,
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
 
             var model = Substitute.For<IEdmModel>();
@@ -177,11 +189,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         public async Task CanCallQueryAsyncWithCount()
         {
             var instance = new DefaultQueryHandler(
-                sourcer,
-                executor,
-                modelMapper,
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
 
             var model = Substitute.For<IEdmModel>();
@@ -230,11 +242,11 @@ namespace Microsoft.Restier.Tests.Core.Query
         public async Task CannotCallQueryAsyncWithNullContext()
         {
             var instance = new DefaultQueryHandler(
-                sourcer,
-                executor,
-                modelMapper,
-                authorizer,
-                expander,
+                sourcerFactory,
+                executorFactory,
+                modelMapperFactory,
+                authorizerFactory,
+                expanderFactory,
                 processorFactory);
 
             Func<Task> act = () => instance.QueryAsync(default(QueryContext), CancellationToken.None);

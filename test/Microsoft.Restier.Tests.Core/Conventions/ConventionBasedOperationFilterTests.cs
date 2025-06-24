@@ -7,6 +7,7 @@ using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Operation;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Tests.Shared;
 using NSubstitute;
 using System;
 using System.Diagnostics;

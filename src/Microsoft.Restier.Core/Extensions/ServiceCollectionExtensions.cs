@@ -43,7 +43,16 @@ namespace Microsoft.Restier.Core
             services.TryAddSingleton<IChainOfResponsibilityFactory<IQueryExecutor>, DefaultChainOfResponsibilityFactory<IQueryExecutor>>();
             services.TryAddSingleton<IChainOfResponsibilityFactory<IModelBuilder>, DefaultChainOfResponsibilityFactory<IModelBuilder>>();
             services.TryAddSingleton<IChainOfResponsibilityFactory<IModelMapper>, DefaultChainOfResponsibilityFactory<IModelMapper>>();
-            services.TryAddSingleton<IQueryExecutor, DefaultQueryExecutor>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IQueryExpressionAuthorizer>, DefaultChainOfResponsibilityFactory<IQueryExpressionAuthorizer>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IQueryExpressionSourcer>, DefaultChainOfResponsibilityFactory<IQueryExpressionSourcer>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IQueryExpressionExpander>, DefaultChainOfResponsibilityFactory<IQueryExpressionExpander>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IQueryExpressionProcessor>, DefaultChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>, DefaultChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IChangeSetItemFilter>, DefaultChainOfResponsibilityFactory<IChangeSetItemFilter>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IChangeSetItemValidator>, DefaultChainOfResponsibilityFactory<IChangeSetItemValidator>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IOperationAuthorizer>, DefaultChainOfResponsibilityFactory<IOperationAuthorizer>>();
+            services.TryAddSingleton<IChainOfResponsibilityFactory<IOperationFilter>, DefaultChainOfResponsibilityFactory<IOperationFilter>>();
+            services.TryAddSingleton<IChainedService<IQueryExecutor>, DefaultQueryExecutor>();
             services.TryAddSingleton<ISubmitHandler, DefaultSubmitHandler>();
             services.TryAddSingleton<IQueryHandler, DefaultQueryHandler>();
 
@@ -61,18 +70,12 @@ namespace Microsoft.Restier.Core
             Ensure.NotNull(services, nameof(services));
             Ensure.NotNull(apiType, nameof(apiType));
 
-            services.TryAddSingleton<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>, DefaultChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
-            services.AddSingleton<IChangeSetItemAuthorizer>(sp => new ConventionBasedChangeSetItemAuthorizer(apiType));
-            services.TryAddSingleton<IChainOfResponsibilityFactory<IChangeSetItemFilter>, DefaultChainOfResponsibilityFactory<IChangeSetItemFilter>>();
-            services.AddSingleton<IChangeSetItemFilter>(sp => new ConventionBasedChangeSetItemFilter(apiType));
-            services.TryAddSingleton<IChainOfResponsibilityFactory<IChangeSetItemValidator>, DefaultChainOfResponsibilityFactory<IChangeSetItemValidator>>();
-            services.AddSingleton<IChangeSetItemValidator, ConventionBasedChangeSetItemValidator>();
-            services.TryAddSingleton<IChainOfResponsibilityFactory<IQueryExpressionProcessor>, DefaultChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
-            services.AddSingleton<IQueryExpressionProcessor>(sp => new ConventionBasedQueryExpressionProcessor(apiType));
-            services.TryAddSingleton<IChainOfResponsibilityFactory<IOperationAuthorizer>, DefaultChainOfResponsibilityFactory<IOperationAuthorizer>>();
-            services.AddSingleton<IOperationAuthorizer>(sp => new ConventionBasedOperationAuthorizer(apiType));
-            services.TryAddSingleton<IChainOfResponsibilityFactory<IOperationFilter>, DefaultChainOfResponsibilityFactory<IOperationFilter>>();
-            services.AddSingleton<IOperationFilter>(sp => new ConventionBasedOperationFilter(apiType));
+            services.AddSingleton<IChainedService<IChangeSetItemAuthorizer>>(sp => new ConventionBasedChangeSetItemAuthorizer(apiType));
+            services.AddSingleton<IChainedService<IChangeSetItemFilter>>(sp => new ConventionBasedChangeSetItemFilter(apiType));
+            services.AddSingleton<IChainedService<IChangeSetItemValidator>, ConventionBasedChangeSetItemValidator>();
+            services.AddSingleton<IChainedService<IQueryExpressionProcessor>>(sp => new ConventionBasedQueryExpressionProcessor(apiType));
+            services.AddSingleton<IChainedService<IOperationAuthorizer>>(sp => new ConventionBasedOperationAuthorizer(apiType));
+            services.AddSingleton<IChainedService<IOperationFilter>>(sp => new ConventionBasedOperationFilter(apiType));
             return services;
         }
     }

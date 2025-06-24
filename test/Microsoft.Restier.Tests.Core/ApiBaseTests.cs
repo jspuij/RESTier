@@ -32,31 +32,52 @@ namespace Microsoft.Restier.Tests.Core
         DefaultQueryHandler queryHandler;
         DefaultSubmitHandler submitHandler;
         TestModelBuilder modelBuilder = new TestModelBuilder();
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionSourcer> _sourcerFactory;
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionProcessor> _processorFactory;
+        private readonly IChainOfResponsibilityFactory<IQueryExecutor> _executorFactory;
+        private readonly IChainOfResponsibilityFactory<IModelMapper> _mapperFactory;
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionAuthorizer> _authorizerFactory;
+        private readonly IChainOfResponsibilityFactory<IQueryExpressionExpander> _expanderFactory;
+        private readonly IChainOfResponsibilityFactory<IChangeSetItemAuthorizer> _changeSetItemAuthorizerFactory;
+        private readonly IChainOfResponsibilityFactory<IChangeSetItemValidator> _changesetItemValidatorFactory;
+        private readonly IChainOfResponsibilityFactory<IChangeSetItemFilter> _changeSetItemFilterFactory;
 
         public ApiBaseTests()
         {
-            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
-            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
-            var changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
-            changeSetItemAuthorizerFactory.Create().Returns(new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi)));
-            var changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
-            changesetItemValidatorFactory.Create().Returns(new ConventionBasedChangeSetItemValidator());
-            var changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
-            changeSetItemFilterFactory.Create().Returns(new ConventionBasedChangeSetItemFilter(typeof(EmptyApi)));
+            _sourcerFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionSourcer>>();
+            _sourcerFactory.Create().Returns(new TestQuerySourcer());
+            _processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
+            _processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _executorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExecutor>>();
+            _executorFactory.Create().Returns(new DefaultQueryExecutor());
+            _mapperFactory = Substitute.For<IChainOfResponsibilityFactory<IModelMapper>>();
+            _mapperFactory.Create().Returns(new TestModelMapper());
+            _authorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionAuthorizer>>();
+            _authorizerFactory.Create().Returns(default(IQueryExpressionAuthorizer));
+            _expanderFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionExpander>>();
+            _expanderFactory.Create().Returns(default(IQueryExpressionExpander));
+
+
+            _changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
+            _changeSetItemAuthorizerFactory.Create().Returns(new ConventionBasedChangeSetItemAuthorizer(typeof(EmptyApi)));
+            _changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
+            _changesetItemValidatorFactory.Create().Returns(new ConventionBasedChangeSetItemValidator());
+            _changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
+            _changeSetItemFilterFactory.Create().Returns(new ConventionBasedChangeSetItemFilter(typeof(EmptyApi)));
             queryHandler = new DefaultQueryHandler(
-                new TestQuerySourcer(),
-                new DefaultQueryExecutor(),
-                new TestModelMapper(),
-                null,
-                null,
-                processorFactory
+                _sourcerFactory,
+                _executorFactory,
+                _mapperFactory,
+                _authorizerFactory,
+                _expanderFactory,
+                _processorFactory
                 );
             submitHandler = new DefaultSubmitHandler(
                 new DefaultChangeSetInitializer(),
                 new DefaultSubmitExecutor(),
-                changeSetItemAuthorizerFactory,
-                changesetItemValidatorFactory,
-                changeSetItemFilterFactory);
+                _changeSetItemAuthorizerFactory,
+                _changesetItemValidatorFactory,
+                _changeSetItemFilterFactory);
             testClass = new TestApiBase(modelBuilder.GetEdmModel(), queryHandler, submitHandler);
         }
 
@@ -100,19 +121,16 @@ namespace Microsoft.Restier.Tests.Core
             var changeSetItemAuthorizer = Substitute.For<IChangeSetItemAuthorizer>();
             var changeSetItemValidator = Substitute.For<IChangeSetItemValidator>();
             var changeSetItemFilter = Substitute.For<IChangeSetItemFilter>();
-            var changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
-            changeSetItemAuthorizerFactory.Create().Returns(changeSetItemAuthorizer);
-            var changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
-            changesetItemValidatorFactory.Create().Returns(changeSetItemValidator);
-            var changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
-            changeSetItemFilterFactory.Create().Returns(changeSetItemFilter);
+            _changeSetItemAuthorizerFactory.Create().Returns(changeSetItemAuthorizer);
+            _changesetItemValidatorFactory.Create().Returns(changeSetItemValidator);
+            _changeSetItemFilterFactory.Create().Returns(changeSetItemFilter);
 
             submitHandler = new DefaultSubmitHandler(
                 new DefaultChangeSetInitializer(),
                 new DefaultSubmitExecutor(),
-                changeSetItemAuthorizerFactory,
-                changesetItemValidatorFactory,
-                changeSetItemFilterFactory);
+                _changeSetItemAuthorizerFactory,
+                _changesetItemValidatorFactory,
+                _changeSetItemFilterFactory);
 
             var changeSet = new ChangeSet();
             changeSet.Entries.Enqueue(
@@ -191,19 +209,16 @@ namespace Microsoft.Restier.Tests.Core
             var changeSetItemValidator = Substitute.For<IChangeSetItemValidator>();
             var changeSetItemFilter = Substitute.For<IChangeSetItemFilter>();
             var changeSetInitializer = Substitute.For<IChangeSetInitializer>();
-            var changeSetItemAuthorizerFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemAuthorizer>>();
-            changeSetItemAuthorizerFactory.Create().Returns(changeSetItemAuthorizer);
-            var changesetItemValidatorFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemValidator>>();
-            changesetItemValidatorFactory.Create().Returns(changeSetItemValidator);
-            var changeSetItemFilterFactory = Substitute.For<IChainOfResponsibilityFactory<IChangeSetItemFilter>>();
-            changeSetItemFilterFactory.Create().Returns(changeSetItemFilter);
+            _changeSetItemAuthorizerFactory.Create().Returns(changeSetItemAuthorizer);
+            _changesetItemValidatorFactory.Create().Returns(changeSetItemValidator);
+            _changeSetItemFilterFactory.Create().Returns(changeSetItemFilter);
 
             submitHandler = new DefaultSubmitHandler(
                 changeSetInitializer,
                 new DefaultSubmitExecutor(),
-                changeSetItemAuthorizerFactory,
-                changesetItemValidatorFactory,
-                changeSetItemFilterFactory);
+                _changeSetItemAuthorizerFactory,
+                _changesetItemValidatorFactory,
+                _changeSetItemFilterFactory);
 
             var changeSet = new ChangeSet();
             var cancellationToken = CancellationToken.None;
@@ -268,16 +283,19 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_EntitySet_ThrowsIfNotMapped()
         {
-            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
-            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _sourcerFactory.Create().Returns(new TestQuerySourcer());
+
+            _processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _executorFactory.Create().Returns(new DefaultQueryExecutor());
+            _mapperFactory.Create().Returns(Substitute.For<IModelMapper>());
 
             queryHandler = new DefaultQueryHandler(
-               new TestQuerySourcer(),
-               new DefaultQueryExecutor(),
-               Substitute.For<IModelMapper>(),
-               null,
-               null,
-               processorFactory
+                _sourcerFactory,
+                _executorFactory,
+                _mapperFactory,
+               _authorizerFactory,
+               _expanderFactory,
+               _processorFactory
                );
             var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
@@ -324,16 +342,19 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_ComposableFunction_ThrowsIfNotMapped()
         {
-            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
-            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _sourcerFactory.Create().Returns(new TestQuerySourcer());
+
+            _processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _executorFactory.Create().Returns(new DefaultQueryExecutor());
+            _mapperFactory.Create().Returns(Substitute.For<IModelMapper>());
 
             queryHandler = new DefaultQueryHandler(
-               new TestQuerySourcer(),
-               new DefaultQueryExecutor(),
-               Substitute.For<IModelMapper>(),
-               null,
-               null,
-               processorFactory
+                _sourcerFactory,
+                _executorFactory,
+                _mapperFactory,
+               _authorizerFactory,
+               _expanderFactory,
+               _processorFactory
                );
             var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
@@ -346,16 +367,18 @@ namespace Microsoft.Restier.Tests.Core
         [Fact]
         public void GetQueryableSource_OfT_ComposableFunction_ThrowsIfNotMapped()
         {
-            var processorFactory = Substitute.For<IChainOfResponsibilityFactory<IQueryExpressionProcessor>>();
-            processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _sourcerFactory.Create().Returns(new TestQuerySourcer());
+            _processorFactory.Create().Returns(new ConventionBasedQueryExpressionProcessor(typeof(EmptyApi)));
+            _executorFactory.Create().Returns(new DefaultQueryExecutor());
+            _mapperFactory.Create().Returns(Substitute.For<IModelMapper>());
 
             queryHandler = new DefaultQueryHandler(
-               new TestQuerySourcer(),
-               new DefaultQueryExecutor(),
-               Substitute.For<IModelMapper>(),
-               null,
-               null,
-               processorFactory
+                _sourcerFactory,
+                _executorFactory,
+                _mapperFactory,
+               _authorizerFactory,
+               _expanderFactory,
+               _processorFactory
                );
             var model = modelBuilder.GetEdmModel();
             var api = new EmptyApi(model, queryHandler, submitHandler);
@@ -375,8 +398,6 @@ namespace Microsoft.Restier.Tests.Core
             Action exceptionTest = () => { api.GetQueryableSource<object>("Namespace", "Function", arguments); };
             exceptionTest.Should().Throw<ArgumentException>();
         }
-
-
 
         [Fact]
         public async Task QueryAsync_WithQueryReturnsResults()
@@ -531,6 +552,11 @@ namespace Microsoft.Restier.Tests.Core
 
         private class TestQuerySourcer : IQueryExpressionSourcer
         {
+            /// <summary>
+            /// Gets or sets the inner handler.
+            /// </summary>
+            public IQueryExpressionSourcer Inner { get; set; }
+
             public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
             {
                 return Expression.Constant(new[] { "Test" }.AsQueryable());

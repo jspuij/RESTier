@@ -21,7 +21,7 @@ public class RestierQueryExpressionSourcer : IQueryExpressionSourcer
     /// <summary>
     /// Gets or sets the inner handler.
     /// </summary>
-    public IQueryExpressionSourcer InnerHandler { get; set; }
+    public IQueryExpressionSourcer Inner { get; set; }
 
     private RestierWebApiModelExtender ModelExtender { get; set; }
 
@@ -48,9 +48,9 @@ public class RestierQueryExpressionSourcer : IQueryExpressionSourcer
 
     private Expression CallInner(QueryExpressionContext context, bool embedded)
     {
-        if (InnerHandler is not null)
+        if (Inner is not null)
         {
-            return InnerHandler.ReplaceQueryableSource(context, embedded);
+            return Inner.ReplaceQueryableSource(context, embedded);
         }
 
         return null;

@@ -30,11 +30,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\src\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
 		<ProjectReference Include="..\..\src\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Extensions\" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">

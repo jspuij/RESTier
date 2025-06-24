@@ -3,12 +3,16 @@
 
 using System;
 using System.Linq;
-using Microsoft.AspNet.OData;
-using Microsoft.AspNet.OData.Query;
+using Microsoft.AspNetCore.OData;
+using Microsoft.AspNetCore.OData.Query;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 #if NET6_0_OR_GREATER
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
+using Microsoft.OData.Edm;
+
 #else
 using Microsoft.Restier.AspNet.Model;
 
@@ -32,7 +36,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
 
         #region Constructors
 
-        public LibraryApi(IServiceProvider serviceProvider) : base(serviceProvider)
+        public LibraryApi(LibraryContext dbContext, IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler) : base(dbContext, model, queryHandler, submitHandler)
         {
         }
 

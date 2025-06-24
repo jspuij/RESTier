@@ -3,7 +3,8 @@
 
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Core;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Diagnostics;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.Shared
 {
@@ -11,27 +12,22 @@ namespace Microsoft.Restier.Tests.Shared
     /// <summary>
     /// 
     /// </summary>
-    public class RestierTestBase
-#if NET6_0_OR_GREATER
-        <TApi>: RestierBreakdanceTestBase<TApi> where TApi : ApiBase
-#endif
+    public class RestierTestBase<TApi>: RestierBreakdanceTestBase<TApi>
+        where TApi : ApiBase
     {
-#if NET6_0_OR_GREATER
-        public RestierTestBase(bool useEndpointRouting = false) : base(useEndpointRouting)
+        public RestierTestBase()
         {
-            
+            Trace.Listeners.Add(TraceListener);
         }
-#else
-
-        ///<summary>Exists to provide compatibility for our ASP.NET Classic tests. Do not use.</summary>
-        public bool UseEndpointRouting => false;
-
-#endif
+        /// <summary>
+        /// Gets the XUnit test context.
+        /// </summary>
+        public ITestContext TestContext => Xunit.TestContext.Current;
 
         /// <summary>
-        /// 
+        /// Gets the Trace Listener that can be used for test output.
         /// </summary>
-        public TestContext TestContext { get; set; }
+        public TraceListener TraceListener { get; } = new TestTraceListener();
 
     }
 

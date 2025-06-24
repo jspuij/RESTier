@@ -14,6 +14,7 @@ using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Tests.Shared;
 using NSubstitute;
 using Xunit;
 

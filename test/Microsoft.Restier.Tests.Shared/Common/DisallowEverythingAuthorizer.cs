@@ -12,6 +12,7 @@ namespace Microsoft.Restier.Tests.Shared
     public class DisallowEverythingAuthorizer : IQueryExpressionAuthorizer
     {
         public bool Authorize(QueryExpressionContext context) => false;
+        public IQueryExpressionAuthorizer Inner { get; set; }
     }
 
 }

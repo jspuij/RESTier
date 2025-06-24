@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.Restier.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Data.Entity;
@@ -15,7 +16,8 @@ namespace Microsoft.Restier.EntityFramework;
 /// <summary>
 /// Represents a model producer that uses the metadata workspace accessible from a <see cref="DbContext" />.
 /// </summary>
-public partial class EFModelBuilder
+public partial class EFModelBuilder<TDbContext> : IModelBuilder
+    where TDbContext : DbContext
 {
     private void EntityFramework6GetEntitySets(out Dictionary<string, Type> entitySetMap, out Dictionary<Type, ICollection<PropertyInfo>> entitySetKeyMap)
     {

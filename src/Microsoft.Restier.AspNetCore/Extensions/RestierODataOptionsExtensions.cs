@@ -2,6 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using Microsoft.AspNetCore.OData;
+using Microsoft.AspNetCore.OData.Batch;
 using Microsoft.AspNetCore.OData.Formatter.Deserialization;
 using Microsoft.AspNetCore.OData.Formatter.Serialization;
 using Microsoft.AspNetCore.OData.Query;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OData;
+using Microsoft.Restier.AspNetCore.Batch;
 using Microsoft.Restier.AspNetCore.Formatter;
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Restier.AspNetCore.Operation;
@@ -33,12 +35,13 @@ public static class RestierODataOptionsExtensions
     /// <typeparam name="TApi">The type of the API to add.</typeparam>
     /// <param name="oDataOptions">The <see cref="ODataOptions"/> to add a route to.</param>
     /// <param name="configureRouteServices">Action to configure the Restier Route services.</param>
+    /// <param name="useRestierBatching">Use the default Restier Batching Handler</param>
     /// <returns>The <see cref="ODataOptions"/>.</returns>
     public static ODataOptions AddRestierRoute<TApi>
     (this ODataOptions oDataOptions,
-            Action<IServiceCollection> configureRouteServices)
+            Action<IServiceCollection> configureRouteServices, bool useRestierBatching = true)
     where TApi : ApiBase
-        => oDataOptions.AddRestierRoute<TApi>(string.Empty, configureRouteServices);
+        => oDataOptions.AddRestierRoute<TApi>(string.Empty, configureRouteServices, useRestierBatching);
 
     /// <summary>
     /// Adds a Restier route for the specified API type to the OData options.
@@ -47,16 +50,22 @@ public static class RestierODataOptionsExtensions
     /// <param name="oDataOptions">The <see cref="ODataOptions"/> to add a route to.</param>
     /// <param name="routePrefix">The route prefix to use.</param>
     /// <param name="configureRouteServices">Action to configure the Restier Route services.</param>
+    /// <param name="useRestierBatching">Use the default Restier Batching Handler</param>
     /// <returns>The <see cref="ODataOptions"/>.</returns>
     public static ODataOptions AddRestierRoute<TApi>(
         this ODataOptions oDataOptions,
         string routePrefix,
-        Action<IServiceCollection> configureRouteServices)
+        Action<IServiceCollection> configureRouteServices,
+        bool useRestierBatching = true)
     where TApi : ApiBase
-    => AddRestierRoute(oDataOptions, typeof(TApi), routePrefix , configureRouteServices);
+    => AddRestierRoute(oDataOptions, typeof(TApi), routePrefix , configureRouteServices, useRestierBatching);
 
 
-    private static ODataOptions AddRestierRoute(ODataOptions oDataOptions, Type type, string routePrefix, Action<IServiceCollection> configureRouteServices)
+    private static ODataOptions AddRestierRoute(
+        ODataOptions oDataOptions,
+        Type type, string routePrefix,
+        Action<IServiceCollection> configureRouteServices,
+        bool useRestierBatching)
     {
         Ensure.NotNull(oDataOptions, nameof(oDataOptions));
         Ensure.NotNull(type, nameof(type));
@@ -136,6 +145,14 @@ public static class RestierODataOptionsExtensions
 
             services.AddSingleton<IModelMapper, RestierModelMapper>();
             services.AddSingleton<IQueryExecutor, RestierQueryExecutor>();
+
+            if (useRestierBatching)
+            {
+                services.AddSingleton<ODataBatchHandler>(sp => new RestierBatchHandler()
+                {
+                    PrefixName = routePrefix,
+                });
+            }
 
             // Dispose the model building service provider when the route is configured.
             modelBuildingServiceProvider.Dispose();

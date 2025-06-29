@@ -205,7 +205,7 @@ namespace Microsoft.Restier.Core.Query
                 if (edmElementType is not null)
                 {
                     var edmType = edmElementType as IEdmType;
-                    edmTypeReference = edmType.GetTypeReference();
+                    edmTypeReference = edmType.ToEdmTypeReference();
 
                     if (edmTypeReference is not null)
                     {

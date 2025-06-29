@@ -27,7 +27,6 @@
 	  <Compile Remove="FeatureTests\AuthorizationTests.cs" />
 	  <Compile Remove="FeatureTests\BatchTests.cs" />
 	  <Compile Remove="FeatureTests\ExpandTests.cs" />
-	  <Compile Remove="FeatureTests\FunctionTests.cs" />
 	  <Compile Remove="FeatureTests\InsertTests.cs" />
 	  <Compile Remove="FeatureTests\InTests.cs" />
 	  <Compile Remove="FeatureTests\MetadataTests.cs" />

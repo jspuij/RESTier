@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
+using System.Data.Entity;
 #if NET6_0_OR_GREATER
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -158,6 +159,17 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
                 Title = "Atlas Shrugged"
             };
         }
+
+        [BoundOperation(OperationType = OperationType.Action, EntitySetPath = "books")]
+        public void DeactivateBooks(IQueryable<Book> books)
+        {
+        }
+
+        [Resource]
+        public Book MyFavoriteBook => DbContext.Books.Find(new Guid("c2081e58-21a5-4a15-b0bd-fff03ebadd30"));
+
+        [Resource]
+        public IQueryable<Book> BooksWithPublisher => DbContext.Books.Include(b => b.Publisher);
 
         #endregion
 

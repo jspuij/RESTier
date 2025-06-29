@@ -120,7 +120,16 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
                         Isbn = "1122334455668",
                         Title = "Sea of Rustoleum",
                         IsActive = false
-                    }
+                    },
+                    new AudioBook
+                    {
+                        Id = new Guid("E6916E98-8427-4F7B-92DA-890F68BFD039"),
+                        Isbn = "9780141370354",
+                        Title = "Matilda",
+                        IsActive = true,
+                        Duration = TimeSpan.FromHours(4.5),
+                        Narrator = "Kate Winslet"
+                    },
                 }
             });
 

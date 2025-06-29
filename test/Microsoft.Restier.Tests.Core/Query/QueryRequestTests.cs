@@ -51,15 +51,6 @@ namespace Microsoft.Restier.Tests.Core.Query
         }
 
         /// <summary>
-        /// Cannot construct with non-querysource.
-        /// </summary>
-        [Fact]
-        public void CannotConstructWithNonQuerySource()
-        {
-            Action act = () => new QueryRequest(query);
-            act.Should().Throw<NotSupportedException>();
-        }
-
         /// <summary>
         /// Can set and get the IQueryable.
         /// </summary>

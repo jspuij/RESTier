@@ -74,6 +74,12 @@ namespace Microsoft.Restier.Core
         {
             Ensure.NotNull(request, nameof(request));
 
+            if (!(request.Query is QueryableSource))
+            {
+                throw new NotSupportedException(
+                    Resources.QueryableSourceCannotBeUsedAsQuery);
+            }
+
             var queryContext = new QueryContext(this, request);
             queryContext.Model = Model;
             return await QueryHandler.QueryAsync(queryContext, cancellationToken).ConfigureAwait(false);

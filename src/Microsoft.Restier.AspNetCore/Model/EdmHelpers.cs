@@ -4,6 +4,7 @@
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
@@ -121,12 +122,12 @@ namespace Microsoft.Restier.AspNetCore.Model
         }
 
         /// <summary>
-        /// Tries to find an EntitySet on the model by using a type reference of the elements.
+        /// Tries to find EntitySets on the model by using a type reference of the elements.
         /// </summary>
         /// <param name="model">The model to use.</param>
         /// <param name="typeReference">The type reference to use.</param>
         /// <returns>An EntitySet if found, null otherwise.</returns>
-        internal static IEdmEntitySet FindDeclaredEntitySetByTypeReference(
+        internal static IEnumerable<IEdmEntitySet> FindDeclaredEntitySetsByTypeReference(
             this IEdmModel model, IEdmTypeReference typeReference)
         {
             if (!typeReference.TryGetElementTypeReference(out var elementTypeReference))
@@ -136,11 +137,11 @@ namespace Microsoft.Restier.AspNetCore.Model
 
             if (!elementTypeReference.IsEntity())
             {
-                return null;
+                return [];
             }
 
             return model.EntityContainer.EntitySets()
-                .SingleOrDefault(e => e.EntityType.FullTypeName() == elementTypeReference.FullName());
+                .Where(e => e.EntityType.FullTypeName() == elementTypeReference.FullName());
         }
 
         private static bool TryGetElementTypeReference(

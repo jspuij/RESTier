@@ -74,6 +74,9 @@ public static class RestierODataOptionsExtensions
         Ensure.NotNull(type, nameof(type));
         Ensure.NotNull(routePrefix, nameof(routePrefix));
 
+        // Restier does not support qualified operation calls.
+        oDataOptions.RouteOptions.EnableQualifiedOperationCall = false;
+
         // We have to do some trickery here. The model building process in OData is now separate from the route building process,
         // but Restier is not really expecting that. So we have to build the model first and then add the model and the model extender
         // to the route services. That also means that we have to invoke the service configuring action twice: once for the model building container
@@ -85,7 +88,7 @@ public static class RestierODataOptionsExtensions
         configureRouteServices.Invoke(modelBuildingServices);
         modelBuildingServices.AddSingleton< IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
             .AddSingleton(new RestierWebApiModelExtender(type))
-            .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type));
+            .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type, sp.GetRequiredService<RestierWebApiModelExtender>()));
 
         IEdmModel model;
         RestierWebApiModelExtender modelExtender;
@@ -130,7 +133,7 @@ public static class RestierODataOptionsExtensions
 
             services.AddSingleton<IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
                 .AddSingleton(modelExtender)
-                .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type))
+                .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type, sp.GetRequiredService<RestierWebApiModelExtender>()))
                 .AddSingleton<IChainedService<IModelMapper>, RestierWebApiModelMapper>()
                 .AddSingleton<IChainedService<IQueryExpressionExpander>, RestierQueryExpressionExpander>()
                 .AddSingleton<IChainedService<IQueryExpressionSourcer>, RestierQueryExpressionSourcer>();
@@ -178,14 +181,15 @@ public static class RestierODataOptionsExtensions
                     PrefixName = routePrefix,
                 });
             }
-
-            //services.TryAddEnumerable(
-            //    ServiceDescriptor.Transient<IApplicationModelProvider, RestierApplicationModelProvider>());
-
         });
 
-        // Add the Restier routing convention to the OData options.
-        oDataOptions.Conventions.Add(new RestierRoutingConvention(-50));
+        // Add the Restier routing conventions to the OData options.
+        oDataOptions.Conventions.Add(new RestierActionRoutingConvention(modelExtender));
+        oDataOptions.Conventions.Add(new RestierEntitySetRoutingConvention(modelExtender));
+        oDataOptions.Conventions.Add(new RestierEntityRoutingConvention(modelExtender));
+        oDataOptions.Conventions.Add(new RestierFunctionRoutingConvention(modelExtender));
+        oDataOptions.Conventions.Add(new RestierOperationImportRoutingConvention(modelExtender));
+        oDataOptions.Conventions.Add(new RestierSingletonRoutingConvention(modelExtender));
 
         return oDataOptions;
     }

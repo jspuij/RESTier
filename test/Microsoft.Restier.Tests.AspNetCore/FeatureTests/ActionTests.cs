@@ -1,21 +1,19 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
 using CloudNimble.Breakdance.AspNetCore;
-using Microsoft.AspNetCore.Http;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Tests.Shared;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using System.Diagnostics;
-using System.Net;
-using Xunit;
 using Microsoft.Restier.Tests.Shared.Extensions;
-using System.Threading;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
 {
@@ -24,9 +22,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
     /// A class for testing OData Actions.
     /// </summary>
     public class ActionTests(ITestOutputHelper outputHelper) : RestierTestBase
-#if NET6_0_OR_GREATER
         <LibraryApi>
-#endif
     {
         /* JHC note: just leaving this here temporarily for reference
         #if EF6
@@ -46,7 +42,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeFalse();
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-            content.Should().Contain("ArgumentNullException");
+            content.Should().Contain("Error: A non-empty request body is required.");
         }
 
         [Fact]
@@ -79,10 +75,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
                 }
             };
 
-            //var response = await RestierTestHelpers.RouteDebug<LibraryApi>(serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Books", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
-
-            //var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/CheckoutBook", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/CheckoutBook", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -91,6 +84,29 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
             content.Should().Contain("| Submitted");
         }
 
+        /// <summary>
+        /// Tests if the query pipeline is correctly returning 200 StatusCodes when legitimate queries to a resource simply return no results.
+        /// </summary>
+        [Fact]
+        public async Task BoundAction_WithParameter_Returns200()
+        {
+            var metadata = RestierTestHelpers.GetApiMetadataAsync<LibraryApi>(serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+
+            var payload = new { bookId = new Guid("2D760F15-974D-4556-8CDF-D610128B537E") };
+
+             var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/Publishers('Publisher1')/PublishNewBook", payload: payload,
+                acceptHeader: WebApiConstants.DefaultAcceptHeader, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+
+            var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+            outputHelper.Write(content);
+            response.IsSuccessStatusCode.Should().BeTrue();
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.DeserializeResponseAsync<Publisher>();
+            results.Should().NotBeNull();
+            results.Response.Should().NotBeNull();
+            results.Response.Books.All(c => c.Title == "Sea of Rust").Should().BeTrue();
+        }
     }
 
 }

@@ -21,11 +21,6 @@ namespace Microsoft.Restier.Core.Query
         public QueryRequest(IQueryable query)
         {
             Ensure.NotNull(query, nameof(query));
-            if (!(query is QueryableSource))
-            {
-                throw new NotSupportedException(
-                    Resources.QueryableSourceCannotBeUsedAsQuery);
-            }
 
             this.Query = query;
         }

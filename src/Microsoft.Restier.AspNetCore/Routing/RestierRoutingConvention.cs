@@ -1,135 +1,106 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.OData.Routing.Conventions;
+using Microsoft.AspNetCore.OData.Routing.Template;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.AspNetCore.Model;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
-using Microsoft.AspNetCore.OData.Extensions;
-using Microsoft.AspNetCore.OData.Routing.Conventions;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.AspNetCore.OData.Routing.Template;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.OData.Edm;
-using Microsoft.OData.UriParser;
 
-namespace Microsoft.Restier.AspNetCore
+namespace Microsoft.Restier.AspNetCore.Routing;
+
+/// <summary>
+/// Base class for Restier routing conventions.
+/// </summary>
+public abstract class RestierRoutingConvention
 {
+    /// <summary>
+    /// The name of the Restier controller, which is used to route requests to the appropriate controller.
+    /// </summary>
+    protected const string RestierControllerName = "Restier";
 
     /// <summary>
-    /// The default routing convention implementation.
+    /// The names of the Get Method that are used to handle requests in Restier controllers.
     /// </summary>
-    public class RestierRoutingConvention : IODataControllerActionConvention
+    protected const string MethodNameOfGet = "Get";
+
+    /// <summary>
+    /// The names of the Post Method that are used to handle requests in Restier controllers.
+    /// </summary>
+    protected const string MethodNameOfPost = "Post";
+
+    /// <summary>
+    /// The names of the Put Method that are used to handle requests in Restier controllers.
+    /// </summary>
+    protected const string MethodNameOfPut = "Put";
+
+    /// <summary>
+    /// The names of the Patch Method that are used to handle requests in Restier controllers.
+    /// </summary>
+    protected const string MethodNameOfPatch = "Patch";
+
+    /// <summary>
+    /// The names of the Delete Method that are used to handle requests in Restier controllers.
+    /// </summary>
+    protected const string MethodNameOfDelete = "Delete";
+
+    /// <summary>
+    /// The names of the PostAction Method that are used to handle requests in Restier controllers.
+    /// </summary>
+    protected const string MethodNameOfPostAction = "PostAction";
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RestierEntitySetRoutingConvention"/> class.
+    /// </summary>
+    /// <param name="modelExtender">The model extender to look up whether this EntitySet is an extended entity set or not.</param>
+    public RestierRoutingConvention(RestierWebApiModelExtender modelExtender)
     {
-        private const string RestierControllerName = "Restier";
-        private const string MethodNameOfGet = "Get";
-        private const string MethodNameOfPost = "Post";
-        private const string MethodNameOfPut = "Put";
-        private const string MethodNameOfPatch = "Patch";
-        private const string MethodNameOfDelete = "Delete";
-        private const string MethodNameOfPostAction = "PostAction";
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="RestierRoutingConvention"/> class.
-        /// </summary>
-        /// <param name="order">The order of the routing convention.</param>
-        public RestierRoutingConvention(int order)
-        {
-            Order = order;
-        }
-
-        /// <inheritdoc />
-        public int Order { get; }
-
-        /*
-
-                /// <summary>
-                /// Selects the appropriate action based on the parsed OData URI.
-                /// </summary>
-                /// <param name="routeContext">The route context.</param>
-                /// <returns>An enumerable of ControllerActionDescriptors.</returns>
-                public IEnumerable<ControllerActionDescriptor> SelectAction(RouteContext routeContext)
-                {
-                    
-                }
-
-                private bool TryFindMatchingODataActions(RouteContext context, out IEnumerable<ControllerActionDescriptor> actions)
-                {
-                    var routingConventions = context.HttpContext.Request.GetRoutingConventions();
-                    if (routingConventions is not null)
-                    {
-                        foreach (var convention in routingConventions)
-                        {
-                            if (convention != this)
-                            {
-                                var actionDescriptor = convention.SelectAction(context);
-                                if (actionDescriptor?.Any() == true)
-                                {
-                                    actions = actionDescriptor;
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-
-                    actions = null;
-                    return false;
-                }
-
-                private static bool IsMetadataPath(ODataPath odataPath)
-                {
-                    return odataPath.PathTemplate == "~" || odataPath.PathTemplate == "~/$metadata";
-                }
-
-                private static bool IsAction(ODataPathSegment lastSegment)
-                {
-                    if (lastSegment is OperationSegment operationSeg)
-                    {
-                        if (operationSeg.Operations.FirstOrDefault() is IEdmAction)
-                        {
-                            return true;
-                        }
-                    }
-
-                    if (lastSegment is OperationImportSegment operationImportSeg)
-                    {
-                        if (operationImportSeg.OperationImports.FirstOrDefault() is IEdmActionImport)
-                        {
-                            return true;
-                        }
-                    }
-
-                    return false;
-                } */
-
-        /// <inheritdoc />
-        public bool AppliesToController(ODataControllerActionContext context)
-        {
-            Ensure.NotNull(context, nameof(context));
-            var controller = context.Controller;
-            var model = context.Model;
-            return string.Equals(controller.ControllerName, RestierControllerName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <inheritdoc />
-        public bool AppliesToAction(ODataControllerActionContext context)
-        {
-            Ensure.NotNull(context, nameof(context));
-            var controller = context.Controller;
-            var action = context.Action;
-            var model = context.Model;
-
-            action.AddSelector("Get",  "api/tests", model, new ODataPathTemplate(new EntitySetSegmentTemplate(model.FindDeclaredEntitySet("Books"))), null);
-
-            return string.Equals(action.ActionName, MethodNameOfDelete, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(action.ActionName, MethodNameOfGet, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(action.ActionName, MethodNameOfPatch, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(action.ActionName, MethodNameOfPost, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(action.ActionName, MethodNameOfPostAction, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(action.ActionName, MethodNameOfPut, StringComparison.OrdinalIgnoreCase);
-        }
+        Ensure.NotNull(modelExtender, nameof(modelExtender));
+        ExtendedEntitySetNames = modelExtender.EntitySetProperties.Select(x => x.Name).ToHashSet();
     }
 
+    /// <summary>
+    /// A hashset of extended EntitySet names that are used to determine if an EntitySet is an extended entity set.
+    /// </summary>
+    protected HashSet<string> ExtendedEntitySetNames { get; }
+
+    /// <inheritdoc />
+    public virtual bool AppliesToController(ODataControllerActionContext context)
+    {
+        var controllerNameComparison = context.Options?.RouteOptions?.EnableActionNameCaseInsensitive == true ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(context.Controller.ControllerName, RestierControllerName, controllerNameComparison);
+    }
+
+    /// <summary>
+    /// Creates a key segment template for the specified entity type and navigation source.
+    /// </summary>
+    /// <param name="entityType">The entity type.</param>
+    /// <param name="navigationSource">The navigation source.</param>
+    /// <param name="keyPrefix">The key prefix.</param>
+    /// <returns></returns>
+    protected static KeySegmentTemplate CreateKeySegment(IEdmEntityType entityType,
+        IEdmNavigationSource navigationSource, string keyPrefix = "key")
+    {
+        Ensure.NotNull(entityType, nameof(entityType));
+
+        IDictionary<string, string> keyTemplates = new Dictionary<string, string>();
+        var keys = entityType.Key().ToArray();
+        if (keys.Length == 1)
+        {
+            // Id={key}
+            keyTemplates[keys[0].Name] = $"{{{keyPrefix}}}";
+        }
+        else
+        {
+            // Id1={keyId1},Id2={keyId2}
+            foreach (var key in keys)
+            {
+                keyTemplates[key.Name] = $"{{{keyPrefix}{key.Name}}}";
+            }
+        }
+
+        return new KeySegmentTemplate(keyTemplates, entityType, navigationSource);
+    }
 }

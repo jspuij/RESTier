@@ -79,11 +79,6 @@ namespace Microsoft.Restier.AspNetCore
             var queryable = GetQuery(path);
             ETag etag;
 
-            var queryRequest = new QueryRequest(queryable)
-            {
-                ShouldReturnCount = shouldReturnCount,
-            };
-
 
             // TODO #365 Do not support additional path segment after function call now
             if (lastSegment is OperationImportSegment unboundSegment)
@@ -91,6 +86,11 @@ namespace Microsoft.Restier.AspNetCore
                 var operation = unboundSegment.OperationImports.FirstOrDefault();
                 Func<string, object> getParaValueFunc = p => unboundSegment.Parameters.FirstOrDefault(c => c.Name == p).Value;
                 result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, true, null, cancellationToken).ConfigureAwait(false);
+
+                var queryRequest = new QueryRequest(result)
+                {
+                    ShouldReturnCount = shouldReturnCount,
+                };
 
                 etag = ApplyQueryOptions(queryRequest, path, true);
                 result = queryRequest.Query;
@@ -104,17 +104,29 @@ namespace Microsoft.Restier.AspNetCore
 
                 if (lastSegment is OperationSegment segment)
                 {
+                    var queryRequest = new QueryRequest(queryable)
+                    {
+                        ShouldReturnCount = shouldReturnCount,
+                    };
+
                     result = await ExecuteQuery(queryRequest, cancellationToken).ConfigureAwait(false);
 
                     var operation = segment.Operations.FirstOrDefault();
                     Func<string, object> getParaValueFunc = p => segment.Parameters.FirstOrDefault(c => c.Name == p).Value;
                     result = await ExecuteOperationAsync(getParaValueFunc, operation.Name, true, result, cancellationToken).ConfigureAwait(false);
-
+                    queryRequest = new QueryRequest(result)
+                    {
+                        ShouldReturnCount = shouldReturnCount,
+                    };
                     etag = ApplyQueryOptions(queryRequest, path, true);
                     result = queryRequest.Query;
                 }
                 else
                 {
+                    var queryRequest = new QueryRequest(queryable)
+                    {
+                        ShouldReturnCount = shouldReturnCount,
+                    };
                     etag = ApplyQueryOptions(queryRequest, path, false);
                     result = await ExecuteQuery(queryRequest, cancellationToken).ConfigureAwait(false);
                 }

@@ -15,6 +15,9 @@
     <Project Path="src/Microsoft.Restier.EntityFramework/Microsoft.Restier.EntityFramework.csproj" />
     <Project Path="src/Microsoft.Restier.EntityFrameworkCore/Microsoft.Restier.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/src/Samples/">
+    <Project Path="src/Microsoft.Restier.Samples.Northwind.AspNetCore/Microsoft.Restier.Samples.Northwind.AspNetCore.csproj" />
+  </Folder>
   <Folder Name="/src/Web/" Id="bf61c3f1-7c7e-4515-8b51-14b374a034f9">
     <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
   </Folder>

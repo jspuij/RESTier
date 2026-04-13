@@ -59,7 +59,9 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
                     SingleProperty = (float)123.45,
                     // StreamProperty = new FileStream("temp.txt", FileMode.OpenOrCreate),
                     StringProperty = "Hello",
+#pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
                     TimeOfDayProperty = TimeOfDay.Now
+#pragma warning restore CS0618
                 }
             });
             libraryContext.Readers.Add(new Employee
@@ -85,7 +87,9 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
                     SingleProperty = (float)123.45,
                     // StreamProperty = new FileStream("temp.txt", FileMode.OpenOrCreate),
                     StringProperty = "Hello",
+#pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
                     TimeOfDayProperty = TimeOfDay.Now
+#pragma warning restore CS0618
                 }
             });
 

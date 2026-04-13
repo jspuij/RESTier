@@ -42,6 +42,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
 
         public string StringProperty { get; set; }
 
+#pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
         public TimeOfDay TimeOfDayProperty { get; set; }
+#pragma warning restore CS0618
     }
 }

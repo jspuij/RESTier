@@ -105,6 +105,7 @@ namespace Microsoft.Restier.EntityFramework
             }
 
             // Edm.Date => System.DateTime[SqlType = Date]
+#pragma warning disable CS0618 // Date and TimeOfDay are obsolete but still used by OData
             if (value is Date dateValue)
             {
                 return (DateTime)dateValue;
@@ -123,6 +124,7 @@ namespace Microsoft.Restier.EntityFramework
                 var timeOfDayValue = (TimeOfDay)value;
                 return (TimeSpan)timeOfDayValue;
             }
+#pragma warning restore CS0618
 
             // In case key is long type, when put an resource, key value will be from key parsing which is type of int
             if (value is int && type == typeof(long))

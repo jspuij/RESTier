@@ -192,7 +192,7 @@ public abstract class RestierOperationRoutingConvention : RestierRoutingConventi
         }
 
         IEdmNavigationSource targetEntitySet = null;
-        if (edmOperation.ReturnType != null)
+        if (edmOperation.GetReturn() != null)
         {
             targetEntitySet = edmOperation.GetTargetEntitySet(navigationSource, context.Model);
         }

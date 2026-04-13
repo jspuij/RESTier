@@ -177,7 +177,9 @@ namespace Microsoft.Restier.Tests.Core.Query
             var source = entityContainerElementItem.As<IEdmFunctionImport>();
             var edmType = Substitute.For<IEdmType>();
 
+#pragma warning disable CS0618 // ReturnType is obsolete
             source.Function.ReturnType.Definition.Returns(edmType);
+#pragma warning restore CS0618
             list.Add(entityContainerElementItem);
 
             model.EntityContainer.Returns(entityContainer);
@@ -211,7 +213,9 @@ namespace Microsoft.Restier.Tests.Core.Query
             var source = schemaElement.As<IEdmFunction>();
             var edmType = Substitute.For<IEdmType>();
 
+#pragma warning disable CS0618 // ReturnType is obsolete
             source.ReturnType.Definition.Returns(edmType);
+#pragma warning restore CS0618
             list.Add(schemaElement);
 
             model.SchemaElements.Returns(list);

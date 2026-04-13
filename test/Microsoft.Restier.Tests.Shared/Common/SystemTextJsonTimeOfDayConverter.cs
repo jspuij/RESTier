@@ -2,6 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 #if NET6_0_OR_GREATER
+#pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
 using Microsoft.OData.Edm;
 using System;
 using System.Globalization;

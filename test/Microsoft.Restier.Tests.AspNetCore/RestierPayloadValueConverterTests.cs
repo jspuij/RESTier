@@ -9,6 +9,7 @@ using Microsoft.Restier.AspNetCore;
 using NSubstitute;
 using Xunit;
 
+#pragma warning disable CS0618 // Date and TimeOfDay are obsolete but still used by OData
 namespace Microsoft.Restier.Tests.AspNetCore;
 
 /// <summary>

@@ -31,6 +31,13 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Marvel
         public MarvelContext()
             : base("MarvelContext") => Database.SetInitializer(new MarvelTestInitializer());
 
+        /// <summary>
+        /// Creates a new instance with an explicit connection string.
+        /// </summary>
+        /// <param name="connectionString">The connection string to use.</param>
+        public MarvelContext(string connectionString)
+            : base(connectionString) => Database.SetInitializer(new MarvelTestInitializer());
+
 #else
 
         #region EntitySet Properties

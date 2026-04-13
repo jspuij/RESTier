@@ -33,9 +33,16 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         #region Constructors
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
-        public LibraryContext() : base("LibraryContext") 
+        public LibraryContext() : base("LibraryContext")
+            => Database.SetInitializer(new LibraryTestInitializer());
+
+        /// <summary>
+        /// Creates a new instance with an explicit connection string.
+        /// </summary>
+        /// <param name="connectionString">The connection string to use.</param>
+        public LibraryContext(string connectionString) : base(connectionString)
             => Database.SetInitializer(new LibraryTestInitializer());
 
         #endregion

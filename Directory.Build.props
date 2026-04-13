@@ -112,7 +112,9 @@
 		<PackageReference Include="coverlet.collector" Version="6.*" />
 		<PackageReference Include="AwesomeAssertions" Version="8.*" PrivateAssets="All" />
 		<PackageReference Include="AwesomeAssertions.Analyzers" Version="0.*" PrivateAssets="All" />
-		<PackageReference Include="xunit.v3" Version="2.*" />
+		<PackageReference Include="xunit.v3" Version="3.*" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
 		<PackageReference Include="NSubstitute" Version="5.3.0"></PackageReference>
 	</ItemGroup>
 

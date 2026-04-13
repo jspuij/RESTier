@@ -41,4 +41,27 @@ public static partial class ServiceCollectionExtensions
 
         return AddEFProviderServices<TDbContext>(services);
     }
+
+    /// <summary>
+    /// This method is used to add entity framework providers service into container with an explicit connection string.
+    /// </summary>
+    /// <typeparam name="TDbContext">The DbContext type.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/>.</param>
+    /// <param name="connectionString">The connection string to use for the DbContext.</param>
+    /// <returns>Current <see cref="IServiceCollection"/>.</returns>
+    public static IServiceCollection AddEF6ProviderServices<TDbContext>(this IServiceCollection services, string connectionString)
+        where TDbContext : DbContext
+    {
+        Ensure.NotNull(services, nameof(services));
+        Ensure.NotNull(connectionString, nameof(connectionString));
+
+        services.TryAddScoped(sp =>
+        {
+            var dbContext = (TDbContext)Activator.CreateInstance(typeof(TDbContext), connectionString);
+            dbContext.Configuration.ProxyCreationEnabled = false;
+            return dbContext;
+        });
+
+        return AddEFProviderServices<TDbContext>(services);
+    }
 }

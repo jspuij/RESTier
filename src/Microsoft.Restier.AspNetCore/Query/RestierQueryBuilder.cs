@@ -96,7 +96,7 @@ namespace Microsoft.Restier.AspNetCore.Query
 
         internal static IReadOnlyDictionary<string, object> GetPathKeyValues(ODataPath path)
         {
-            var segments = path as IList<ODataPathSegment>;
+            var segments = path.ToList();
 
             if (segments.Count == 2 && segments[0] is EntitySetSegment && segments[1] is KeySegment keySegment)
             {

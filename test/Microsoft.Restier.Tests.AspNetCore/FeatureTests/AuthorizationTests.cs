@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Common;
@@ -37,7 +38,7 @@ public class AuthorizationTests : RestierTestBase<LibraryApi>
             {
                 services
                     .AddEntityFrameworkServices<LibraryContext>()
-                    .AddSingleton<IQueryExpressionAuthorizer, DisallowEverythingAuthorizer>();
+                    .AddSingleton<IChainedService<IQueryExpressionAuthorizer>, DisallowEverythingAuthorizer>();
             });
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 

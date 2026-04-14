@@ -82,7 +82,7 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
         feature.Path = parsedPath;
         feature.Model = model;
         feature.RoutePrefix = routePrefix;
-        feature.BaseAddress = BuildBaseAddress(httpContext.Request, routePrefix).ToString();
+        feature.BaseAddress = BuildBaseAddress(httpContext.Request, routePrefix);
 
         // Determine the controller action based on HTTP method and path.
         var actionName = DetermineActionName(httpContext.Request.Method, parsedPath);
@@ -185,14 +185,13 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
     /// <summary>
     /// Builds the OData base address from the request and route prefix.
     /// </summary>
-    private static Uri BuildBaseAddress(HttpRequest request, string routePrefix)
+    private static string BuildBaseAddress(HttpRequest request, string routePrefix)
     {
         var baseUri = $"{request.Scheme}://{request.Host}";
         if (!string.IsNullOrEmpty(routePrefix))
         {
             baseUri += "/" + routePrefix;
         }
-        baseUri += "/";
-        return new Uri(baseUri);
+        return baseUri + "/";
     }
 }

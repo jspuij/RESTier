@@ -26,7 +26,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         /// <summary>
         /// Tests if the query pipeline is correctly returning 200 StatusCodes when legitimate queries to a resource simply return no results.
         /// </summary>
-        [Fact(Skip = "FilterSegment handler not yet implemented in RestierQueryBuilder")]
+        [Fact]
         public async Task BoundFunctions_CanHaveFilterPathSegment()
         {
             /* JHC Note:
@@ -48,10 +48,10 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
             results.Response.Should().NotBeNull();
             results.Response.Items.Should().NotBeNullOrEmpty();
             results.Response.Items.Should().HaveCount(2);
-            results.Response.Items.All(c => c.Title.EndsWith(" | Discontinued", StringComparison.CurrentCulture)).Should().BeTrue();
+            results.Response.Items.All(c => c.Title.EndsWith(" | Intercepted | Discontinued | Intercepted", StringComparison.CurrentCulture)).Should().BeTrue();
         }
 
-        [Fact(Skip = "FilterSegment handler not yet implemented in RestierQueryBuilder")]
+        [Fact]
         public async Task FilterPathSegment_FiltersCollection()
         {
             // $filter as a path segment without a subsequent bound function

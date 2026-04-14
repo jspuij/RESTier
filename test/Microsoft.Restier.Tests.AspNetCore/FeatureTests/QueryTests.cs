@@ -26,7 +26,6 @@ public class QueryTests : RestierTestBase<LibraryApi>
         var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
             HttpMethod.Get,
             resource: "/LibraryCards",
-            routeName: "ApiTests",
             serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 

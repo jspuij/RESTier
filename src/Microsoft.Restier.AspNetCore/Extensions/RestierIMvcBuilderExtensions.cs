@@ -57,6 +57,7 @@ public static class RestierIMvcBuilderExtensions
     {
         Ensure.NotNull(builder, nameof(builder));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<Routing.RestierRouteValueTransformer>();
         builder.AddOData(setupAction);
         return builder;
     }
@@ -72,6 +73,7 @@ public static class RestierIMvcBuilderExtensions
     {
         Ensure.NotNull(builder, nameof(builder));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<Routing.RestierRouteValueTransformer>();
         builder.AddOData(setupAction);
         return builder;
     }
@@ -87,6 +89,7 @@ public static class RestierIMvcBuilderExtensions
     {
         Ensure.NotNull(builder, nameof(builder));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<Routing.RestierRouteValueTransformer>();
         builder.AddOData(setupAction);
         builder.Services.TryAddEnumerable(
             ServiceDescriptor.Transient<IConfigureOptions<MvcOptions>, RestierMvcOptionsSetup>(sp => new RestierMvcOptionsSetup(alternateBaseUri)));
@@ -105,6 +108,7 @@ public static class RestierIMvcBuilderExtensions
     {
         Ensure.NotNull(builder, nameof(builder));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<Routing.RestierRouteValueTransformer>();
         builder.AddOData(setupAction);
         builder.Services.TryAddEnumerable(
             ServiceDescriptor.Transient<IConfigureOptions<MvcOptions>, RestierMvcOptionsSetup>(sp => new RestierMvcOptionsSetup(alternateBaseUri)));

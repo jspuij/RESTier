@@ -42,6 +42,9 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
                 .Function("TopCustomers")
                 .ReturnsCollectionFromEntitySet<TestCustomer>("Customers");
 
+            // Unbound action (action import)
+            builder.Action("ResetDatabase");
+
             return builder.GetEdmModel();
         }
 
@@ -350,6 +353,72 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
             result["action"].Should().Be("Get");
         }
 
+        [Fact]
+        public async Task Post_ActionImport_ReturnsPostActionAction()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "ResetDatabase" };
+            var httpContext = CreateHttpContext("POST", "/ResetDatabase");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().NotBeNull();
+            result["controller"].Should().Be("Restier");
+            result["action"].Should().Be("PostAction");
+        }
+
+        [Fact]
+        public async Task Options_UnsupportedMethod_ReturnsNull()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "Customers" };
+            var httpContext = CreateHttpContext("OPTIONS", "/Customers");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task NullHttpContext_ReturnsNull()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "Customers" };
+
+            // Act
+            var result = await transformer.TransformAsync(null, values);
+
+            // Assert
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task Get_NavigationProperty_ReturnsGetAction()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "Customers(1)/Orders" };
+            var httpContext = CreateHttpContext("GET", "/Customers(1)/Orders");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().NotBeNull();
+            result["controller"].Should().Be("Restier");
+            result["action"].Should().Be("Get");
+
+            var feature = httpContext.ODataFeature();
+            feature.Path.Should().HaveCount(3); // EntitySet + Key + NavigationProperty
+        }
+
         #endregion
 
         #region Entity Classes
@@ -359,6 +428,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
         {
             public int Id { get; set; }
             public string Name { get; set; }
+            public System.Collections.Generic.List<TestOrder> Orders { get; set; }
         }
 
         /// <summary>Entity class for use with ODataConventionModelBuilder.</summary>

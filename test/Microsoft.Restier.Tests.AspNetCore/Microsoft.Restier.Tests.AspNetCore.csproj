@@ -24,17 +24,6 @@
 	<ItemGroup>
 	  <Compile Remove="DependencyInjectionTests.cs" />
 	  <Compile Remove="ExceptionHandlerTests.cs" />
-	  <Compile Remove="FeatureTests\AuthorizationTests.cs" />
-	  <Compile Remove="FeatureTests\BatchTests.cs" />
-	  <Compile Remove="FeatureTests\ExpandTests.cs" />
-	  <Compile Remove="FeatureTests\InsertTests.cs" />
-	  <Compile Remove="FeatureTests\InTests.cs" />
-	  <Compile Remove="FeatureTests\MetadataTests.cs" />
-	  <Compile Remove="FeatureTests\NavigationPropertyTests.cs" />
-	  <Compile Remove="FeatureTests\PagingTests.cs" />
-	  <Compile Remove="FeatureTests\QueryTests.cs" />
-	  <Compile Remove="FeatureTests\UpdateTests.cs" />
-	  <Compile Remove="FeatureTests\ValidationTests.cs" />
 	  <Compile Remove="Model\RestierModelBuilderTests.cs" />
 	  <Compile Remove="Model\RestierModelExtenderTests.cs" />
 	  <Compile Remove="Model\RestierWebApiOperationModelBuilderTests.cs" />

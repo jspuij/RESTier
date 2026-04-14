@@ -51,6 +51,25 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
             results.Response.Items.All(c => c.Title.EndsWith(" | Discontinued", StringComparison.CurrentCulture)).Should().BeTrue();
         }
 
+        [Fact(Skip = "FilterSegment handler not yet implemented in RestierQueryBuilder")]
+        public async Task FilterPathSegment_FiltersCollection()
+        {
+            // $filter as a path segment without a subsequent bound function
+            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Books/$filter(endswith(Title,'The'))",
+                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+            outputHelper.Write(content);
+            response.IsSuccessStatusCode.Should().BeTrue();
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.DeserializeResponseAsync<ODataV4List<Book>>();
+            results.Should().NotBeNull();
+            results.Response.Should().NotBeNull();
+            results.Response.Items.Should().NotBeNullOrEmpty();
+            results.Response.Items.Should().HaveCount(2);
+            results.Response.Items.All(c => c.Title.EndsWith("The", StringComparison.Ordinal)).Should().BeTrue();
+        }
+
         /// <summary>
         /// Tests if the query pipeline is correctly returning 200 StatusCodes when legitimate queries to a resource simply return no results.
         /// </summary>

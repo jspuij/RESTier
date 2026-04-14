@@ -80,8 +80,11 @@ namespace Microsoft.Restier.Breakdance
                 builder.UseAuthorization();
 
                 builder.UseDeveloperExceptionPage();
-                builder.UseEndpoints(endpoints => 
-                    endpoints.MapControllers());
+                builder.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapControllers();
+                    endpoints.MapRestier();
+                });
             });
         }
 

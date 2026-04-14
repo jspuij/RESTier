@@ -92,6 +92,7 @@ namespace Microsoft.Restier.Samples.Northwind.AspNetCore
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+                endpoints.MapRestier();
             });
 
             // TODO: Re-enable when Swagger project is ported to new OData APIs.

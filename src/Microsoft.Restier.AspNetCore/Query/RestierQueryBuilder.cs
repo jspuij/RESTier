@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Query.Expressions;
 using Microsoft.AspNetCore.OData.Routing.Template;
 using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
@@ -54,6 +56,7 @@ namespace Microsoft.Restier.AspNetCore.Query
             handlers[typeof(NavigationPropertySegment)] = HandleNavigationPathSegment;
             handlers[typeof(PropertySegment)] = HandlePropertyAccessPathSegment;
             handlers[typeof(TypeSegment)] = HandleEntityTypeSegment;
+            handlers[typeof(FilterSegment)] = HandleFilterPathSegment;
 
             // Complex cast is not supported by EF, and is not supported here
             // this.handlers[ODataSegmentKinds.ComplexCast] = null;
@@ -288,10 +291,24 @@ namespace Microsoft.Restier.AspNetCore.Query
             }
 
             if (edmType.TypeKind == EdmTypeKind.Entity)
-            {   
+            {
                 currentType = edmType.GetClrType(edmModel);
                 queryable = ExpressionHelpers.OfType(queryable, currentType);
             }
+        }
+
+        private void HandleFilterPathSegment(ODataPathSegment segment)
+        {
+            var filterSegment = (FilterSegment)segment;
+
+            // Wrap the segment's expression in a FilterClause so we can reuse
+            // the ASP.NET Core OData FilterBinder infrastructure.
+            var filterClause = new FilterClause(filterSegment.Expression, filterSegment.RangeVariable);
+
+            var filterBinder = new FilterBinder();
+            var context = new QueryBinderContext(edmModel, new ODataQuerySettings(), currentType);
+
+            queryable = filterBinder.ApplyBind(queryable, filterClause, context);
         }
     }
 }

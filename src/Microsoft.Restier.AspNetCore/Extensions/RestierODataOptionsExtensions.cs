@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.OData.Batch;
 using Microsoft.AspNetCore.OData.Formatter.Deserialization;
@@ -119,6 +118,9 @@ public static class RestierODataOptionsExtensions
 
         oDataOptions.AddRouteComponents(routePrefix, model, services =>
         {
+            // Register the Restier route marker so MapRestier() can identify this as a Restier route.
+            services.AddSingleton<RestierRouteMarker>();
+
             //RWM: Add the API as the specific API type first, then if an ApiBase instance is requested from the container,
             //     get the existing instance.
             services
@@ -182,14 +184,6 @@ public static class RestierODataOptionsExtensions
                 });
             }
         });
-
-        // Add the Restier routing conventions to the OData options.
-        oDataOptions.Conventions.Add(new RestierActionRoutingConvention(modelExtender));
-        oDataOptions.Conventions.Add(new RestierEntitySetRoutingConvention(modelExtender));
-        oDataOptions.Conventions.Add(new RestierEntityRoutingConvention(modelExtender));
-        oDataOptions.Conventions.Add(new RestierFunctionRoutingConvention(modelExtender));
-        oDataOptions.Conventions.Add(new RestierOperationImportRoutingConvention(modelExtender));
-        oDataOptions.Conventions.Add(new RestierSingletonRoutingConvention(modelExtender));
 
         return oDataOptions;
     }

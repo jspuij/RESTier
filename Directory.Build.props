@@ -100,7 +100,23 @@
 
 	<PropertyGroup>
 		<StandardTestTfms>net48</StandardTestTfms>
+		<RestierBreakdanceVersion>[7.0.0, 8.0.0)</RestierBreakdanceVersion>
+		<RestierEasyAfVersion>[3.0.0, 4.0.0)</RestierEasyAfVersion>
+		<RestierNet9DependencyInjectionVersion>[9.*, 10.0.0)</RestierNet9DependencyInjectionVersion>
+		<RestierNet9EntityFrameworkVersion>[9.*, 10.0.0)</RestierNet9EntityFrameworkVersion>
+		<RestierNet9SystemTextJsonVersion>[9.*, 10.0.0)</RestierNet9SystemTextJsonVersion>
+		<RestierNet9UserSecretsVersion>[9.*, 10.0.0)</RestierNet9UserSecretsVersion>
+		<RestierNet9AspNetCoreTestHostVersion>[9.*, 10.0.0)</RestierNet9AspNetCoreTestHostVersion>
 	</PropertyGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(RestierNet9DependencyInjectionVersion)" PrivateAssets="All" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="$(RestierNet9UserSecretsVersion)" PrivateAssets="All" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="$(RestierNet9UserSecretsVersion)" PrivateAssets="All" />
+		<PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="$(RestierNet9UserSecretsVersion)" PrivateAssets="All" />
+		<PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="$(RestierNet9UserSecretsVersion)" PrivateAssets="All" />
+		<PackageReference Include="System.Text.Json" Version="$(RestierNet9SystemTextJsonVersion)" PrivateAssets="All" />
+	</ItemGroup>
 
 	<ItemGroup Condition=" $(IsTestProject) != 'true' AND $(IsSampleProject) != 'true'">
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />

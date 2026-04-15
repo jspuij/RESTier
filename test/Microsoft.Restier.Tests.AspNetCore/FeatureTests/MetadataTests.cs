@@ -1,75 +1,59 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using CloudNimble.Breakdance.Assemblies;
+using System;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EF6;
 using System.IO;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
-[Collection("LibraryApi")]
-public class MetadataTests : RestierTestBase<LibraryApi>
+public abstract class MetadataTests<TApi, TContext> : RestierTestBase<TApi>
+    where TApi : ApiBase
+    where TContext : class
 {
     private const string RelativePath = "..//..//..//..//Microsoft.Restier.Tests.AspNetCore//";
     private const string BaselineFolder = "Baselines//";
 
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    protected abstract Task<XDocument> GetMarvelApiMetadataAsync();
+
     [Fact]
     public async Task LibraryApi_CompareCurrentApiMetadataToPriorRun()
     {
-        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}{nameof(LibraryApi)}-ApiMetadata.txt";
+        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}{typeof(TApi).Name}-ApiMetadata.txt";
         File.Exists(fileName).Should().BeTrue();
 
         var oldReport = File.ReadAllText(fileName);
-        var newReport = await RestierTestHelpers.GetApiMetadataAsync<LibraryApi>(
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+        var newReport = await RestierTestHelpers.GetApiMetadataAsync<TApi>(
+            serviceCollection: ConfigureServices);
 
         TraceListener.WriteLine($"Old Report: {oldReport}");
         TraceListener.WriteLine($"New Report: {newReport}");
 
         oldReport.Should().BeEquivalentTo(newReport.ToString());
-    }
-
-    [BreakdanceManifestGenerator]
-    private async Task LibraryApi_SaveMetadataDocument(string projectPath)
-    {
-        await RestierTestHelpers.WriteCurrentApiMetadata<LibraryApi>(
-            Path.Combine(projectPath, BaselineFolder),
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
-        File.Exists($"{Path.Combine(projectPath, BaselineFolder)}{nameof(LibraryApi)}-ApiMetadata.txt").Should().BeTrue();
     }
 
     [Fact]
     public async Task MarvelApi_CompareCurrentApiMetadataToPriorRun()
     {
-        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}{nameof(MarvelApi)}-ApiMetadata.txt";
+        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}MarvelApi-ApiMetadata.txt";
         File.Exists(fileName).Should().BeTrue();
 
         var oldReport = File.ReadAllText(fileName);
-        var newReport = await RestierTestHelpers.GetApiMetadataAsync<MarvelApi>(
-            serviceCollection: services => services.AddEntityFrameworkServices<MarvelContext>());
+        var newReport = await GetMarvelApiMetadataAsync();
 
         TraceListener.WriteLine($"Old Report: {oldReport}");
         TraceListener.WriteLine($"New Report: {newReport}");
 
         oldReport.Should().BeEquivalentTo(newReport.ToString());
-    }
-
-    [BreakdanceManifestGenerator]
-    private async Task MarvelApi_SaveMetadataDocument(string projectPath)
-    {
-        await RestierTestHelpers.WriteCurrentApiMetadata<MarvelApi>(
-            Path.Combine(projectPath, BaselineFolder),
-            serviceCollection: services => services.AddEntityFrameworkServices<MarvelContext>());
-        File.Exists($"{Path.Combine(projectPath, BaselineFolder)}{nameof(MarvelApi)}-ApiMetadata.txt").Should().BeTrue();
     }
 
     [Fact]
@@ -85,13 +69,5 @@ public class MetadataTests : RestierTestBase<LibraryApi>
         TraceListener.WriteLine($"New Report: {newReport}");
 
         oldReport.Should().BeEquivalentTo(newReport.ToString());
-    }
-
-    [BreakdanceManifestGenerator]
-    private async Task StoreApi_SaveMetadataDocument(string projectPath)
-    {
-        await RestierTestHelpers.WriteCurrentApiMetadata<StoreApi>(
-            Path.Combine(projectPath, BaselineFolder));
-        File.Exists($"{Path.Combine(projectPath, BaselineFolder)}{nameof(StoreApi)}-ApiMetadata.txt").Should().BeTrue();
     }
 }

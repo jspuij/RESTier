@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
@@ -15,214 +15,173 @@ using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Restier.Tests.Shared.Extensions;
+using Xunit;
 
-#if NET6_0_OR_GREATER
-namespace Microsoft.Restier.Tests.AspNetCore
-#else
-namespace Microsoft.Restier.Tests.AspNet
-#endif
+namespace Microsoft.Restier.Tests.AspNetCore;
+
+/// <summary>
+/// Tests that verify RESTier's exception handling correctly maps exceptions to HTTP status codes.
+/// </summary>
+public class ExceptionHandlerTests : RestierTestBase<StoreApi>
 {
+    private const string conflictMessage = "Record could not be saved.";
+    private const string innerExceptionMessage = "More details about what happened.";
+    private const string securityError = "Security error.";
+    private const string somethingHappened = "Something happened.";
 
-#if NET6_0_OR_GREATER
-
-    [TestClass]
-    [TestCategory("Endpoint Routing")]
-    public class ExceptionHandlerTests_EndpointRouting : ExceptionHandlerTests
+    [Fact]
+    public async Task ODataException_Returns400()
     {
-        public ExceptionHandlerTests_EndpointRouting() : base(true)
+        static void di(IServiceCollection services)
         {
+            services
+                .AddTestStoreApiServices()
+                .AddChainedService<IQueryExpressionSourcer>((sp, next) => new ODataExceptionSourcer());
         }
+
+        var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Products", serviceCollection: di);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.IsSuccessStatusCode.Should().BeFalse();
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var result = await response.DeserializeResponseAsync<Product, ODataV4ErrorResponse>();
+        result.Should().NotBeNull();
+        result.Response.Should().BeNull();
+        result.ErrorContent.Should().NotBeNull();
+        result.ErrorContent.Error.Message.Should().Be(somethingHappened);
     }
 
-    [TestClass]
-    [TestCategory("Legacy Routing")]
-    public class ExceptionHandlerTests_LegacyRouting : ExceptionHandlerTests
+    [Fact]
+    public async Task ShouldReturn403HandlerThrowsSecurityException()
     {
-        public ExceptionHandlerTests_LegacyRouting() : base(false)
+        static void di(IServiceCollection services)
         {
+            services
+                .AddTestStoreApiServices()
+                .AddChainedService<IQueryExpressionSourcer>((sp, next) => new SecurityExceptionSourcer());
+        }
+
+        var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Products", serviceCollection: di);
+        response.IsSuccessStatusCode.Should().BeFalse();
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var result = await response.DeserializeResponseAsync<Product, ODataV4ErrorResponse>();
+        result.Should().NotBeNull();
+        result.Response.Should().BeNull();
+        result.ErrorContent.Should().NotBeNull();
+        result.ErrorContent.Error.Message.Should().Be(securityError);
+    }
+
+    [Fact]
+    public async Task NullReferenceException_ReturnsProperPayload()
+    {
+        static void di(IServiceCollection services)
+        {
+            services
+                .AddTestStoreApiServices()
+                .AddChainedService<IQueryExpressionSourcer>((sp, next) => new NullReferenceExceptionSourcer());
+        }
+
+        var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Products", serviceCollection: di);
+        response.IsSuccessStatusCode.Should().BeFalse();
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+
+        var result = await response.DeserializeResponseAsync<Product, ODataV4ErrorResponse>();
+        result.Should().NotBeNull();
+        result.Response.Should().BeNull();
+        result.ErrorContent.Should().NotBeNull();
+        result.ErrorContent.Error.Message.Should().Contain("magic word");
+    }
+
+    #region Test Resources
+
+    /// <summary>
+    /// Throws an <see cref="ODataException"/> without an InnerException.
+    /// </summary>
+    private class ODataExceptionSourcer : IQueryExpressionSourcer
+    {
+        public IQueryExpressionSourcer Inner { get; set; }
+
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
+        {
+            throw new ODataException(somethingHappened);
         }
     }
 
     /// <summary>
-    /// 
+    /// Throws an <see cref="ODataException"/> with an InnerException.
     /// </summary>
-    [TestClass]
-    public abstract class ExceptionHandlerTests : RestierTestBase<StoreApi>
+    private class ODataInnerExceptionSourcer : IQueryExpressionSourcer
     {
+        public IQueryExpressionSourcer Inner { get; set; }
 
-        public ExceptionHandlerTests(bool useEndpointRouting) : base(useEndpointRouting)
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
         {
-            //AddRestierAction = builder =>
-            //{
-            //    builder.AddRestierApi<StoreApi>(services => services.AddEntityFrameworkServices<StoreContext>());
-            //};
-            //MapRestierAction = routeBuilder =>
-            //{
-            //    routeBuilder.MapApiRoute<StoreApi>(WebApiConstants.RouteName, WebApiConstants.RoutePrefix, false);
-            //};
+            throw new ODataException(somethingHappened, new Exception(innerExceptionMessage));
         }
-
-        //[TestInitialize]
-        //public void ClaimsTestSetup() => TestSetup();
-
-#else
+    }
 
     /// <summary>
-    /// 
+    /// Throws a <see cref="NullReferenceException"/>.
     /// </summary>
-    [TestClass]
-    public class ExceptionHandlerTests : RestierTestBase
+    private class NullReferenceExceptionSourcer : IQueryExpressionSourcer
     {
+        public IQueryExpressionSourcer Inner { get; set; }
 
-#endif
-
-        private const string conflictMessage = "Record could not be saved.";
-        private const string innerExceptionMessage = "More details about what happened.";
-        private const string securityError = "Security error.";
-        private const string somethingHappened = "Something happened.";
-
-        [TestMethod]
-        public async Task ODataException_Returns403()
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
         {
-            static void di(IServiceCollection services)
-            {
-                services
-                    .AddTestStoreApiServices()
-                    .AddChainedService<IQueryExpressionSourcer>((sp, next) => new ODataExceptionSourcer());
-            }
-
-            var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Products", serviceCollection: di, useEndpointRouting: UseEndpointRouting);
-            var content = await TestContext.LogAndReturnMessageContentAsync(response);
-
-            response.IsSuccessStatusCode.Should().BeFalse();
-            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-
-            var result = await response.DeserializeResponseAsync<Product, ODataV4ErrorResponse>();
-            result.Should().NotBeNull();
-            result.Response.Should().BeNull();
-            result.ErrorContent.Should().NotBeNull();
-            result.ErrorContent.Error.Message.Should().Be(somethingHappened);
+            throw new NullReferenceException("Ah ah ah, you didn't say the magic word!");
         }
-
-        [TestMethod]
-        public async Task ShouldReturn403HandlerThrowsSecurityException()
-        {
-            static void di(IServiceCollection services)
-            {
-                services
-                    .AddTestStoreApiServices()
-                    .AddChainedService<IQueryExpressionSourcer>((sp, next) => new SecurityExceptionSourcer());
-            }
-
-            var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Products", serviceCollection: di, useEndpointRouting: UseEndpointRouting);
-            response.IsSuccessStatusCode.Should().BeFalse();
-            response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-
-            var result = await response.DeserializeResponseAsync<Product, ODataV4ErrorResponse>();
-            result.Should().NotBeNull();
-            result.Response.Should().BeNull();
-            result.ErrorContent.Should().NotBeNull();
-            result.ErrorContent.Error.Message.Should().Be(securityError);
-        }
-
-        [TestMethod]
-        public async Task NullReferenceException_ReturnsProperPayload()
-        {
-            static void di(IServiceCollection services)
-            {
-                services
-                    .AddTestStoreApiServices()
-                    .AddChainedService<IQueryExpressionSourcer>((sp, next) => new NullReferenceExceptionSourcer());
-            }
-
-            var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Products", serviceCollection: di, useEndpointRouting: UseEndpointRouting);
-            response.IsSuccessStatusCode.Should().BeFalse();
-            response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
-
-            var result = await response.DeserializeResponseAsync<Product, ODataV4ErrorResponse>();
-            result.Should().NotBeNull();
-            result.Response.Should().BeNull();
-            result.ErrorContent.Should().NotBeNull();
-            result.ErrorContent.Error.Message.Should().Contain("magic word");
-        }
-
-        #region Test Resources
-
-        /// <summary>
-        /// Throws an <see cref="ODataException"/> without an InnerException.
-        /// </summary>
-        private class ODataExceptionSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new ODataException(somethingHappened);
-            }
-        }
-
-        /// <summary>
-        /// Throws an <see cref="ODataException"/> with an InnerException.
-        /// </summary>
-        private class ODataInnerExceptionSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new ODataException(somethingHappened, new Exception(innerExceptionMessage));
-            }
-        }
-
-        /// <summary>
-        /// Throws a <see cref="SecurityException"/> without any parameters.
-        /// </summary>
-        private class NullReferenceExceptionSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new NullReferenceException("Ah ah ah, you didn't say the magic word!");
-            }
-        }
-
-        /// <summary>
-        /// Throws a <see cref="SecurityException"/> without any parameters.
-        /// </summary>
-        private class SecurityExceptionSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new SecurityException();
-            }
-        }
-
-        /// <summary>
-        /// Throws a <see cref="SecurityException"/> without any parameters.
-        /// </summary>
-        private class SecurityExceptionMessageSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new SecurityException(somethingHappened);
-            }
-        }
-
-        private class StatusCodeExceptionSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new StatusCodeException(HttpStatusCode.Conflict, conflictMessage);
-            }
-        }
-
-        private class StatusCodeInnerExceptionSourcer : IQueryExpressionSourcer
-        {
-            public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
-            {
-                throw new StatusCodeException(HttpStatusCode.Conflict, conflictMessage,
-                    new Exception(innerExceptionMessage));
-            }
-        }
-
-        #endregion
-
-
     }
+
+    /// <summary>
+    /// Throws a <see cref="SecurityException"/> without any parameters.
+    /// </summary>
+    private class SecurityExceptionSourcer : IQueryExpressionSourcer
+    {
+        public IQueryExpressionSourcer Inner { get; set; }
+
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
+        {
+            throw new SecurityException();
+        }
+    }
+
+    /// <summary>
+    /// Throws a <see cref="SecurityException"/> with a message.
+    /// </summary>
+    private class SecurityExceptionMessageSourcer : IQueryExpressionSourcer
+    {
+        public IQueryExpressionSourcer Inner { get; set; }
+
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
+        {
+            throw new SecurityException(somethingHappened);
+        }
+    }
+
+    private class StatusCodeExceptionSourcer : IQueryExpressionSourcer
+    {
+        public IQueryExpressionSourcer Inner { get; set; }
+
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
+        {
+            throw new StatusCodeException(HttpStatusCode.Conflict, conflictMessage);
+        }
+    }
+
+    private class StatusCodeInnerExceptionSourcer : IQueryExpressionSourcer
+    {
+        public IQueryExpressionSourcer Inner { get; set; }
+
+        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
+        {
+            throw new StatusCodeException(HttpStatusCode.Conflict, conflictMessage,
+                new Exception(innerExceptionMessage));
+        }
+    }
+
+    #endregion
 }

@@ -7,11 +7,7 @@
 		<StrongNamePublicKey>$(StrongNamePublicKey)</StrongNamePublicKey>
 	</PropertyGroup>
 
-	<ItemGroup>
-	  <Compile Remove="Extensions\ServiceCollectionExtensions.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
+<ItemGroup>
 		<InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNet, $(StrongNamePublicKey)" />
 		<InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNetCore, $(StrongNamePublicKey)" />
 		<InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNetCorePlusEF6, $(StrongNamePublicKey)" />

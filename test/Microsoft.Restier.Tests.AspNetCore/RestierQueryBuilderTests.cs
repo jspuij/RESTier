@@ -1,95 +1,40 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System.Net.Http;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Net.Http;
-using System.Threading.Tasks;
+using Microsoft.Restier.Tests.Shared.Extensions;
+using Xunit;
 
-#if NET6_0_OR_GREATER
-namespace Microsoft.Restier.Tests.AspNetCore
-#else
-namespace Microsoft.Restier.Tests.AspNet
-#endif
+namespace Microsoft.Restier.Tests.AspNetCore;
+
+/// <summary>
+/// Tests that verify various key types work correctly with the RESTier query builder.
+/// </summary>
+public class RestierQueryBuilderTests : RestierTestBase<StoreApi>
 {
-
-#if NET6_0_OR_GREATER
-
-    [TestClass]
-    [TestCategory("Endpoint Routing")]
-    public class RestierQueryBuilderTests_EndpointRouting : RestierQueryBuilderTests
+    private static void di(IServiceCollection services)
     {
-        public RestierQueryBuilderTests_EndpointRouting() : base(true)
-        {
-        }
+        services.AddTestStoreApiServices();
     }
 
-    [TestClass]
-    [TestCategory("Legacy Routing")]
-    public class RestierQueryBuilderTests_LegacyRouting : RestierQueryBuilderTests
+    [Fact]
+    public async Task TestInt16AsKey()
     {
-        public RestierQueryBuilderTests_LegacyRouting() : base(false)
-        {
-        }
+        var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Customers(1)", serviceCollection: di);
+        response.IsSuccessStatusCode.Should().BeTrue();
+        TraceListener.WriteLine(await response.Content.ReadAsStringAsync(Xunit.TestContext.Current.CancellationToken));
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    [TestClass]
-    public abstract class RestierQueryBuilderTests : RestierTestBase<StoreApi>
+    [Fact]
+    public async Task TestInt64AsKey()
     {
-
-        public RestierQueryBuilderTests(bool useEndpointRouting) : base(useEndpointRouting)
-        {
-            //AddRestierAction = builder =>
-            //{
-            //    builder.AddRestierApi<StoreApi>(services => services.AddEntityFrameworkServices<LibraryContext>());
-            //};
-            //MapRestierAction = routeBuilder =>
-            //{
-            //    routeBuilder.MapApiRoute<StoreApi>(WebApiConstants.RouteName, WebApiConstants.RoutePrefix, false);
-            //};
-        }
-
-        //[TestInitialize]
-        //public void ClaimsTestSetup() => TestSetup();
-
-#else
-
-    /// <summary>
-    /// 
-    /// </summary>
-    [TestClass]
-    public class RestierQueryBuilderTests : RestierTestBase
-    {
-
-#endif
-
-        void di(IServiceCollection services)
-        {
-            services.AddTestStoreApiServices();
-        }
-
-        [TestMethod]
-        public async Task TestInt16AsKey()
-        {
-            var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Customers(1)", serviceCollection: di, useEndpointRouting: UseEndpointRouting);
-            response.IsSuccessStatusCode.Should().BeTrue();
-            TestContext.WriteLine(await response.Content.ReadAsStringAsync());
-        }
-
-        [TestMethod]
-        public async Task TestInt64AsKey()
-        {
-            var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Stores(1)", serviceCollection: di, useEndpointRouting: UseEndpointRouting);
-            response.IsSuccessStatusCode.Should().BeTrue();
-            TestContext.WriteLine(await response.Content.ReadAsStringAsync());
-        }
-
+        var response = await RestierTestHelpers.ExecuteTestRequest<StoreApi>(HttpMethod.Get, resource: "/Stores(1)", serviceCollection: di);
+        response.IsSuccessStatusCode.Should().BeTrue();
+        TraceListener.WriteLine(await response.Content.ReadAsStringAsync(Xunit.TestContext.Current.CancellationToken));
     }
-
 }

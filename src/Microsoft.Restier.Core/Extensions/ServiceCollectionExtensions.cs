@@ -36,6 +36,25 @@ namespace Microsoft.Restier.Core
             return services.Count(sd => sd.ServiceType == typeof(TService));
         }
 
+        /// <summary>
+        /// Registers a chained service implementation with the <see cref="IServiceCollection"/>.
+        /// </summary>
+        /// <typeparam name="TService">The service type to register.</typeparam>
+        /// <param name="services">The <see cref="IServiceCollection"/> to register the service with.</param>
+        /// <param name="factory">A factory that creates the service instance. The first parameter is the <see cref="IServiceProvider"/>,
+        /// the second is the next (inner) service in the chain, which may be <c>null</c>.</param>
+        /// <returns>The <see cref="IServiceCollection"/> for chaining.</returns>
+        public static IServiceCollection AddChainedService<TService>(this IServiceCollection services,
+            Func<IServiceProvider, TService, TService> factory)
+            where TService : class, IChainedService<TService>
+        {
+            Ensure.NotNull(services, nameof(services));
+            Ensure.NotNull(factory, nameof(factory));
+
+            services.AddSingleton<IChainedService<TService>>(sp => factory(sp, default));
+            return services;
+        }
+
         internal static IServiceCollection AddRestierCoreServices(this IServiceCollection services)
         {
             Ensure.NotNull(services, nameof(services));

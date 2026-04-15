@@ -13,7 +13,13 @@ using Microsoft.Restier.Tests.Shared.EntityFrameworkCore;
 #endif
 
 
-namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
+using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+
+#if EF6
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6
+#elif EFCore
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
+#endif
 {
     /// <summary>
     /// An initializer to populate data into the context.

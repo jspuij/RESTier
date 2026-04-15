@@ -20,7 +20,13 @@ using Microsoft.Restier.Tests.Shared.Scenarios.Library;
     using Microsoft.Restier.EntityFrameworkCore;
 #endif
 
-namespace Microsoft.Restier.Tests.Shared.Scenarios.Marvel
+using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
+
+#if EF6
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EF6
+#elif EFCore
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EFCore
+#endif
 {
 
     /// <summary>

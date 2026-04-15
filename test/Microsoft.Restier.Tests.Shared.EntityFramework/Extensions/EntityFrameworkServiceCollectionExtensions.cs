@@ -1,18 +1,21 @@
-
-    using Microsoft.Restier.EntityFramework;
 #if EF6
+    using Microsoft.Restier.EntityFramework;
     using System;
     using System.Data.Common;
     using System.Data.Entity;
     using System.Data.Entity.Infrastructure;
     using System.Runtime.InteropServices;
     using Microsoft.Extensions.Configuration;
+    using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
+    using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EF6;
 #endif
 #if EFCore
+using System;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Restier.EntityFrameworkCore;
 using Microsoft.Restier.Tests.Shared.EntityFrameworkCore;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore;
+using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EFCore;
 #endif
 
 namespace Microsoft.Extensions.DependencyInjection
@@ -83,7 +86,7 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <returns></returns>
         public static IServiceCollection AddEntityFrameworkServices<TDbContext>(this IServiceCollection services) where TDbContext : DbContext
         {
-            services.AddEFCoreProviderServices<TDbContext>();
+            services.AddEFCoreProviderServices<TDbContext>((Action<DbContextOptionsBuilder>)null);
 
             if (typeof(TDbContext) == typeof(LibraryContext))
             {

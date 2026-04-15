@@ -7,7 +7,12 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
+#if EF6
 using System.Data.Entity;
+#endif
+#if EFCore
+using Microsoft.EntityFrameworkCore;
+#endif
 #if NET6_0_OR_GREATER
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,7 +30,13 @@ using Microsoft.Restier.EntityFramework;
 using Microsoft.Restier.EntityFrameworkCore;
 #endif
 
-namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
+using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+
+#if EF6
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6
+#elif EFCore
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
+#endif
 {
 
     /// <summary>

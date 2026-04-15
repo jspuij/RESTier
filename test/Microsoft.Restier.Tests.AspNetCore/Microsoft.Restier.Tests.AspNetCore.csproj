@@ -7,12 +7,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="RegressionTests\**" />
-	  <EmbeddedResource Remove="RegressionTests\**" />
-	  <None Remove="RegressionTests\**" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <Compile Remove="DependencyInjectionTests.cs" />
 	  <Compile Remove="ExceptionHandlerTests.cs" />
 	  <Compile Remove="Model\RestierModelBuilderTests.cs" />

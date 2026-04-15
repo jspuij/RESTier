@@ -1,174 +1,100 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-#if NET6_0_OR_GREATER
-
-using CloudNimble.Breakdance.AspNetCore;
-using FluentAssertions;
-using Microsoft.AspNet.OData.Builder;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.OData.Edm;
-using Microsoft.Restier.AspNetCore.Model;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Model;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
+using CloudNimble.Breakdance.AspNetCore;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OData.Edm;
+using Microsoft.OData.ModelBuilder;
+using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.AspNetCore.Model;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.DependencyInjection;
+using Microsoft.Restier.Core.Model;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Tests.Shared;
+using Microsoft.Restier.Tests.Shared.Extensions;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
+using Xunit;
 
-namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests
+namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;
+
+/// <summary>
+/// Regression tests for https://github.com/OData/RESTier/issues/714.
+/// </summary>
+public class Issue714_ComplexTypes : RestierTestBase<ComplexTypesApi>
 {
-
-    /// <summary>
-    /// 
-    /// </summary>
-    [TestClass]
-    public class Issue714_ComplexTypes : RestierTestBase<ComplexTypesApi>
+    public Issue714_ComplexTypes()
     {
-
-        #region Constructors
-
-        /// <summary>
-        /// Initializes the Test Server with the configuration it needs to run Restier services.
-        /// </summary>
-        public Issue714_ComplexTypes() : base()
+        AddRestierAction = options =>
         {
-            ApplicationBuilderAction = (app) =>
+            options.AddRestierRoute<ComplexTypesApi>(WebApiConstants.RoutePrefix, routeServices =>
             {
-                app.UseResponseCompression();
-                app.UseHttpsRedirection();
-                app.UseRestierBatching();
-            };
-
-            TestHostBuilder.ConfigureServices((builder, services) =>
-            {
-                services
-                    .AddHttpContextAccessor()
-                    .AddResponseCompression()
-                    .AddCors();
+                routeServices
+                    .AddEntityFrameworkServices<MarvelContext>()
+                    .AddSingleton<IChainedService<IModelBuilder>, ComplexTypesModelBuilder>();
             });
+        };
+        TestSetup();
+    }
 
-            AddRestierAction = (apiBuilder) =>
-            {
-                apiBuilder.AddRestierApi<ComplexTypesApi>(routeServices =>
-                {
-                    routeServices
-#if EF6
-                        .AddEF6ProviderServices<MarvelContext>()
-#elif EFCore
-                        .AddEFCoreProviderServices<MarvelContext>()
-#endif
-                        .AddChainedService<IModelBuilder, ComplexTypesModelBuilder>();
+    [Fact]
+    public async Task ComplexTypes_WorkAsExpected()
+    {
+        var response = await ExecuteTestRequest(HttpMethod.Get, resource: "/ComplexTypeTest()");
+        response.Should().NotBeNull();
 
-                });
-            };
+        response.IsSuccessStatusCode.Should().BeTrue();
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
-            MapRestierAction = (routeBuilder) =>
-            {
-                routeBuilder.MapApiRoute<ComplexTypesApi>(WebApiConstants.RouteName, WebApiConstants.RoutePrefix);
-            };
+        content.Should().NotBeNullOrWhiteSpace();
+    }
+}
 
-        }
+#region ComplexTypesApi
+
+public class ComplexTypesApi : MarvelApi
+{
+    public ComplexTypesApi(MarvelContext dbContext, IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+        : base(dbContext, model, queryHandler, submitHandler)
+    {
+    }
+
+    [UnboundOperation(OperationType = OperationType.Function)]
+    public LibraryCard ComplexTypeTest()
+    {
+        return new()
+        {
+            Id = Guid.NewGuid()
+        };
+    }
+}
 
 #endregion
 
-        #region Test Setup / Teardown
+#region ComplexTypesModelBuilder
 
-        /// <summary>
-        /// Calls the base class to configure the test host and sets up test data.
-        /// </summary>
-        [TestInitialize]
-        public void TestInitialize()
-        {
-            TestSetup();
-        }
-
-        /// <summary>
-        /// Cleans up test data and calls base class to shut down the test host.
-        /// </summary>
-        [TestCleanup]
-        public void TestCleanup()
-        {
-            TestTearDown();
-        }
-
-        #endregion
-
-        /// <summary>
-        /// 
-        /// </summary>
-        [TestMethod]
-        public async Task ComplexTypes_WorkAsExpected()
-        {
-            var responseMessage = await ExecuteTestRequest(HttpMethod.Get, resource: "ComplexTypeTest()");
-            responseMessage.Should().NotBeNull();
-
-            responseMessage.IsSuccessStatusCode.Should().BeTrue();
-            var content = await TestContext.LogAndReturnMessageContentAsync(responseMessage);
-
-            content.Should().NotBeNullOrWhiteSpace();
-
-        }
-
-    }
-
-    #region ComplexTypesApi
-
-    public class ComplexTypesApi : MarvelApi
+/// <summary>
+/// Builds the EdmModel for the Restier API.
+/// </summary>
+/// <remarks>
+/// Hopefully this won't be necessary if we can get the OperationAttribute to register types it does not recognize.
+/// </remarks>
+public class ComplexTypesModelBuilder : IModelBuilder
+{
+    public IEdmModel GetEdmModel()
     {
-
-        public ComplexTypesApi(IServiceProvider serviceProvider) : base(serviceProvider)
-        {
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        [UnboundOperation(OperationType = OperationType.Function)]
-        public LibraryCard ComplexTypeTest()
-        {
-            return new()
-            {
-                Id = Guid.NewGuid()
-            };
-        }
-
+        var modelBuilder = new ODataConventionModelBuilder();
+        modelBuilder.ComplexType<LibraryCard>();
+        return modelBuilder.GetEdmModel();
     }
 
-    #endregion
-
-    #region ComplexTypesModelBuilder
-
-    /// <summary>
-    /// Builds the EdmModel for the Restier API.
-    /// </summary>
-    /// <remarks>
-    /// Hopefully this won't be necessary if we can get the OperationAttribute to register types it does not recognize.
-    /// </remarks>
-    public class ComplexTypesModelBuilder : IModelBuilder
-    {
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        public IEdmModel GetModel(ModelContext context)
-        {
-            var modelBuilder = new ODataConventionModelBuilder();
-            modelBuilder.ComplexType<LibraryCard>();
-            return modelBuilder.GetEdmModel();
-        }
-
-    }
-
-    #endregion
-
+    public IModelBuilder Inner { get; set; }
 }
 
-#endif
+#endregion

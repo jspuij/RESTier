@@ -30,6 +30,8 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
     private const string MethodNameOfPatch = "Patch";
     private const string MethodNameOfDelete = "Delete";
     private const string MethodNameOfPostAction = "PostAction";
+    private const string MethodNameOfGetMetadata = "GetMetadata";
+    private const string MethodNameOfGetServiceDocument = "GetServiceDocument";
 
     private readonly IOptions<ODataOptions> _odataOptions;
 
@@ -128,6 +130,18 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
     internal static string DetermineActionName(string httpMethod, ODataPath path)
     {
         var lastSegment = path.LastOrDefault();
+
+        // $metadata and service document requests need dedicated handling.
+        if (lastSegment is MetadataSegment)
+        {
+            return MethodNameOfGetMetadata;
+        }
+
+        if (path.Count == 0)
+        {
+            return MethodNameOfGetServiceDocument;
+        }
+
         var isAction = IsAction(lastSegment);
 
         if (string.Equals(httpMethod, "GET", StringComparison.OrdinalIgnoreCase) && !isAction)

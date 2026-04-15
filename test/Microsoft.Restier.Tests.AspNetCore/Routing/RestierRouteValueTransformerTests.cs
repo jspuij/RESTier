@@ -12,6 +12,7 @@ using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
 using Microsoft.OData.UriParser;
 using Microsoft.Restier.AspNetCore.Routing;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -241,7 +242,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
         }
 
         [Fact]
-        public async Task Get_EmptyPath_ReturnsGetActionForServiceDocument()
+        public async Task Get_EmptyPath_ReturnsGetServiceDocumentAction()
         {
             // Arrange
             var (transformer, _) = CreateTransformer();
@@ -254,11 +255,32 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
             // Assert
             result.Should().NotBeNull();
             result["controller"].Should().Be("Restier");
-            result["action"].Should().Be("Get");
+            result["action"].Should().Be("GetServiceDocument");
 
             var feature = httpContext.ODataFeature();
             feature.Path.Should().NotBeNull();
             feature.Path.Should().HaveCount(0);
+        }
+
+        [Fact]
+        public async Task Get_MetadataPath_ReturnsGetMetadataAction()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "$metadata" };
+            var httpContext = CreateHttpContext("GET", "/$metadata");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().NotBeNull();
+            result["controller"].Should().Be("Restier");
+            result["action"].Should().Be("GetMetadata");
+
+            var feature = httpContext.ODataFeature();
+            feature.Path.Should().NotBeNull();
+            feature.Path.LastOrDefault().Should().BeOfType<MetadataSegment>();
         }
 
         [Fact]

@@ -8,15 +8,12 @@
 
 	<ItemGroup>
 	  <Compile Remove="ClaimsPrincipalAccessorTests\**" />
-	  <Compile Remove="EndpointRouting\**" />
 	  <Compile Remove="FallbackTests\**" />
 	  <Compile Remove="RegressionTests\**" />
 	  <EmbeddedResource Remove="ClaimsPrincipalAccessorTests\**" />
-	  <EmbeddedResource Remove="EndpointRouting\**" />
 	  <EmbeddedResource Remove="FallbackTests\**" />
 	  <EmbeddedResource Remove="RegressionTests\**" />
 	  <None Remove="ClaimsPrincipalAccessorTests\**" />
-	  <None Remove="EndpointRouting\**" />
 	  <None Remove="FallbackTests\**" />
 	  <None Remove="RegressionTests\**" />
 	</ItemGroup>

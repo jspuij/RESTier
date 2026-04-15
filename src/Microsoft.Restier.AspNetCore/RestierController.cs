@@ -61,6 +61,26 @@ namespace Microsoft.Restier.AspNetCore
         }
 
         /// <summary>
+        /// Handles a GET request for the OData $metadata document.
+        /// </summary>
+        /// <returns>The EDM model for the current route.</returns>
+        public IActionResult GetMetadata()
+        {
+            var model = HttpContext.ODataFeature().Model;
+            return Ok(model);
+        }
+
+        /// <summary>
+        /// Handles a GET request for the OData service document.
+        /// </summary>
+        /// <returns>The OData service document for the current route.</returns>
+        public IActionResult GetServiceDocument()
+        {
+            var model = HttpContext.ODataFeature().Model;
+            return Ok(model);
+        }
+
+        /// <summary>
         /// Handles a GET request to query entities.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>

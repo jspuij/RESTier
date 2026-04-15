@@ -7,7 +7,6 @@ using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System;
 using System.Linq;
 using System.Net;
@@ -21,9 +20,9 @@ using Microsoft.Restier.Tests.Shared.Extensions;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
 {
-    [Collection("LibraryApi")]
-    public class FunctionTests(ITestOutputHelper outputHelper) : RestierTestBase<LibraryApi>
+    public abstract class FunctionTests<TApi, TContext>(ITestOutputHelper outputHelper) : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
     {
+        protected abstract Action<IServiceCollection> ConfigureServices { get; }
 
         /// <summary>
         /// Tests if the query pipeline is correctly returning 200 StatusCodes when legitimate queries to a resource simply return no results.
@@ -38,8 +37,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
              * site:    Microsoft.OData.UriParser.PathSegmentHandler.Handle
              * 
              * */
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Books/$filter(endswith(Title,'The'))/DiscontinueBooks()", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/Books/$filter(endswith(Title,'The'))/DiscontinueBooks()", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -57,8 +56,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         public async Task FilterPathSegment_FiltersCollection()
         {
             // $filter as a path segment without a subsequent bound function
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Books/$filter(endswith(Title,'The'))",
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/Books/$filter(endswith(Title,'The'))",
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -78,11 +77,11 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task BoundFunctions_Returns200()
         {
-            //var response = await RestierTestHelpers.RouteDebug<LibraryApi>(routePrefix: string.Empty, serviceCollection : (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            //var response = await RestierTestHelpers.RouteDebug<LibraryApi>(routePrefix: string.Empty, serviceCollection : ConfigureServices);
 
 
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Books/DiscontinueBooks()", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/Books/DiscontinueBooks()", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -99,8 +98,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task BoundFunctions_WithExpand()
         {
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/Publishers('Publisher1')/PublishedBooks()?$expand=Publisher", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/Publishers('Publisher1')/PublishedBooks()?$expand=Publisher", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -110,8 +109,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task FunctionWithFilter()
         {
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/FavoriteBooks()?$filter=contains(Title,'Cat')", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/FavoriteBooks()?$filter=contains(Title,'Cat')", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -122,8 +121,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task FunctionWithExpand()
         {
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/FavoriteBooks()?$expand=Publisher", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/FavoriteBooks()?$expand=Publisher", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -133,8 +132,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task FunctionParameters_BooleanParameter()
         {
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/PublishBook(IsActive=true)", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/PublishBook(IsActive=true)", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -144,8 +143,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task FunctionParameters_IntParameter()
         {
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: "/PublishBooks(Count=5)", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: "/PublishBooks(Count=5)", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -156,8 +155,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         public async Task FunctionParameters_GuidParameter()
         {
             var testGuid = Guid.NewGuid();
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Get, resource: $"/SubmitTransaction(Id={testGuid})", 
-                serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Get, resource: $"/SubmitTransaction(Id={testGuid})", 
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();

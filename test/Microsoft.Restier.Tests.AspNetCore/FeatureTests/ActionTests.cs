@@ -5,10 +5,10 @@ using CloudNimble.Breakdance.AspNetCore;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System;
 using System.Linq;
 using System.Net;
@@ -22,10 +22,11 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
     /// <summary>
     /// A class for testing OData Actions.
     /// </summary>
-    [Collection("LibraryApi")]
-    public class ActionTests(ITestOutputHelper outputHelper) : RestierTestBase
-        <LibraryApi>
+    public abstract class ActionTests<TApi, TContext>(ITestOutputHelper outputHelper) : RestierTestBase
+        <TApi> where TApi : ApiBase where TContext : class
     {
+        protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
         /* JHC note: just leaving this here temporarily for reference
         #if EF6
                 void addTestServices<TDbContext>(IServiceCollection services) where TDbContext : DbContext => services.AddEF6ProviderServices<TDbContext>();
@@ -39,7 +40,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task ActionParameters_MissingParameter()
         {
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/CheckoutBook", serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Post, resource: "/CheckoutBook", serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeFalse();
@@ -58,7 +59,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
                 }
             };
 
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/CheckoutBook", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Post, resource: "/CheckoutBook", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeFalse();
@@ -77,7 +78,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
                 }
             };
 
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/CheckoutBook", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Post, resource: "/CheckoutBook", acceptHeader: WebApiConstants.DefaultAcceptHeader, payload: bookPayload, serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -92,12 +93,12 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
         [Fact]
         public async Task BoundAction_WithParameter_Returns200()
         {
-            var metadata = RestierTestHelpers.GetApiMetadataAsync<LibraryApi>(serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+            var metadata = RestierTestHelpers.GetApiMetadataAsync<TApi>(serviceCollection: ConfigureServices);
 
             var payload = new { bookId = new Guid("2D760F15-974D-4556-8CDF-D610128B537E") };
 
-             var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(HttpMethod.Post, resource: "/Publishers('Publisher1')/PublishNewBook", payload: payload,
-                acceptHeader: WebApiConstants.DefaultAcceptHeader, serviceCollection: (services) => services.AddEntityFrameworkServices<LibraryContext>());
+             var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(HttpMethod.Post, resource: "/Publishers('Publisher1')/PublishNewBook", payload: payload,
+                acceptHeader: WebApiConstants.DefaultAcceptHeader, serviceCollection: ConfigureServices);
 
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
             outputHelper.Write(content);

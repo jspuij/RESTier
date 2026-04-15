@@ -1,29 +1,31 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
-[Collection("LibraryApi")]
-public class InTests : RestierTestBase<LibraryApi>
+public abstract class InTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
     [Fact]
     public async Task InQueries_IdInList()
     {
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Books?$filter=Id in ['c2081e58-21a5-4a15-b0bd-fff03ebadd30','0697576b-d616-4057-9d28-ed359775129e']",
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeTrue();

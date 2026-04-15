@@ -1,13 +1,14 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.Http;
@@ -19,16 +20,17 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 /// <summary>
 /// Restier tests that cover the general queryability of the service.
 /// </summary>
-[Collection("LibraryApi")]
-public class QueryTests : RestierTestBase<LibraryApi>
+public abstract class QueryTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
     [Fact]
     public async Task EmptyEntitySetQueryReturns200Not404()
     {
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/LibraryCards",
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeTrue();
@@ -38,10 +40,10 @@ public class QueryTests : RestierTestBase<LibraryApi>
     [Fact]
     public async Task EmptyFilterQueryReturns200Not404()
     {
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Books?$filter=Title eq 'Sesame Street'",
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeTrue();
@@ -51,10 +53,10 @@ public class QueryTests : RestierTestBase<LibraryApi>
     [Fact]
     public async Task NonExistentEntitySetReturns404()
     {
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Subscribers",
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeFalse();
@@ -64,10 +66,10 @@ public class QueryTests : RestierTestBase<LibraryApi>
     [Fact]
     public async Task ObservableCollectionsAsCollectionNavigationProperties()
     {
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Publishers('Publisher2')/Books",
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeTrue();

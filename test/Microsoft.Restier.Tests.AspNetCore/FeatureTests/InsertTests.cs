@@ -1,22 +1,24 @@
 ﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using FluentAssertions;
 using CloudNimble.Breakdance.AspNetCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
-[Collection("LibraryApi")]
-public class InsertTests : RestierTestBase<LibraryApi>
+public abstract class InsertTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
     [Fact]
     public async Task InsertBook()
     {
@@ -26,12 +28,12 @@ public class InsertTests : RestierTestBase<LibraryApi>
             Isbn = "0118006345789",
         };
 
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Post,
             resource: "/Publishers('Publisher1')/Books",
             payload: book,
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
 
         response.Should().NotBeNull();
 

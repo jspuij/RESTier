@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -8,28 +9,30 @@ using CloudNimble.Breakdance.AspNetCore;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EF6;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;
 
 /// <summary>
 /// Regression tests for https://github.com/OData/RESTier/issues/671.
+/// Tests a single LibraryContext registration.
 /// </summary>
-public class Issue671_MultipleContexts_SingleLibraryContext : RestierTestBase<LibraryApi>
+public abstract class Issue671_MultipleContexts_SingleLibraryContext<TApi, TContext> : RestierTestBase<TApi>
+    where TApi : ApiBase
+    where TContext : class
 {
-    public Issue671_MultipleContexts_SingleLibraryContext()
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    protected Issue671_MultipleContexts_SingleLibraryContext()
     {
         AddRestierAction = options =>
         {
-            options.AddRestierRoute<LibraryApi>(WebApiConstants.RoutePrefix, services =>
+            options.AddRestierRoute<TApi>(WebApiConstants.RoutePrefix, services =>
             {
-                services.AddEntityFrameworkServices<LibraryContext>();
+                ConfigureServices(services);
             });
         };
         TestSetup();
@@ -45,15 +48,23 @@ public class Issue671_MultipleContexts_SingleLibraryContext : RestierTestBase<Li
     }
 }
 
-public class Issue671_MultipleContexts_SingleMarvelContext : RestierTestBase<MarvelApi>
+/// <summary>
+/// Regression tests for https://github.com/OData/RESTier/issues/671.
+/// Tests a single MarvelContext registration.
+/// </summary>
+public abstract class Issue671_MultipleContexts_SingleMarvelContext<TApi, TContext> : RestierTestBase<TApi>
+    where TApi : ApiBase
+    where TContext : class
 {
-    public Issue671_MultipleContexts_SingleMarvelContext()
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    protected Issue671_MultipleContexts_SingleMarvelContext()
     {
         AddRestierAction = options =>
         {
-            options.AddRestierRoute<MarvelApi>(WebApiConstants.RoutePrefix, services =>
+            options.AddRestierRoute<TApi>(WebApiConstants.RoutePrefix, services =>
             {
-                services.AddEntityFrameworkServices<MarvelContext>();
+                ConfigureServices(services);
             });
         };
         TestSetup();
@@ -69,19 +80,28 @@ public class Issue671_MultipleContexts_SingleMarvelContext : RestierTestBase<Mar
     }
 }
 
-public class Issue671_MultipleContexts : RestierTestBase<LibraryApi>
+/// <summary>
+/// Regression tests for https://github.com/OData/RESTier/issues/671.
+/// Tests multiple context registrations (Library + Marvel).
+/// </summary>
+public abstract class Issue671_MultipleContexts<TLibraryApi, TMarvelApi> : RestierTestBase<TLibraryApi>
+    where TLibraryApi : ApiBase
+    where TMarvelApi : ApiBase
 {
-    public Issue671_MultipleContexts()
+    protected abstract Action<IServiceCollection> ConfigureLibraryServices { get; }
+    protected abstract Action<IServiceCollection> ConfigureMarvelServices { get; }
+
+    protected Issue671_MultipleContexts()
     {
         AddRestierAction = options =>
         {
-            options.AddRestierRoute<LibraryApi>("Library", services =>
+            options.AddRestierRoute<TLibraryApi>("Library", services =>
             {
-                services.AddEntityFrameworkServices<LibraryContext>();
+                ConfigureLibraryServices(services);
             });
-            options.AddRestierRoute<MarvelApi>("Marvel", services =>
+            options.AddRestierRoute<TMarvelApi>("Marvel", services =>
             {
-                services.AddEntityFrameworkServices<MarvelContext>();
+                ConfigureMarvelServices(services);
             });
         };
         TestSetup();

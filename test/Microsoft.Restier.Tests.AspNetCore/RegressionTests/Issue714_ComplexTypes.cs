@@ -6,22 +6,14 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using CloudNimble.Breakdance.AspNetCore;
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.OData;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
-using Microsoft.Restier.AspNetCore;
-using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
-using Microsoft.Restier.Core.Query;
-using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
-using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EF6;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;
@@ -29,19 +21,14 @@ namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;
 /// <summary>
 /// Regression tests for https://github.com/OData/RESTier/issues/714.
 /// </summary>
-public class Issue714_ComplexTypes : RestierTestBase<ComplexTypesApi>
+public abstract class Issue714_ComplexTypes<TApi> : RestierTestBase<TApi>
+    where TApi : ApiBase
 {
-    public Issue714_ComplexTypes()
+    protected abstract Action<ODataOptions> ConfigureRoute { get; }
+
+    protected Issue714_ComplexTypes()
     {
-        AddRestierAction = options =>
-        {
-            options.AddRestierRoute<ComplexTypesApi>(WebApiConstants.RoutePrefix, routeServices =>
-            {
-                routeServices
-                    .AddEntityFrameworkServices<MarvelContext>()
-                    .AddSingleton<IChainedService<IModelBuilder>, ComplexTypesModelBuilder>();
-            });
-        };
+        AddRestierAction = ConfigureRoute;
         TestSetup();
     }
 
@@ -57,27 +44,6 @@ public class Issue714_ComplexTypes : RestierTestBase<ComplexTypesApi>
         content.Should().NotBeNullOrWhiteSpace();
     }
 }
-
-#region ComplexTypesApi
-
-public class ComplexTypesApi : MarvelApi
-{
-    public ComplexTypesApi(MarvelContext dbContext, IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
-        : base(dbContext, model, queryHandler, submitHandler)
-    {
-    }
-
-    [UnboundOperation(OperationType = OperationType.Function)]
-    public LibraryCard ComplexTypeTest()
-    {
-        return new()
-        {
-            Id = Guid.NewGuid()
-        };
-    }
-}
-
-#endregion
 
 #region ComplexTypesModelBuilder
 

@@ -1,16 +1,16 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 using CloudNimble.Breakdance.AspNetCore;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;
@@ -18,15 +18,19 @@ namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;
 /// <summary>
 /// Regression tests for https://github.com/OData/RESTier/issues/541.
 /// </summary>
-public class Issue541_CountPlusParametersFails : RestierTestBase<LibraryApi>
+public abstract class Issue541_CountPlusParametersFails<TApi, TContext> : RestierTestBase<TApi>
+    where TApi : ApiBase
+    where TContext : class
 {
-    public Issue541_CountPlusParametersFails()
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    protected Issue541_CountPlusParametersFails()
     {
         AddRestierAction = options =>
         {
-            options.AddRestierRoute<LibraryApi>(WebApiConstants.RoutePrefix, services =>
+            options.AddRestierRoute<TApi>(WebApiConstants.RoutePrefix, services =>
             {
-                services.AddEntityFrameworkServices<LibraryContext>();
+                ConfigureServices(services);
             });
         };
         TestSetup();

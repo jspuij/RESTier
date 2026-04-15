@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System;
 using System.Linq;
 using System.Net.Http;

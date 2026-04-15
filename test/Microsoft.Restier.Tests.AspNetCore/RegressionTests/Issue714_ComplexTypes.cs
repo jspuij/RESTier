@@ -19,7 +19,9 @@ using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using Microsoft.Restier.Tests.Shared.Scenarios.Marvel;
+using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EF6;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests;

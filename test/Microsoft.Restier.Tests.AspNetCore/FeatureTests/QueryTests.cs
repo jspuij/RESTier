@@ -7,6 +7,7 @@ using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.Http;

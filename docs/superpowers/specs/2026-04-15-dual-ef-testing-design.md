@@ -35,7 +35,11 @@ Entity model types (Book, Publisher, Employee, etc.) stay in `Microsoft.Restier.
 
 ### New Project: Microsoft.Restier.Tests.Shared.EntityFrameworkCore
 
-Mirrors `Microsoft.Restier.Tests.Shared.EntityFramework` but compiled with `DefineConstants: EFCore`. References `Microsoft.Restier.EntityFrameworkCore` instead of `Microsoft.Restier.EntityFramework`. Contains the same source files (LibraryApi.cs, LibraryContext.cs, etc.) — either as linked files or as a copy of the shared project.
+Mirrors `Microsoft.Restier.Tests.Shared.EntityFramework` but compiled with `DefineConstants: EFCore`. References `Microsoft.Restier.EntityFrameworkCore` instead of `Microsoft.Restier.EntityFramework`. Links to the same source files (LibraryApi.cs, LibraryContext.cs, etc.) from the EF6 project directory via `<Compile Include="...">` items, so there is a single copy of each source file.
+
+### Pre-existing Issues to Fix
+
+`LibraryApi.cs` has `using System.Data.Entity;` on line 10 outside any `#if` block. This will break EFCore compilation and must be wrapped in `#if EF6`.
 
 ### Test Class Pattern
 

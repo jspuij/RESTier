@@ -1,14 +1,14 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using FluentAssertions;
 using CloudNimble.Breakdance.AspNetCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -19,9 +19,12 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
-[Collection("LibraryApi")]
-public class BatchTests : RestierTestBase<LibraryApi>
+public abstract class BatchTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    protected abstract Task CleanupBatchBooksAsync();
+
     [Fact]
     public async Task BatchTests_AddMultipleEntries()
     {
@@ -40,10 +43,10 @@ public class BatchTests : RestierTestBase<LibraryApi>
             _ = await TraceListener.LogAndReturnMessageContentAsync(batchResponse);
             batchResponse.IsSuccessStatusCode.Should().BeTrue();
 
-            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
                 HttpMethod.Get,
                 resource: "/Books?$expand=Publisher",
-                serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+                serviceCollection: ConfigureServices);
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
             response.IsSuccessStatusCode.Should().BeTrue();
@@ -129,25 +132,12 @@ public class BatchTests : RestierTestBase<LibraryApi>
         content.Should().Contain("The Cat in the Hat");
     }
 
-    private static async Task<HttpClient> GetHttpClientAsync()
+    private async Task<HttpClient> GetHttpClientAsync()
     {
-        var httpClient = await RestierTestHelpers.GetTestableHttpClient<LibraryApi>(
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+        var httpClient = await RestierTestHelpers.GetTestableHttpClient<TApi>(
+            serviceCollection: ConfigureServices);
         httpClient.BaseAddress = new Uri($"{WebApiConstants.Localhost}{WebApiConstants.RoutePrefix}");
         return httpClient;
-    }
-
-    private static async Task CleanupBatchBooksAsync()
-    {
-        var context = await RestierTestHelpers.GetTestableInjectedService<LibraryApi, LibraryContext>(
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
-        var books = context.Books.Where(book => book.Title.StartsWith("Batch Test")).ToList();
-        foreach (var book in books)
-        {
-            context.Books.Remove(book);
-        }
-
-        await context.SaveChangesAsync();
     }
 
     private const string MimeBatchRequest =

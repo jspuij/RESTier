@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using CloudNimble.EasyAF.Http.OData;
@@ -6,10 +6,10 @@ using FluentAssertions;
 using CloudNimble.Breakdance.AspNetCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
+using Microsoft.Restier.Core;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System;
 using System.Linq;
 using System.Net;
@@ -19,17 +19,20 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
-[Collection("LibraryApi")]
-public class UpdateTests : RestierTestBase<LibraryApi>
+public abstract class UpdateTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    protected abstract Task Cleanup(Guid bookId, string title);
+
     [Fact]
     public async Task UpdateBookWithPublisher_IgnoresNavigationProperty()
     {
-        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Books?$expand=Publisher&$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         bookRequest.IsSuccessStatusCode.Should().BeTrue();
 
         var (bookList, _) = await bookRequest.DeserializeResponseAsync<ODataV4List<Book>>();
@@ -44,12 +47,12 @@ public class UpdateTests : RestierTestBase<LibraryApi>
 
         // Navigation properties in the payload are silently ignored (not rejected).
         // This enables @odata.bind links to work and prevents embedded entities from causing errors.
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Put,
             resource: $"/Books({book.Id})",
             payload: book,
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
 
         response.IsSuccessStatusCode.Should().BeTrue();
 
@@ -59,11 +62,11 @@ public class UpdateTests : RestierTestBase<LibraryApi>
     [Fact]
     public async Task UpdateBook()
     {
-        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Books?$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         bookRequest.IsSuccessStatusCode.Should().BeTrue();
 
         var (bookList, _) = await bookRequest.DeserializeResponseAsync<ODataV4List<Book>>();
@@ -71,19 +74,19 @@ public class UpdateTests : RestierTestBase<LibraryApi>
         var originalTitle = book.Title;
         book.Title += " Test";
 
-        var updateResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var updateResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Put,
             resource: $"/Books({book.Id})",
             payload: book,
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         updateResponse.IsSuccessStatusCode.Should().BeTrue();
 
-        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: $"/Books({book.Id})",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         checkResponse.IsSuccessStatusCode.Should().BeTrue();
 
         var (updatedBook, _) = await checkResponse.DeserializeResponseAsync<Book>();
@@ -96,11 +99,11 @@ public class UpdateTests : RestierTestBase<LibraryApi>
     [Fact]
     public async Task PatchBook()
     {
-        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Books?$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         bookRequest.IsSuccessStatusCode.Should().BeTrue();
 
         var (bookList, _) = await bookRequest.DeserializeResponseAsync<ODataV4List<Book>>();
@@ -112,19 +115,19 @@ public class UpdateTests : RestierTestBase<LibraryApi>
             Title = $"{book.Title} | Patch Test",
         };
 
-        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             new HttpMethod("PATCH"),
             resource: $"/Books({book.Id})",
             payload: payload,
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         patchResponse.IsSuccessStatusCode.Should().BeTrue();
 
-        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: $"/Books({book.Id})",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         checkResponse.IsSuccessStatusCode.Should().BeTrue();
 
         var (updatedBook, _) = await checkResponse.DeserializeResponseAsync<Book>();
@@ -137,11 +140,11 @@ public class UpdateTests : RestierTestBase<LibraryApi>
     [Fact]
     public async Task UpdatePublisher_ShouldCallInterceptor()
     {
-        var publisherRequest = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var publisherRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Publishers('Publisher1')",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         publisherRequest.IsSuccessStatusCode.Should().BeTrue();
 
         var (publisher, _) = await publisherRequest.DeserializeResponseAsync<Publisher>();
@@ -150,34 +153,25 @@ public class UpdateTests : RestierTestBase<LibraryApi>
 
         publisher.Books = null;
 
-        var updateResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var updateResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Put,
             resource: $"/Publishers('{publisher.Id}')",
             payload: publisher,
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         _ = await TraceListener.LogAndReturnMessageContentAsync(updateResponse);
 
         updateResponse.IsSuccessStatusCode.Should().BeTrue();
 
-        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Publishers('Publisher1')",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+            serviceCollection: ConfigureServices);
         checkResponse.IsSuccessStatusCode.Should().BeTrue();
 
         var (updatedPublisher, _) = await checkResponse.DeserializeResponseAsync<Publisher>();
         updatedPublisher.Should().NotBeNull();
         updatedPublisher.LastUpdated.Should().BeCloseTo(DateTimeOffset.Now, new TimeSpan(0, 0, 0, 6));
-    }
-
-    private static async Task Cleanup(Guid bookId, string title)
-    {
-        var api = await RestierTestHelpers.GetTestableApiInstance<LibraryApi>(
-            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
-        var book = api.DbContext.Books.First(candidate => candidate.Id == bookId);
-        book.Title = title;
-        await api.DbContext.SaveChangesAsync();
     }
 }

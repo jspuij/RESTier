@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using CloudNimble.EasyAF.Http.OData;
@@ -14,7 +14,6 @@ using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Common;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
 using System;
 using System.Linq;
 using System.Net;
@@ -26,21 +25,21 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
-[Collection("LibraryApi")]
-public class AuthorizationTests : RestierTestBase<LibraryApi>
+public abstract class AuthorizationTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
+    protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
     [Fact]
     public async Task Authorization_FilterReturns403()
     {
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Readers?$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
             serviceCollection: services =>
             {
-                services
-                    .AddEntityFrameworkServices<LibraryContext>()
-                    .AddSingleton<IChainedService<IQueryExpressionAuthorizer>, DisallowEverythingAuthorizer>();
+                ConfigureServices(services);
+                services.AddSingleton<IChainedService<IQueryExpressionAuthorizer>, DisallowEverythingAuthorizer>();
             });
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 
@@ -60,17 +59,16 @@ public class AuthorizationTests : RestierTestBase<LibraryApi>
 
         Action<IServiceCollection> services = serviceCollection =>
         {
-            serviceCollection
-                .AddEntityFrameworkServices<LibraryContext>()
-                .AddSingleton(new ODataValidationSettings
-                {
-                    MaxTop = 5,
-                    MaxAnyAllExpressionDepth = 3,
-                    MaxExpansionDepth = 3,
-                });
+            ConfigureServices(serviceCollection);
+            serviceCollection.AddSingleton(new ODataValidationSettings
+            {
+                MaxTop = 5,
+                MaxAnyAllExpressionDepth = 3,
+                MaxExpansionDepth = 3,
+            });
         };
 
-        var employeeResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var employeeResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
             resource: "/Readers?$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
@@ -93,7 +91,7 @@ public class AuthorizationTests : RestierTestBase<LibraryApi>
 
         employee.FullName += " Can't Update";
 
-        var employeeEditResponse = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+        var employeeEditResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Put,
             resource: $"/Readers({employee.Id})",
             payload: employee,

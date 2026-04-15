@@ -62,7 +62,10 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EFCore
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseInMemoryDatabase(nameof(MarvelContext));
+            if (!optionsBuilder.IsConfigured)
+            {
+                optionsBuilder.UseInMemoryDatabase(nameof(MarvelContext));
+            }
         }
 
 #endif

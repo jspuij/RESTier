@@ -4,7 +4,10 @@
 #if EF6
 using System.Data.Entity;
 #else
+using System;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.OData.Edm;
 #endif
 
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
@@ -82,13 +85,25 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseInMemoryDatabase(nameof(LibraryContext));
+            if (!optionsBuilder.IsConfigured)
+            {
+                optionsBuilder.UseInMemoryDatabase(nameof(LibraryContext));
+            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+#pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
+            var timeOfDayConverter = new ValueConverter<TimeOfDay, TimeSpan>(
+                v => new TimeSpan(0, v.Hours, v.Minutes, v.Seconds, (int)v.Milliseconds),
+                v => new TimeOfDay(v.Hours, v.Minutes, v.Seconds, v.Milliseconds));
+#pragma warning restore CS0618
+
             modelBuilder.Entity<Employee>().OwnsOne(c => c.Addr);
-            modelBuilder.Entity<Employee>().OwnsOne(c => c.Universe);
+            modelBuilder.Entity<Employee>().OwnsOne(c => c.Universe, b =>
+            {
+                b.Property(u => u.TimeOfDayProperty).HasConversion(timeOfDayConverter);
+            });
             modelBuilder.Entity<Publisher>().OwnsOne(c => c.Addr);
         }
 

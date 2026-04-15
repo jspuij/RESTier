@@ -1,77 +1,53 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System.Net.Http;
-using System.Threading.Tasks;
-using FluentAssertions;
-using Microsoft.Restier.Tests.Shared;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Microsoft.Restier.Core;
-using Microsoft.AspNetCore.Builder;
+#if NET6_0_OR_GREATER
+
 using CloudNimble.Breakdance.AspNetCore;
 using CloudNimble.EasyAF.Http.OData;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.Tests.AspNetCore.ClaimsPrincipalAccessor;
+using Microsoft.Restier.Tests.Shared;
+using Microsoft.Restier.Tests.Shared.Extensions;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
 
-namespace Microsoft.Restier.Tests.AspNetCore
+namespace Microsoft.Restier.Tests.AspNetCore;
+
+public class ClaimsPrincipalAccessorTests : RestierTestBase<ClaimsPrincipalApi>
 {
-
-    [TestClass]
-    [TestCategory("Endpoint Routing")]
-    public class ClaimsPrincipalAccessorTests_EndpointRouting : ClaimsPrincipalAccessorTests
+    public ClaimsPrincipalAccessorTests()
     {
-        public ClaimsPrincipalAccessorTests_EndpointRouting() : base(true)
+        ApplicationBuilderAction = app =>
         {
-        }
+            app.UseClaimsPrincipals();
+        };
+        AddRestierAction = options =>
+        {
+            options.AddRestierRoute<ClaimsPrincipalApi>(WebApiConstants.RoutePrefix, services =>
+            {
+                services.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
+                services.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
+            });
+        };
+        TestSetup();
     }
 
-    [TestClass]
-    [TestCategory("Legacy Routing")]
-    public class ClaimsPrincipalAccessorTests_LegacyRouting : ClaimsPrincipalAccessorTests
+    [Fact]
+    public async Task ClaimsPrincipalCurrent_IsNotNull()
     {
-        public ClaimsPrincipalAccessorTests_LegacyRouting() : base(false)
-        {
-        }
+        var response = await ExecuteTestRequest(HttpMethod.Get, resource: "/ClaimsPrincipalCurrentIsNotNull()");
+        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+        var (Response, ErrorContent) = await response.DeserializeResponseAsync<ODataV4PrimitiveResult<bool>>();
+        Response.Should().NotBeNull();
+        Response.Value.Should().BeTrue();
     }
-
-    #region Abstract Test Class (Actual Tests)
-
-    [TestClass]
-    public abstract class ClaimsPrincipalAccessorTests : RestierTestBase<ClaimsPrincipalApi>
-    {
-
-        public ClaimsPrincipalAccessorTests(bool useEndpointRouting) : base(useEndpointRouting)
-        {
-            ApplicationBuilderAction = app =>
-            {
-                app.UseClaimsPrincipals();
-            };
-            AddRestierAction = builder =>
-            {
-                builder.AddRestierApi<ClaimsPrincipalApi>(services => services.AddTestDefaultServices());
-            };
-            MapRestierAction = routeBuilder =>
-            {
-                routeBuilder.MapApiRoute<ClaimsPrincipalApi>(WebApiConstants.RouteName, WebApiConstants.RoutePrefix, false);
-            };
-        }
-
-        [TestInitialize]
-        public void ClaimsTestSetup() => TestSetup();
-
-        [TestMethod]
-        public async Task NetCoreApi_ClaimsPrincipalCurrent_IsNotNull()
-        {
-            var response = await ExecuteTestRequest(HttpMethod.Get, resource: "/ClaimsPrincipalCurrentIsNotNull()");
-            await TestContext.LogAndReturnMessageContentAsync(response);
-
-            response.IsSuccessStatusCode.Should().BeTrue();
-            var (Response, ErrorContent) = await response.DeserializeResponseAsync<ODataV4PrimitiveResult<bool>>();
-            Response.Should().NotBeNull();
-            Response.Value.Should().BeTrue();
-        }
-
-    }
-
-    #endregion
-
 }
+
+#endif

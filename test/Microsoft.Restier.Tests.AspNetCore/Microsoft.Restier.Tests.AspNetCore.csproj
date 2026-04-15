@@ -7,13 +7,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="ClaimsPrincipalAccessorTests\**" />
 	  <Compile Remove="FallbackTests\**" />
 	  <Compile Remove="RegressionTests\**" />
-	  <EmbeddedResource Remove="ClaimsPrincipalAccessorTests\**" />
 	  <EmbeddedResource Remove="FallbackTests\**" />
 	  <EmbeddedResource Remove="RegressionTests\**" />
-	  <None Remove="ClaimsPrincipalAccessorTests\**" />
 	  <None Remove="FallbackTests\**" />
 	  <None Remove="RegressionTests\**" />
 	</ItemGroup>

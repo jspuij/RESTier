@@ -20,6 +20,7 @@ using Microsoft.Restier.Tests.Shared.Extensions;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
 {
+    [Collection("LibraryApi")]
     public class FunctionTests(ITestOutputHelper outputHelper) : RestierTestBase<LibraryApi>
     {
 

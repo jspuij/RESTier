@@ -13,6 +13,7 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
+[Collection("LibraryApi")]
 public class InsertTests : RestierTestBase<LibraryApi>
 {
     [Fact]

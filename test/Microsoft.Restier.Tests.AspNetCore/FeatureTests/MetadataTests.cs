@@ -14,6 +14,7 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
+[Collection("LibraryApi")]
 public class MetadataTests : RestierTestBase<LibraryApi>
 {
     private const string RelativePath = "..//..//..//..//Microsoft.Restier.Tests.AspNetCore//";

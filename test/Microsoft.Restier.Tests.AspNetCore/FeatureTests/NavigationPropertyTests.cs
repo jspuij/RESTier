@@ -15,6 +15,7 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
+[Collection("LibraryApi")]
 public class NavigationPropertyTests : RestierTestBase<LibraryApi>
 {
     [Fact]

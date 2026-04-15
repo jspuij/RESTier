@@ -18,10 +18,11 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
+[Collection("LibraryApi")]
 public class UpdateTests : RestierTestBase<LibraryApi>
 {
     [Fact]
-    public async Task UpdateBookWithPublisher_ShouldReturn400()
+    public async Task UpdateBookWithPublisher_IgnoresNavigationProperty()
     {
         var bookRequest = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
             HttpMethod.Get,
@@ -37,8 +38,11 @@ public class UpdateTests : RestierTestBase<LibraryApi>
         var book = bookList.Items.First();
         book.Should().NotBeNull();
         book.Publisher.Should().NotBeNull();
+        var originalTitle = book.Title;
         book.Title += " Test";
 
+        // Navigation properties in the payload are silently ignored (not rejected).
+        // This enables @odata.bind links to work and prevents embedded entities from causing errors.
         var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
             HttpMethod.Put,
             resource: $"/Books({book.Id})",
@@ -46,8 +50,9 @@ public class UpdateTests : RestierTestBase<LibraryApi>
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
             serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
 
-        response.IsSuccessStatusCode.Should().BeFalse();
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.IsSuccessStatusCode.Should().BeTrue();
+
+        await Cleanup(book.Id, originalTitle);
     }
 
     [Fact]

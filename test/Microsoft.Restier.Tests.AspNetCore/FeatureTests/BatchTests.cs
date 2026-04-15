@@ -18,6 +18,7 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
+[Collection("LibraryApi")]
 public class BatchTests : RestierTestBase<LibraryApi>
 {
     [Fact]
@@ -72,8 +73,10 @@ public class BatchTests : RestierTestBase<LibraryApi>
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
             response.IsSuccessStatusCode.Should().BeTrue();
-            content.Should().Contain(BatchResponse1);
-            content.Should().Contain(BatchResponse2);
+            // Normalize line endings: MIME responses use \r\n but verbatim string constants use \n on Unix.
+            var normalizedContent = content.Replace("\r\n", "\n");
+            normalizedContent.Should().Contain(BatchResponse1);
+            normalizedContent.Should().Contain(BatchResponse2);
         }
         finally
         {
@@ -185,7 +188,7 @@ Content-ID: 1
 
 HTTP/1.1 201 Created
 Location: http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)
-Content-Type: application/json; odata.metadata=minimal; odata.streaming=true
+Content-Type: application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8
 OData-Version: 4.0
 
 {""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""IsActive"":true}
@@ -198,7 +201,7 @@ Content-ID: 2
 
 HTTP/1.1 201 Created
 Location: http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)
-Content-Type: application/json; odata.metadata=minimal; odata.streaming=true
+Content-Type: application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8
 OData-Version: 4.0
 
 {""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""IsActive"":true}
@@ -242,11 +245,8 @@ OData-Version: 4.0
             ]
         }";
 
-#if NETCOREAPP
-    private const string JsonBatchResponse = @"{""responses"":[{""id"":""1"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""IsActive"":true}},{""id"":""2"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""IsActive"":true}}]}";
-#else
-    private const string JsonBatchResponse = @"{""responses"":[{""id"":""1"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)"",""content-type"":""application/json; odata.metadata=minimal"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""IsActive"":true}},{""id"":""2"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)"",""content-type"":""application/json; odata.metadata=minimal"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""IsActive"":true}}]}";
-#endif
+    private const string JsonBatchResponse = @"{""responses"":[{""id"":""1"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""IsActive"":true}},{""id"":""2"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""IsActive"":true}}]}";
+
 
     private const string SelectPlusFunctionBatchRequest = @"
         {

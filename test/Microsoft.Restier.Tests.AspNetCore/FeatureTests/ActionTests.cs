@@ -21,6 +21,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests
     /// <summary>
     /// A class for testing OData Actions.
     /// </summary>
+    [Collection("LibraryApi")]
     public class ActionTests(ITestOutputHelper outputHelper) : RestierTestBase
         <LibraryApi>
     {

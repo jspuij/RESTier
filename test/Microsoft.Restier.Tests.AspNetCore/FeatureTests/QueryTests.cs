@@ -18,6 +18,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 /// <summary>
 /// Restier tests that cover the general queryability of the service.
 /// </summary>
+[Collection("LibraryApi")]
 public class QueryTests : RestierTestBase<LibraryApi>
 {
     [Fact]

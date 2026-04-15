@@ -16,6 +16,7 @@ using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 
+[Collection("LibraryApi")]
 public class ValidationTests : RestierTestBase<LibraryApi>
 {
     [Fact]

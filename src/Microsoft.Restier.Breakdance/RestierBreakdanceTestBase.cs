@@ -75,11 +75,12 @@ namespace Microsoft.Restier.Breakdance
            .Configure(builder =>
             {
                 ApplicationBuilderAction?.Invoke(builder);
+                builder.UseDeveloperExceptionPage();
+                builder.UseMiddleware<AspNetCore.Middleware.ODataBatchHttpContextFixerMiddleware>();
+                builder.UseODataBatching();
                 builder.UseODataRouteDebug();
                 builder.UseRouting();
                 builder.UseAuthorization();
-
-                builder.UseDeveloperExceptionPage();
                 builder.UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();

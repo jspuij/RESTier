@@ -11,7 +11,9 @@
 #endif
 #if EFCore
 using System;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Restier.EntityFrameworkCore;
 using Microsoft.Restier.Tests.Shared.EntityFrameworkCore;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore;
@@ -78,14 +80,57 @@ namespace Microsoft.Extensions.DependencyInjection
 
 #if EFCore
 
+        private static IConfiguration _configuration;
+
         /// <summary>
-        ///
+        /// Gets the test configuration, loading user secrets if available.
         /// </summary>
-        /// <typeparam name="TDbContext"></typeparam>
-        /// <param name="services"></param>
-        /// <returns></returns>
+        private static IConfiguration Configuration
+        {
+            get
+            {
+                if (_configuration is null)
+                {
+                    _configuration = new ConfigurationBuilder()
+                        .AddUserSecrets(typeof(EFServiceCollectionExtensions).Assembly, optional: true)
+                        .Build();
+                }
+                return _configuration;
+            }
+        }
+
+        /// <summary>
+        /// Adds Entity Framework Core provider services for the specified DbContext.
+        /// Uses SQL Server when a connection string is configured; falls back to in-memory.
+        /// </summary>
+        /// <typeparam name="TDbContext">The type of the DbContext.</typeparam>
+        /// <param name="services">The service collection.</param>
+        /// <returns>The service collection for chaining.</returns>
         public static IServiceCollection AddEntityFrameworkServices<TDbContext>(this IServiceCollection services) where TDbContext : DbContext
         {
+            var connectionString = Configuration.GetConnectionString(typeof(TDbContext).Name);
+
+            if (!string.IsNullOrEmpty(connectionString))
+            {
+                var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+                if (builder.ContainsKey("Initial Catalog"))
+                {
+                    builder["Initial Catalog"] = $"{builder["Initial Catalog"]}_{Environment.Version.Major}_EFCore";
+                }
+                else if (builder.ContainsKey("Database"))
+                {
+                    builder["Database"] = $"{builder["Database"]}_{Environment.Version.Major}_EFCore";
+                }
+
+                services.AddDbContext<TDbContext>(options =>
+                    options.UseSqlServer(builder.ConnectionString));
+            }
+            else
+            {
+                services.AddDbContext<TDbContext>(options =>
+                    options.UseInMemoryDatabase(typeof(TDbContext).Name));
+            }
+
             services.AddEFCoreProviderServices<TDbContext>((Action<DbContextOptionsBuilder>)null);
 
             if (typeof(TDbContext) == typeof(LibraryContext))

@@ -1,69 +1,62 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
 using System.Linq;
-using Microsoft.Restier.Core;
-using Microsoft.Restier.Core.Query;
 using System.Linq.Expressions;
-using Microsoft.Restier.Core.Model;
-
-#if NET6_0_OR_GREATER
+using Microsoft.OData.Edm;
 using Microsoft.Restier.AspNetCore.Model;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Model;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 
-namespace Microsoft.Restier.Tests.AspNetCore.FallbackTests
+namespace Microsoft.Restier.Tests.AspNetCore.FallbackTests;
 
-#else
-using Microsoft.Restier.AspNet.Model;
-
-namespace Microsoft.Restier.Tests.AspNet.FallbackTests
-#endif
-
+public class FallbackApi : ApiBase
 {
+    [Resource]
+    public IQueryable<Order> PreservedOrders => this.GetQueryableSource<Order>("Orders").Where(o => o.Id > 123);
 
-    public class FallbackApi : ApiBase
+    public FallbackApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+        : base(model, queryHandler, submitHandler)
     {
-
-        [Resource]
-        public IQueryable<Order> PreservedOrders => this.GetQueryableSource<Order>("Orders").Where(o => o.Id > 123);
-
-        public FallbackApi(IServiceProvider serviceProvider) : base(serviceProvider)
-        {
-        }
-
     }
+}
 
-    internal class FallbackQueryExpressionSourcer : IQueryExpressionSourcer
+internal class FallbackQueryExpressionSourcer : IQueryExpressionSourcer
+{
+    public IQueryExpressionSourcer Inner { get; set; }
+
+    public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
     {
-        public Expression ReplaceQueryableSource(QueryExpressionContext context, bool embedded)
+        var orders = new[]
         {
-            var orders = new[]
-            {
-                new Order {Id = 234}
-            };
+            new Order {Id = 234}
+        };
 
-            if (!embedded)
+        if (!embedded)
+        {
+            if (context.VisitedNode.ToString().StartsWith("GetQueryableSource(\"Orders\"", StringComparison.CurrentCulture))
             {
-                if (context.VisitedNode.ToString().StartsWith("GetQueryableSource(\"Orders\"", StringComparison.CurrentCulture))
-                {
-                    return Expression.Constant(orders.AsQueryable());
-                }
+                return Expression.Constant(orders.AsQueryable());
             }
-
-            return context.VisitedNode;
         }
-    }
 
-    internal class FallbackModelMapper : IModelMapper
+        return context.VisitedNode;
+    }
+}
+
+internal class FallbackModelMapper : IModelMapper
+{
+    public IModelMapper Inner { get; set; }
+
+    public bool TryGetRelevantType(InvocationContext context, string name, out Type relevantType)
     {
-        public bool TryGetRelevantType(ModelContext context, string name, out Type relevantType)
-        {
-            relevantType = name == "Person" ? typeof(Person) : typeof(Order);
+        relevantType = name == "Person" ? typeof(Person) : typeof(Order);
 
-            return true;
-        }
-
-        public bool TryGetRelevantType(ModelContext context, string namespaceName, string name, out Type relevantType) => TryGetRelevantType(context, name, out relevantType);
+        return true;
     }
 
+    public bool TryGetRelevantType(InvocationContext context, string namespaceName, string name, out Type relevantType) => TryGetRelevantType(context, name, out relevantType);
 }

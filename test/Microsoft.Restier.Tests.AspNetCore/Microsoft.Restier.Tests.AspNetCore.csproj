@@ -7,11 +7,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="FallbackTests\**" />
 	  <Compile Remove="RegressionTests\**" />
-	  <EmbeddedResource Remove="FallbackTests\**" />
 	  <EmbeddedResource Remove="RegressionTests\**" />
-	  <None Remove="FallbackTests\**" />
 	  <None Remove="RegressionTests\**" />
 	</ItemGroup>
 

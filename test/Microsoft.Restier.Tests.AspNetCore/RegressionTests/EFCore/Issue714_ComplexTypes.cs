@@ -17,8 +17,11 @@ using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EFCore;
 
+using Xunit;
+
 namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests.EFCore;
 
+[Collection("LibraryApiEFCore")]
 public class Issue714_ComplexTypes : Issue714_ComplexTypes<ComplexTypesApiEFCore>
 {
     protected override Action<ODataOptions> ConfigureRoute => options =>

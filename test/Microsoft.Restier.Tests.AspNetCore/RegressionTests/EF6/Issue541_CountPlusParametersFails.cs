@@ -4,9 +4,11 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library.EF6;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.RegressionTests.EF6;
 
+[Collection("LibraryApiEF6")]
 public class Issue541_CountPlusParametersFails : Issue541_CountPlusParametersFails<LibraryApi, LibraryContext>
 {
     protected override Action<IServiceCollection> ConfigureServices

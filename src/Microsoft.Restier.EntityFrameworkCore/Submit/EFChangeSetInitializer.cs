@@ -80,11 +80,17 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 return Enum.Parse(TypeHelper.GetUnderlyingTypeOrSelf(type), (string)value);
             }
 
-            // Edm.Date => System.DateTime[SqlType = Date]
+            // Edm.Date => System.DateOnly
 #pragma warning disable CS0618 // Date and TimeOfDay are obsolete but still used by OData
-            if (value is Date dateValue)
+            if (value is Date dateValue && TypeHelper.IsDateOnly(type))
             {
-                return (DateTime)dateValue;
+                return new DateOnly(dateValue.Year, dateValue.Month, dateValue.Day);
+            }
+
+            // Edm.Date => System.DateTime[SqlType = Date]
+            if (value is Date dateValueForDateTime)
+            {
+                return (DateTime)dateValueForDateTime;
             }
 
             // System.DateTimeOffset => System.DateTime[SqlType = DateTime or DateTime2]
@@ -92,6 +98,12 @@ namespace Microsoft.Restier.EntityFrameworkCore
             {
                 var dateTimeOffsetValue = (DateTimeOffset)value;
                 return dateTimeOffsetValue.DateTime;
+            }
+
+            // Edm.TimeOfDay => System.TimeOnly
+            if (value is TimeOfDay timeOfDayForTimeOnly && TypeHelper.IsTimeOnly(type))
+            {
+                return new TimeOnly(timeOfDayForTimeOnly.Hours, timeOfDayForTimeOnly.Minutes, timeOfDayForTimeOnly.Seconds, (int)timeOfDayForTimeOnly.Milliseconds);
             }
 
             // Edm.TimeOfDay => System.TimeSpan[SqlType = Time]

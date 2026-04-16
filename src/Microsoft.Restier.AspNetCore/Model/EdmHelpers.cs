@@ -191,6 +191,11 @@ namespace Microsoft.Restier.AspNetCore.Model
                 return null;
             }
 
+            if (type == typeof(DateOnly))
+            {
+                return EdmPrimitiveTypeKind.Date;
+            }
+
             if (type == typeof(DateTimeOffset))
             {
                 return EdmPrimitiveTypeKind.DateTimeOffset;
@@ -234,6 +239,11 @@ namespace Microsoft.Restier.AspNetCore.Model
             if (type == typeof(float))
             {
                 return EdmPrimitiveTypeKind.Single;
+            }
+
+            if (type == typeof(TimeOnly))
+            {
+                return EdmPrimitiveTypeKind.TimeOfDay;
             }
 
             if (type == typeof(TimeSpan))

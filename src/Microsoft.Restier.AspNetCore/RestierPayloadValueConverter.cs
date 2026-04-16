@@ -28,7 +28,7 @@ namespace Microsoft.Restier.AspNetCore
                     var dateTimeValue = (DateTime)value;
 
 #pragma warning disable CS0618 // Date and TimeOfDay are obsolete but still used by OData
-                    // System.DateTime[SqlType = Date] => Edm.Library.Date
+                    // System.DateTime[SqlType = Date] => Edm.Date
                     if (edmTypeReference.IsDate())
                     {
                         return new Date(dateTimeValue.Year, dateTimeValue.Month, dateTimeValue.Day);
@@ -60,6 +60,18 @@ namespace Microsoft.Restier.AspNetCore
                 {
                     var dateTimeOffsetValue = (DateTimeOffset)value;
                     return new Date(dateTimeOffsetValue.Year, dateTimeOffsetValue.Month, dateTimeOffsetValue.Day);
+                }
+
+                // System.DateOnly => Edm.Date
+                if (edmTypeReference.IsDate() && value is DateOnly dateOnlyValue)
+                {
+                    return new Date(dateOnlyValue.Year, dateOnlyValue.Month, dateOnlyValue.Day);
+                }
+
+                // System.TimeOnly => Edm.TimeOfDay
+                if (edmTypeReference.IsTimeOfDay() && value is TimeOnly timeOnlyValue)
+                {
+                    return new TimeOfDay(timeOnlyValue.Hour, timeOnlyValue.Minute, timeOnlyValue.Second, timeOnlyValue.Millisecond);
                 }
 #pragma warning restore CS0618
             }

@@ -95,6 +95,34 @@ public class RestierPayloadValueConverterTests
     }
 
     [Fact]
+    public void ConvertToPayloadValue_ShouldReturnDate_ForDateOnlyAndEdmDate()
+    {
+        // Arrange
+        var dateOnly = new DateOnly(2025, 4, 21);
+        var edmTypeReference = EdmCoreModel.Instance.GetDate(false);
+
+        // Act
+        var result = _converter.ConvertToPayloadValue(dateOnly, edmTypeReference);
+
+        // Assert
+        result.Should().BeOfType<Date>().Which.Should().BeEquivalentTo(new Date(2025, 4, 21));
+    }
+
+    [Fact]
+    public void ConvertToPayloadValue_ShouldReturnTimeOfDay_ForTimeOnlyAndEdmTimeOfDay()
+    {
+        // Arrange
+        var timeOnly = new TimeOnly(10, 30, 45, 500);
+        var edmTypeReference = EdmCoreModel.Instance.GetTimeOfDay(false);
+
+        // Act
+        var result = _converter.ConvertToPayloadValue(timeOnly, edmTypeReference);
+
+        // Assert
+        result.Should().BeOfType<TimeOfDay>().Which.Should().BeEquivalentTo(new TimeOfDay(10, 30, 45, 500));
+    }
+
+    [Fact]
     public void ConvertToPayloadValue_ShouldCallBaseMethod_ForUnsupportedTypes()
     {
         // Arrange

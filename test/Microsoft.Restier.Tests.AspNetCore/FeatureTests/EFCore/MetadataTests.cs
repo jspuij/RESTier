@@ -18,6 +18,10 @@ public class MetadataTests : MetadataTests<LibraryApi, LibraryContext>
     protected override Action<IServiceCollection> ConfigureServices
         => services => services.AddEntityFrameworkServices<LibraryContext>();
 
+    protected override string ProviderName => "EFCore";
+
+    protected override string MarvelBaselinePrefix => "MarvelApi-EFCore";
+
     protected override async Task<XDocument> GetMarvelApiMetadataAsync()
     {
         return await RestierTestHelpers.GetApiMetadataAsync<MarvelApi>(

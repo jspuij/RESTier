@@ -25,10 +25,20 @@ public abstract class MetadataTests<TApi, TContext> : RestierTestBase<TApi>
 
     protected abstract Task<XDocument> GetMarvelApiMetadataAsync();
 
+    /// <summary>
+    /// Gets the provider-specific prefix for baseline filenames (e.g., "EF6" or "EFCore").
+    /// </summary>
+    protected abstract string ProviderName { get; }
+
+    /// <summary>
+    /// Gets the provider-specific prefix for Marvel baseline filenames.
+    /// </summary>
+    protected abstract string MarvelBaselinePrefix { get; }
+
     [Fact]
     public async Task LibraryApi_CompareCurrentApiMetadataToPriorRun()
     {
-        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}{typeof(TApi).Name}-ApiMetadata.txt";
+        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}{typeof(TApi).Name}-{ProviderName}-ApiMetadata.txt";
         File.Exists(fileName).Should().BeTrue();
 
         var oldReport = File.ReadAllText(fileName);
@@ -44,7 +54,7 @@ public abstract class MetadataTests<TApi, TContext> : RestierTestBase<TApi>
     [Fact]
     public async Task MarvelApi_CompareCurrentApiMetadataToPriorRun()
     {
-        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}MarvelApi-ApiMetadata.txt";
+        var fileName = $"{Path.Combine(RelativePath, BaselineFolder)}{MarvelBaselinePrefix}-ApiMetadata.txt";
         File.Exists(fileName).Should().BeTrue();
 
         var oldReport = File.ReadAllText(fileName);

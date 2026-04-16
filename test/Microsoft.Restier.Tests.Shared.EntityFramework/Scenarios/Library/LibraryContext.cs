@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.OData.Edm;
 #endif
 
+
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 
 #if EF6
@@ -94,9 +95,9 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
 #pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
-            var timeOfDayConverter = new ValueConverter<TimeOfDay, TimeSpan>(
-                v => new TimeSpan(0, v.Hours, v.Minutes, v.Seconds, (int)v.Milliseconds),
-                v => new TimeOfDay(v.Hours, v.Minutes, v.Seconds, v.Milliseconds));
+            var timeOfDayConverter = new ValueConverter<TimeOfDay, TimeOnly>(
+                v => new TimeOnly(v.Hours, v.Minutes, v.Seconds, (int)v.Milliseconds),
+                v => new TimeOfDay(v.Hour, v.Minute, v.Second, v.Millisecond));
 #pragma warning restore CS0618
 
             modelBuilder.Entity<Employee>().OwnsOne(c => c.Addr);

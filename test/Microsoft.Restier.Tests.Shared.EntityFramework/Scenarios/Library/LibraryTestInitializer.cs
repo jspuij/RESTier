@@ -26,7 +26,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
     /// </summary>
     public class LibraryTestInitializer
 #if EF6
-        : DropCreateDatabaseAlways<LibraryContext>
+        : CreateDatabaseIfNotExists<LibraryContext>
     {
 
         protected override void Seed(LibraryContext libraryContext)

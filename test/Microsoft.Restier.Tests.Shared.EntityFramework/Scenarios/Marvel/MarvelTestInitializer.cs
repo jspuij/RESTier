@@ -22,7 +22,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EFCore
 
     public class MarvelTestInitializer
 #if EF6
-        : DropCreateDatabaseAlways<MarvelContext>
+        : CreateDatabaseIfNotExists<MarvelContext>
     {
 
         protected override void Seed(MarvelContext context)

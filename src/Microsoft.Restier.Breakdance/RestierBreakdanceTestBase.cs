@@ -71,10 +71,36 @@ namespace Microsoft.Restier.Breakdance
                     })
                     .AddApplicationPart(typeof(TApi).Assembly)
                     .AddApplicationPart(typeof(RestierController).Assembly);
-            })
+            });
+        }
 
-           .ConfigureWebHost(webBuilder =>
+        // Workaround for Breakdance 8.0 bug: AspNetCoreBreakdanceTestBase.TestSetupAsync() calls
+        // base.TestSetup() instead of base.TestSetupAsync(), and BreakdanceTestBase.TestSetup()
+        // calls TestSetupAsync() — creating infinite mutual recursion that stack overflows.
+        // Remove these overrides once Breakdance ships a fix.
+
+        /// <inheritdoc/>
+        public override void TestSetup()
+        {
+            EnsureTestServerAsync().GetAwaiter().GetResult();
+        }
+
+        /// <inheritdoc/>
+        public override async Task TestSetupAsync()
+        {
+            await EnsureTestServerAsync();
+        }
+
+        private new async Task EnsureTestServerAsync()
+        {
+            if (TestServer is not null)
             {
+                return;
+            }
+
+            TestHostBuilder.ConfigureWebHost(webBuilder =>
+            {
+                webBuilder.UseTestServer();
                 webBuilder.Configure(builder =>
                 {
                     ApplicationBuilderAction?.Invoke(builder);
@@ -91,6 +117,10 @@ namespace Microsoft.Restier.Breakdance
                     });
                 });
             });
+
+            var host = TestHostBuilder.Build();
+            await host.StartAsync();
+            TestServer = host.GetTestServer();
         }
 
         /// <summary>

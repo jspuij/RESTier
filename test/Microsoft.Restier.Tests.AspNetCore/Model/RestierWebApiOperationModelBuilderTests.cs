@@ -1,15 +1,16 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
+using System.Diagnostics;
+using System.Linq;
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Tests.Core;
+using Microsoft.Restier.Tests.Shared;
 using NSubstitute;
-using System;
-using System.Diagnostics;
-using System.Linq;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.Model;
@@ -21,13 +22,15 @@ public class RestierWebApiOperationModelBuilderTests
 {
     private readonly Type _targetApiType = typeof(SampleApi);
     private readonly IModelBuilder _innerModelBuilder = Substitute.For<IModelBuilder>();
-    private readonly IModelContext _modelContext = Substitute.For<IModelContext>();
 
     [Fact]
     public void Constructor_ShouldInitializeProperties()
     {
+        // Arrange
+        var extender = new RestierWebApiModelExtender(_targetApiType);
+
         // Act
-        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, _innerModelBuilder);
+        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, extender);
 
         // Assert
         builder.Should().NotBeNull();
@@ -37,11 +40,15 @@ public class RestierWebApiOperationModelBuilderTests
     public void GetEdmModel_ShouldReturnNull_WhenInnerModelBuilderReturnsNull()
     {
         // Arrange
-        _innerModelBuilder.GetEdmModel(_modelContext).Returns((IEdmModel)null);
-        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, _innerModelBuilder);
+        _innerModelBuilder.GetEdmModel().Returns((IEdmModel)null);
+        var extender = new RestierWebApiModelExtender(_targetApiType);
+        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, extender)
+        {
+            Inner = _innerModelBuilder
+        };
 
         // Act
-        var result = builder.GetEdmModel(_modelContext);
+        var result = builder.GetEdmModel();
 
         // Assert
         result.Should().BeNull();
@@ -51,14 +58,19 @@ public class RestierWebApiOperationModelBuilderTests
     public void GetEdmModel_ShouldReturnModel_WhenInnerModelBuilderReturnsValidModel()
     {
         // Arrange
-        var edmModel = Substitute.For<EdmModel>();
-        edmModel.DeclaredNamespaces.Returns(new[] { "TestNamespace" });
-        _innerModelBuilder.GetEdmModel(_modelContext).Returns(edmModel);
+        var edmModel = new EdmModel();
+        var container = new EdmEntityContainer("TestNamespace", "DefaultContainer");
+        edmModel.AddElement(container);
+        _innerModelBuilder.GetEdmModel().Returns(edmModel);
 
-        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, _innerModelBuilder);
+        var extender = new RestierWebApiModelExtender(_targetApiType);
+        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, extender)
+        {
+            Inner = _innerModelBuilder
+        };
 
         // Act
-        var result = builder.GetEdmModel(_modelContext);
+        var result = builder.GetEdmModel();
 
         // Assert
         result.Should().NotBeNull();
@@ -69,14 +81,19 @@ public class RestierWebApiOperationModelBuilderTests
     public void GetEdmModel_ShouldExtendModelWithOperations()
     {
         // Arrange
-        var edmModel = Substitute.For<EdmModel>();
-        edmModel.DeclaredNamespaces.Returns(new[] { "TestNamespace" });
-        _innerModelBuilder.GetEdmModel(_modelContext).Returns(edmModel);
+        var edmModel = new EdmModel();
+        var container = new EdmEntityContainer("TestNamespace", "DefaultContainer");
+        edmModel.AddElement(container);
+        _innerModelBuilder.GetEdmModel().Returns(edmModel);
 
-        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, _innerModelBuilder);
+        var extender = new RestierWebApiModelExtender(_targetApiType);
+        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, extender)
+        {
+            Inner = _innerModelBuilder
+        };
 
         // Act
-        var result = builder.GetEdmModel(_modelContext);
+        var result = builder.GetEdmModel();
 
         // Assert
         result.Should().NotBeNull();
@@ -87,28 +104,39 @@ public class RestierWebApiOperationModelBuilderTests
     [Fact]
     public void GetEdmModel_ShouldWarnWhenBoundOperationHasNoParameters()
     {
-        TestTraceListener testTraceListener = new TestTraceListener();
+        var testTraceListener = new TestTraceListener();
         Trace.Listeners.Add(testTraceListener);
 
-        // Arrange
-        var edmModel = Substitute.For<EdmModel>();
-        edmModel.DeclaredNamespaces.Returns(new[] { "TestNamespace" });
-        _innerModelBuilder.GetEdmModel(_modelContext).Returns(edmModel);
+        try
+        {
+            // Arrange
+            var edmModel = new EdmModel();
+            var container = new EdmEntityContainer("TestNamespace", "DefaultContainer");
+            edmModel.AddElement(container);
+            _innerModelBuilder.GetEdmModel().Returns(edmModel);
 
-        var builder = new RestierWebApiOperationModelBuilder(_targetApiType, _innerModelBuilder);
+            var extender = new RestierWebApiModelExtender(_targetApiType);
+            var builder = new RestierWebApiOperationModelBuilder(_targetApiType, extender)
+            {
+                Inner = _innerModelBuilder
+            };
 
-        // Act
-        var result = builder.GetEdmModel(_modelContext);
+            // Act
+            var result = builder.GetEdmModel();
 
-        // Assert
-        result.Should().NotBeNull();
-        // Verify that a warning is logged (if applicable).
-        testTraceListener.Messages.Should().Contain("The operation 'WrongBoundMethod' was marked with [BoundOperation], but no parameters were specified to bind against.");
+            // Assert
+            result.Should().NotBeNull();
+            testTraceListener.Messages.Should().Contain("The operation 'WrongBoundMethod' was marked with [BoundOperation], but no parameters were specified to bind against.");
+        }
+        finally
+        {
+            Trace.Listeners.Remove(testTraceListener);
+        }
     }
 }
 
 // Sample API class for testing purposes
-public class SampleApi 
+public class SampleApi
 {
     [UnboundOperation]
     public int SampleMethod()
@@ -121,6 +149,4 @@ public class SampleApi
     {
         return 42;
     }
-
-
 }

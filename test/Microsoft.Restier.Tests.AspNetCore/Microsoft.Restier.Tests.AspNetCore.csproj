@@ -6,12 +6,6 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
-	<ItemGroup>
-	  <Compile Remove="Model\RestierModelBuilderTests.cs" />
-	  <Compile Remove="Model\RestierModelExtenderTests.cs" />
-	  <Compile Remove="Model\RestierWebApiOperationModelBuilderTests.cs" />
-	</ItemGroup>
-
 	
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />

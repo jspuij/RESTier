@@ -1,28 +1,17 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.EntityFrameworkCore;
-using Microsoft.Restier.Tests.Shared.Scenarios.Library;
-using System;
 
-namespace Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views
+namespace Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views;
+
+public class LibraryWithViewsApi : EntityFrameworkApi<LibraryWithViewsContext>
 {
-
-    /// <summary>
-    ///
-    /// </summary>
-    public class LibraryWithViewsApi : EntityFrameworkApi<LibraryWithViewsContext>
+    public LibraryWithViewsApi(LibraryWithViewsContext dbContext, IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+        : base(dbContext, model, queryHandler, submitHandler)
     {
-
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="serviceProvider"></param>
-        public LibraryWithViewsApi(IServiceProvider serviceProvider) : base(serviceProvider)
-        {
-
-        }
-
     }
-
 }

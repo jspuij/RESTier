@@ -3,6 +3,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore;
 
 namespace Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views
 {

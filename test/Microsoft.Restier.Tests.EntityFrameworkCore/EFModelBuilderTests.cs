@@ -4,9 +4,9 @@
 using System;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
-using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.EntityFrameworkCore;
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.IncorrectLibrary;
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views;
@@ -22,10 +22,10 @@ public class EFModelBuilderTests
         var getModelAction = async () =>
         {
             _ = await RestierTestHelpers.GetApiMetadataAsync<IncorrectLibraryApi>(
-                serviceCollection: services => services.AddEFCoreProviderServices<IncorrectLibraryContext>());
+                serviceCollection: services => services.AddEFCoreProviderServices<IncorrectLibraryContext>((Action<DbContextOptionsBuilder>)null));
         };
-        await getModelAction.Should().ThrowAsync<EdmModelValidationException>()
-            .Where(c => c.Message.Contains("Address") && c.Message.Contains("Universe"));
+        await getModelAction.Should().ThrowAsync<InvalidOperationException>()
+            .Where(c => c.ToString().Contains("Address") && c.ToString().Contains("Universe"));
     }
 
     [Fact]
@@ -34,9 +34,9 @@ public class EFModelBuilderTests
         var getModelAction = async () =>
         {
             _ = await RestierTestHelpers.GetApiMetadataAsync<LibraryWithViewsApi>(
-                serviceCollection: services => services.AddEFCoreProviderServices<LibraryWithViewsContext>());
+                serviceCollection: services => services.AddEFCoreProviderServices<LibraryWithViewsContext>((Action<DbContextOptionsBuilder>)null));
         };
         await getModelAction.Should().ThrowAsync<InvalidOperationException>()
-            .Where(c => c.Message.Contains("[Keyless]"));
+            .Where(c => c.ToString().Contains("[Keyless]"));
     }
 }

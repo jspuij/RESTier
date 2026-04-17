@@ -10,6 +10,7 @@ using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.EntityFrameworkCore;
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.IncorrectLibrary;
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.EntityFrameworkCore;
@@ -38,5 +39,18 @@ public class EFModelBuilderTests
         };
         await getModelAction.Should().ThrowAsync<InvalidOperationException>()
             .Where(c => c.ToString().Contains("[Keyless]"));
+    }
+
+    [Fact]
+    public async Task GetEdmModel_ShouldBuildValidModel_ForStandardContext()
+    {
+        var metadata = await RestierTestHelpers.GetApiMetadataAsync<LibraryApi>(
+            serviceCollection: services => services.AddEntityFrameworkServices<LibraryContext>());
+
+        metadata.Should().NotBeNull();
+        var metadataString = metadata.ToString();
+        metadataString.Should().Contain("Books");
+        metadataString.Should().Contain("Publishers");
+        metadataString.Should().Contain("Readers");
     }
 }

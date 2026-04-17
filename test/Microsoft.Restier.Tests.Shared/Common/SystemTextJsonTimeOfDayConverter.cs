@@ -1,7 +1,6 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-#if NET6_0_OR_GREATER
 #pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData
 using Microsoft.OData.Edm;
 using System;
@@ -13,13 +12,13 @@ namespace Microsoft.Restier.Tests.Shared.Common
 {
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class SystemTextJsonTimeOfDayConverter : JsonConverter<TimeOfDay>
     {
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="typeToConvert"></param>
@@ -39,7 +38,7 @@ namespace Microsoft.Restier.Tests.Shared.Common
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="writer"></param>
         /// <param name="value"></param>
@@ -52,4 +51,3 @@ namespace Microsoft.Restier.Tests.Shared.Common
     }
 
 }
-#endif

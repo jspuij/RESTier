@@ -7,11 +7,7 @@ using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 
-#if NET6_0_OR_GREATER
-    using Microsoft.Restier.AspNetCore.Model;
-#else
-    using Microsoft.Restier.AspNet.Model;
-#endif
+using Microsoft.Restier.AspNetCore.Model;
 
 #if EF6
     using Microsoft.Restier.EntityFramework;

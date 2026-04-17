@@ -23,10 +23,6 @@
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp3.1' OR '$(TargetFramework)' == 'netstandard2.1'">
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*" />
-	</ItemGroup>
-
 	<ItemGroup>
 		<ProjectReference Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
 		<ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />

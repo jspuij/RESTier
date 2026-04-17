@@ -13,16 +13,10 @@ using System.Data.Entity;
 #if EFCore
 using Microsoft.EntityFrameworkCore;
 #endif
-#if NET6_0_OR_GREATER
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
 using Microsoft.OData.Edm;
-
-#else
-using Microsoft.Restier.AspNet.Model;
-
-#endif
 
 #if EF6
 using Microsoft.Restier.EntityFramework;

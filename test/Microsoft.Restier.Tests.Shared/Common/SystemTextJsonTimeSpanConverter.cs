@@ -1,7 +1,6 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-#if NET6_0_OR_GREATER
 using System;
 using System.Globalization;
 using System.Text.Json;
@@ -12,13 +11,13 @@ namespace Microsoft.Restier.Tests.Shared.Common
 {
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class SystemTextJsonTimeSpanConverter : JsonConverter<TimeSpan>
     {
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="typeToConvert"></param>
@@ -34,7 +33,7 @@ namespace Microsoft.Restier.Tests.Shared.Common
             var value = reader.GetString();
             if (string.IsNullOrWhiteSpace(value)) return default;
 
-  
+
             if (value.Contains("-") && value.IndexOf("-", StringComparison.InvariantCultureIgnoreCase) != 0)
             {
                 value = $"-{value.Replace("-", "")}";
@@ -43,7 +42,7 @@ namespace Microsoft.Restier.Tests.Shared.Common
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="writer"></param>
         /// <param name="value"></param>
@@ -56,4 +55,3 @@ namespace Microsoft.Restier.Tests.Shared.Common
     }
 
 }
-#endif

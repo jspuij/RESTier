@@ -120,22 +120,6 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
 
-#if !EFCore
-            // Todo: Restore geometry handling
-            if (type == typeof(DbGeography))
-            {
-                if (value is GeographyPoint point)
-                {
-                    return point.ToDbGeography();
-                }
-
-                if (value is GeographyLineString s)
-                {
-                    return s.ToDbGeography();
-                }
-            }
-#endif
-
             return value;
         }
 

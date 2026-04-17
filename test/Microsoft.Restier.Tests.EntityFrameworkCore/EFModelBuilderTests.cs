@@ -12,9 +12,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Threading.Tasks;
 
-#if NET6_0_OR_GREATER
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views;
-#endif
 
 namespace Microsoft.Restier.Tests.EntityFrameworkCore
 {
@@ -36,8 +34,6 @@ namespace Microsoft.Restier.Tests.EntityFrameworkCore
             getModelAction.Should().Throw<EdmModelValidationException>().Where(c => c.Message.Contains("Address") && c.Message.Contains("Universe"));
         }
 
-#if NET6_0_OR_GREATER
-
         /// <summary>
         /// Tests that APIs that try to map Views to DbSets throws an InvalidOperationException, per https://docs.microsoft.com/en-us/odata/webapi/abstract-entity-types.
         /// </summary>
@@ -54,8 +50,6 @@ namespace Microsoft.Restier.Tests.EntityFrameworkCore
             };
             getModelAction.Should().ThrowAsync<InvalidOperationException>().Where(c => c.Message.Contains("[Keyless]"));
         }
-
-#endif
 
     }
 

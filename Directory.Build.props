@@ -8,7 +8,7 @@
 		<IsSampleProject Condition="$(MSBuildProjectName.ToLower().Contains('.samples.'))">true</IsSampleProject>
 		<IsTemplateProject Condition="$(MSBuildProjectName.ToLower().Contains('.templates.'))">true</IsTemplateProject>
 		<IsTemplatePackageProject Condition="$(MSBuildProjectName.ToLower().Contains('.templates.package'))">true</IsTemplatePackageProject>
-		<IsNetCore Condition=" '$(TargetFramework)' == 'net9.0' OR '$(TargetFramework)' == 'net8.0' ">true</IsNetCore>
+		<IsNetCore Condition=" '$(TargetFramework)' == 'net10.0' OR '$(TargetFramework)' == 'net9.0' OR '$(TargetFramework)' == 'net8.0' ">true</IsNetCore>
 		<IsPrimaryProject Condition=" '$(IsBenchmarkProject)' != 'true' And '$(IsTestProject)' != 'true' And '$(IsTestAssetProject)' != 'true' And '$(IsSampleProject)' != 'true' ">true</IsPrimaryProject>
 		<IncludeReadmeFile Condition="Exists('$(MSBuildProjectDirectory)\readme.md')">true</IncludeReadmeFile>
 
@@ -82,6 +82,9 @@
 		<!-- Suppress warnings about pre-release packages -->
 		<NoWarn>$(NoWarn);NU5104</NoWarn>
 
+		<!-- Suppress .NET 10 package pruning warnings for multi-targeted packages that are in-box on net10.0 -->
+		<NoWarn>$(NoWarn);NU1510</NoWarn>
+
 	</PropertyGroup>
 
 	<PropertyGroup Condition=" $(IsTestProject) == 'true' ">
@@ -100,13 +103,18 @@
 
 	<PropertyGroup>
 		<StandardTestTfms>net48</StandardTestTfms>
-		<RestierBreakdanceVersion>[7.0.0, 8.0.0)</RestierBreakdanceVersion>
-		<RestierEasyAfVersion>[3.0.0, 4.0.0)</RestierEasyAfVersion>
+		<RestierBreakdanceVersion>[8.0.0, 9.0.0)</RestierBreakdanceVersion>
+		<RestierEasyAfVersion>[4.0.0, 5.0.0)</RestierEasyAfVersion>
 		<RestierNet9DependencyInjectionVersion>[9.*, 10.0.0)</RestierNet9DependencyInjectionVersion>
 		<RestierNet9EntityFrameworkVersion>[9.*, 10.0.0)</RestierNet9EntityFrameworkVersion>
 		<RestierNet9SystemTextJsonVersion>[9.*, 10.0.0)</RestierNet9SystemTextJsonVersion>
 		<RestierNet9UserSecretsVersion>[9.*, 10.0.0)</RestierNet9UserSecretsVersion>
 		<RestierNet9AspNetCoreTestHostVersion>[9.*, 10.0.0)</RestierNet9AspNetCoreTestHostVersion>
+		<RestierNet10DependencyInjectionVersion>[10.*, 11.0.0)</RestierNet10DependencyInjectionVersion>
+		<RestierNet10EntityFrameworkVersion>[10.*, 11.0.0)</RestierNet10EntityFrameworkVersion>
+		<RestierNet10SystemTextJsonVersion>[10.*, 11.0.0)</RestierNet10SystemTextJsonVersion>
+		<RestierNet10UserSecretsVersion>[10.*, 11.0.0)</RestierNet10UserSecretsVersion>
+		<RestierNet10AspNetCoreTestHostVersion>[10.*, 11.0.0)</RestierNet10AspNetCoreTestHostVersion>
 	</PropertyGroup>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
@@ -117,6 +125,7 @@
 		<PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="$(RestierNet9UserSecretsVersion)" PrivateAssets="All" />
 		<PackageReference Include="System.Text.Json" Version="$(RestierNet9SystemTextJsonVersion)" PrivateAssets="All" />
 	</ItemGroup>
+
 
 	<ItemGroup Condition=" $(IsTestProject) != 'true' AND $(IsSampleProject) != 'true'">
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />

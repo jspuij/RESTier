@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.OData.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.Core;
@@ -50,13 +51,13 @@ namespace Microsoft.Restier.Breakdance
         /// </remarks>
         public RestierBreakdanceTestBase()
         {
-            TestHostBuilder.ConfigureServices(services =>
+            TestHostBuilder.ConfigureServices((context, services) =>
             {
                 services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                         .AddCookie(options =>
                         {
-                            options.Events.OnRedirectToAccessDenied = context => {
-                                context.Response.StatusCode = 403;
+                            options.Events.OnRedirectToAccessDenied = ctx => {
+                                ctx.Response.StatusCode = 403;
                                 return Task.CompletedTask;
                             };
                         });
@@ -72,19 +73,22 @@ namespace Microsoft.Restier.Breakdance
                     .AddApplicationPart(typeof(RestierController).Assembly);
             })
 
-           .Configure(builder =>
+           .ConfigureWebHost(webBuilder =>
             {
-                ApplicationBuilderAction?.Invoke(builder);
-                builder.UseDeveloperExceptionPage();
-                builder.UseMiddleware<AspNetCore.Middleware.ODataBatchHttpContextFixerMiddleware>();
-                builder.UseODataBatching();
-                builder.UseODataRouteDebug();
-                builder.UseRouting();
-                builder.UseAuthorization();
-                builder.UseEndpoints(endpoints =>
+                webBuilder.Configure(builder =>
                 {
-                    endpoints.MapControllers();
-                    endpoints.MapRestier();
+                    ApplicationBuilderAction?.Invoke(builder);
+                    builder.UseDeveloperExceptionPage();
+                    builder.UseMiddleware<AspNetCore.Middleware.ODataBatchHttpContextFixerMiddleware>();
+                    builder.UseODataBatching();
+                    builder.UseODataRouteDebug();
+                    builder.UseRouting();
+                    builder.UseAuthorization();
+                    builder.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapControllers();
+                        endpoints.MapRestier();
+                    });
                 });
             });
         }

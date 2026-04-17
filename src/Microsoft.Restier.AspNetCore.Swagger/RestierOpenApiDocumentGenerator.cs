@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Microsoft.OpenApi.OData;
 using Microsoft.Restier.AspNetCore;
 using System;

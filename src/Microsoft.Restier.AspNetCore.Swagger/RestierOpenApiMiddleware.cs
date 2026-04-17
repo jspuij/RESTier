@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
-using Microsoft.OpenApi.Extensions;
 using Microsoft.OpenApi.OData;
 using System;
 using System.Threading.Tasks;
@@ -55,7 +54,7 @@ namespace Microsoft.Restier.AspNetCore.Swagger
                     if (document is not null)
                     {
                         context.Response.ContentType = "application/json; charset=utf-8";
-                        var json = document.SerializeAsJson(OpenApiSpecVersion.OpenApi3_0);
+                        var json = await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0);
                         await context.Response.WriteAsync(json);
                         return;
                     }

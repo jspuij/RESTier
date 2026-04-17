@@ -19,6 +19,7 @@
     <Project Path="src/Microsoft.Restier.Samples.Northwind.AspNetCore/Microsoft.Restier.Samples.Northwind.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/src/Web/" Id="bf61c3f1-7c7e-4515-8b51-14b374a034f9">
+    <Project Path="src/Microsoft.Restier.AspNetCore.Swagger/Microsoft.Restier.AspNetCore.Swagger.csproj" />
     <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/test/" Id="67e76b39-b345-4061-b1a8-31b95b6f83a8">
@@ -32,6 +33,7 @@
     <Project Path="test/Microsoft.Restier.Tests.Shared.EntityFrameworkCore/Microsoft.Restier.Tests.Shared.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/test/Web/" Id="ae160b58-fb2d-4b9f-9357-8c7648381b95">
+    <Project Path="test/Microsoft.Restier.Tests.AspNetCore.Swagger/Microsoft.Restier.Tests.AspNetCore.Swagger.csproj" />
     <Project Path="test/Microsoft.Restier.Tests.AspNetCore/Microsoft.Restier.Tests.AspNetCore.csproj" />
   </Folder>
 </Solution>

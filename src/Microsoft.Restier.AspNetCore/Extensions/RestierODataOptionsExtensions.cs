@@ -23,6 +23,7 @@ using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Operation;
 using Microsoft.Restier.Core.Query;
 using System;
+using System.Collections.Generic;
 
 namespace Microsoft.Restier.AspNetCore;
 
@@ -62,6 +63,25 @@ public static class RestierODataOptionsExtensions
     where TApi : ApiBase
     => AddRestierRoute(oDataOptions, typeof(TApi), routePrefix , configureRouteServices, useRestierBatching);
 
+
+    /// <summary>
+    /// Gets the route prefixes for all registered Restier APIs.
+    /// </summary>
+    /// <param name="odataOptions">The <see cref="ODataOptions"/> to enumerate.</param>
+    /// <returns>An enumerable of route prefix strings for Restier routes.</returns>
+    public static IEnumerable<string> GetRestierRoutePrefixes(this ODataOptions odataOptions)
+    {
+        Ensure.NotNull(odataOptions, nameof(odataOptions));
+
+        foreach (var (prefix, _) in odataOptions.RouteComponents)
+        {
+            var routeServices = odataOptions.GetRouteServices(prefix);
+            if (routeServices.GetService(typeof(RestierRouteMarker)) is not null)
+            {
+                yield return prefix;
+            }
+        }
+    }
 
     private static ODataOptions AddRestierRoute(
         ODataOptions oDataOptions,

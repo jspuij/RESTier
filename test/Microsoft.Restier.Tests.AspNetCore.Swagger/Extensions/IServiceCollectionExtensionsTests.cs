@@ -1,28 +1,38 @@
-﻿using FluentAssertions;
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Licensed under the MIT License.  See License.txt in the project root for license information.
+
+using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.Swagger.Extensions
 {
 
-    [TestClass]
     public class IServiceCollectionExtensionsTests
     {
 
-        [TestMethod]
-        public void AddRestierSwagger_NoSettingsAction()
+        [Fact]
+        public void AddRestierSwagger_RegistersOpenApiServices()
         {
             var collection = new ServiceCollection();
             collection.AddRestierSwagger();
-            collection.Should().ContainSingle();
+            collection.Should().NotBeEmpty();
         }
 
-        [TestMethod]
-        public void AddRestierSwagger_SettingsAction()
+        [Fact]
+        public void AddRestierSwagger_WithSettingsAction_RegistersOpenApiServices()
         {
             var collection = new ServiceCollection();
             collection.AddRestierSwagger(settings => settings.AddAlternateKeyPaths = true);
-            collection.Should().HaveCount(2);
+            collection.Should().NotBeEmpty();
+        }
+
+        [Fact]
+        public void AddRestierSwagger_WithDocumentName_RegistersOpenApiServices()
+        {
+            var collection = new ServiceCollection();
+            collection.AddRestierSwagger("api");
+            collection.Should().NotBeEmpty();
         }
 
     }

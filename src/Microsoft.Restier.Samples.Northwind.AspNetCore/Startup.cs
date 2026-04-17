@@ -66,8 +66,7 @@ namespace Microsoft.Restier.Samples.Northwind.AspNetCore
                 .AddApplicationPart(typeof(NorthwindApi).Assembly)
                 .AddApplicationPart(typeof(RestierController).Assembly);
 
-            // TODO: Re-enable when Swagger project is ported to new OData APIs.
-            //services.AddRestierSwagger();
+            services.AddRestierSwagger();
 
             //RWM: Since AddRestier calls .AddAuthorization(), you can uncomment the line below if you want every request to be authenticated.
             //services.Configure<AuthorizationOptions>(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -95,10 +94,10 @@ namespace Microsoft.Restier.Samples.Northwind.AspNetCore
             {
                 endpoints.MapControllers();
                 endpoints.MapRestier();
+                endpoints.MapRestierSwagger();
             });
 
-            // TODO: Re-enable when Swagger project is ported to new OData APIs.
-            //app.UseRestierSwagger(true);
+            app.UseRestierSwaggerUI();
         }
 
     }

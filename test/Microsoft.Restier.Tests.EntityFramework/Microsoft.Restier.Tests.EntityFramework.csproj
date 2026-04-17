@@ -1,35 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net48;net8.0;net9.0;</TargetFrameworks>
+		<TargetFrameworks>net8.0;net9.0</TargetFrameworks>
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Breakdance.Assemblies" Version="$(RestierBreakdanceVersion)" />
-		<PackageReference Include="Microsoft.OData.Core" Version="7.*" />
-		<PackageReference Include="Microsoft.OData.Edm" Version="7.*" />
-		<PackageReference Include="Microsoft.AspNet.OData" Version="7.*" Condition="'$(IsNetCore)' != 'true'" />
-		<PackageReference Include="Microsoft.AspNetCore.OData" Version="7.*" Condition="'$(IsNetCore)' == 'true'" />
-
-		<PackageReference Include="System.Text.RegularExpressions" Version="4.*" />
-	</ItemGroup>
-	
-	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="$(RestierNet9DependencyInjectionVersion)" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<ProjectReference Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
-		<ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
+		<ProjectReference Include="..\..\src\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+		<ProjectReference Include="..\..\src\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
 		<ProjectReference Include="..\Microsoft.Restier.Tests.Shared.EntityFramework\Microsoft.Restier.Tests.Shared.EntityFramework.csproj" />
 		<ProjectReference Include="..\Microsoft.Restier.Tests.Shared\Microsoft.Restier.Tests.Shared.csproj" />
-		<ProjectReference Include="..\Microsoft.Restier.AspNet\Microsoft.Restier.AspNet.csproj" Condition="'$(IsNetCore)' != 'true'" />
-		<ProjectReference Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" Condition="'$(IsNetCore)' == 'true'" />
 	</ItemGroup>
 
 </Project>

@@ -1,56 +1,42 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
-using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.EntityFrameworkCore;
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.IncorrectLibrary;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Threading.Tasks;
-
 using Microsoft.Restier.Tests.EntityFrameworkCore.Scenarios.Views;
+using Xunit;
 
-namespace Microsoft.Restier.Tests.EntityFrameworkCore
+namespace Microsoft.Restier.Tests.EntityFrameworkCore;
+
+public class EFModelBuilderTests
 {
-
-    [TestClass]
-    public class EFModelBuilderTests
+    [Fact]
+    public async Task DbSetOnComplexType_Should_ThrowException()
     {
-
-        /// <summary>
-        /// Tests that mapping a complex type to a DbSet in the model causes an exception.
-        /// </summary>
-        /// <remarks>This is not supported because the EFModelBuilder requires that a primary key is defined for each type in the model.</remarks>
-        [TestMethod]
-        public async Task DbSetOnComplexType_Should_ThrowException()
+        var getModelAction = async () =>
         {
-            var provider = await RestierTestHelpers.GetTestableInjectionContainer<IncorrectLibraryApi>(serviceCollection: (services) => services.AddEFCoreProviderServices<IncorrectLibraryContext>());
-            var api = provider.GetTestableApiInstance<IncorrectLibraryApi>();
-            Action getModelAction = () =>  new EFModelBuilder().GetModel(new ModelContext(api));
-            getModelAction.Should().Throw<EdmModelValidationException>().Where(c => c.Message.Contains("Address") && c.Message.Contains("Universe"));
-        }
-
-        /// <summary>
-        /// Tests that APIs that try to map Views to DbSets throws an InvalidOperationException, per https://docs.microsoft.com/en-us/odata/webapi/abstract-entity-types.
-        /// </summary>
-        /// <remarks>
-        /// This is not supported because the EFModelBuilder requires that a primary key is defined for each type in the model.
-        /// The issue that created the need for this test is here: https://github.com/OData/RESTier/issues/692
-        /// </remarks>
-        [TestMethod]
-        public void EFModelBuilder_Should_HandleViews()
-        {
-            var getModelAction = async () =>
-            {
-                _ = await RestierTestHelpers.GetApiMetadataAsync<LibraryWithViewsApi>(serviceCollection: (services) => services.AddEFCoreProviderServices<LibraryWithViewsContext>());
-            };
-            getModelAction.Should().ThrowAsync<InvalidOperationException>().Where(c => c.Message.Contains("[Keyless]"));
-        }
-
+            _ = await RestierTestHelpers.GetApiMetadataAsync<IncorrectLibraryApi>(
+                serviceCollection: services => services.AddEFCoreProviderServices<IncorrectLibraryContext>());
+        };
+        await getModelAction.Should().ThrowAsync<EdmModelValidationException>()
+            .Where(c => c.Message.Contains("Address") && c.Message.Contains("Universe"));
     }
 
+    [Fact]
+    public async Task EFModelBuilder_Should_HandleViews()
+    {
+        var getModelAction = async () =>
+        {
+            _ = await RestierTestHelpers.GetApiMetadataAsync<LibraryWithViewsApi>(
+                serviceCollection: services => services.AddEFCoreProviderServices<LibraryWithViewsContext>());
+        };
+        await getModelAction.Should().ThrowAsync<InvalidOperationException>()
+            .Where(c => c.Message.Contains("[Keyless]"));
+    }
 }

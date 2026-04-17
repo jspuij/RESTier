@@ -12,27 +12,19 @@ namespace Microsoft.Restier.Tests.AspNetCore.Swagger.Extensions
     {
 
         [Fact]
-        public void AddRestierSwagger_RegistersOpenApiServices()
+        public void AddRestierSwagger_NoSettingsAction()
         {
             var collection = new ServiceCollection();
             collection.AddRestierSwagger();
-            collection.Should().NotBeEmpty();
+            collection.Should().ContainSingle();
         }
 
         [Fact]
-        public void AddRestierSwagger_WithSettingsAction_RegistersOpenApiServices()
+        public void AddRestierSwagger_SettingsAction()
         {
             var collection = new ServiceCollection();
             collection.AddRestierSwagger(settings => settings.AddAlternateKeyPaths = true);
-            collection.Should().NotBeEmpty();
-        }
-
-        [Fact]
-        public void AddRestierSwagger_WithDocumentName_RegistersOpenApiServices()
-        {
-            var collection = new ServiceCollection();
-            collection.AddRestierSwagger("api");
-            collection.Should().NotBeEmpty();
+            collection.Should().HaveCount(2);
         }
 
     }

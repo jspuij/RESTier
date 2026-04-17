@@ -94,7 +94,6 @@ namespace Microsoft.Restier.Samples.Northwind.AspNetCore
             {
                 endpoints.MapControllers();
                 endpoints.MapRestier();
-                endpoints.MapRestierSwagger();
             });
 
             app.UseRestierSwaggerUI();

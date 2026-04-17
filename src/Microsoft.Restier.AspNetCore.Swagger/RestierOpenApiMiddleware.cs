@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-#if !NET9_0_OR_GREATER
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.Options;
@@ -10,15 +8,13 @@ using Microsoft.OpenApi;
 using Microsoft.OpenApi.Extensions;
 using Microsoft.OpenApi.OData;
 using System;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace Microsoft.Restier.AspNetCore.Swagger
 {
 
     /// <summary>
-    /// Middleware that serves OpenAPI documents for Restier routes on net8.0,
-    /// where <c>Microsoft.AspNetCore.OpenApi</c> does not support document transformers.
+    /// Middleware that serves OpenAPI documents generated from Restier EDM models.
     /// </summary>
     internal class RestierOpenApiMiddleware
     {
@@ -72,5 +68,3 @@ namespace Microsoft.Restier.AspNetCore.Swagger
     }
 
 }
-
-#endif

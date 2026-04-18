@@ -23,10 +23,7 @@ before you work on the pull request. After the RESTier team has reviewed this is
 to "accepting pull request", you can work on the code change.
 
 ### Prepare Tools
-[Atom](https://atom.io/) with package [atom-beautify](https://atom.io/packages/atom-beautify) and 
-[markdown-toc](https://atom.io/packages/markdown-toc) is recommended to edit the document. 
-[MarkdownPad](http://www.markdownpad.com/) can also be used to edit the document.<br />
-Visual Studio 2015 is recommended for code contribution.
+Visual Studio 2022 or later is recommended for code contribution. VS Code and JetBrains Rider also work well.
 
 ### Steps to create a pull request
 These are the recommended steps to create a pull request:<br />
@@ -36,9 +33,9 @@ These are the recommended steps to create a pull request:<br />
 3. Add a git remote to upstream for local repository with command _git remote add upstream 
 [https://github.com/OData/RESTier.git](https://github.com/OData/RESTier.git)_
 4. Make code changes and add test cases, refer Test specification section for more details about test
-5. Test the changed codes with one-click build and test script
+5. Build and test the changes with `dotnet build RESTier.slnx && dotnet test RESTier.slnx`
 6. Commit changed code to local repository with clear message
-7. Rebase the code to upstream via command _git pull --rebase upstream master_ and resolve conflicts 
+7. Rebase the code to upstream via command _git pull --rebase upstream main_ and resolve conflicts 
 if there is any then continue rebase via command _git pull --rebase continue_
 8. Push local commit to the forked repository
 9. Create pull request from forked repository Web console via comparing with upstream.
@@ -46,18 +43,18 @@ if there is any then continue rebase via command _git pull --rebase continue_
 11. Pull request will be reviewed by Microsoft OData team
 12. Address comments and revise code if necessary
 13. Commit the changes to local repository or amend existing commit via command _git commit --amend_
-14. Rebase the code with upstream again via command _git pull --rebase upstream master_ and resolve 
+14. Rebase the code with upstream again via command _git pull --rebase upstream main_ and resolve 
 conflicts if there is any then continue rebase via command _git pull --rebase continue_
-15. Test the changed codes with one-click build and test script again
+15. Build and test the changes again with `dotnet build RESTier.slnx && dotnet test RESTier.slnx`
 16. Push changes to the forked repository and use _--force_ option if existing commit is amended
 17. Microsoft OData team will merge the pull request into upstream
 
 ### Test specification
-All tests need to be written with xUnit. Here are some rules to follow when you are organizing the 
+All tests need to be written with **xUnit v3**. Use **FluentAssertions** for assertions and **NSubstitute** for mocking. Here are some rules to follow when you are organizing the 
 test code:
 
-- **Project name correspondence** (`X -> X.Tests`). For instance, all the test code of the `Microsoft.Restier.Core` project should be placed in the `Microsoft.Restier.Core.Tests` project. Path and file name correspondence. (`X/Y/Z/A.cs -> X.Tests/Y/Z/ATests.cs`). For example, the test code of the `ConventionBasedApiModelBuilder` class (in the `Microsoft.Restier.Core/Convention/ConventionBasedApiModelBuilder.cs` file) should be placed in the `Microsoft.Restier.Core.Tests/Convention/ConventionBasedApiModelBuilderTests.cs` file.
-- **Namespace correspondence** (`X.Tests/Y/Z -> X.Tests.Y.Z`). The namespace of the file should strictly follow the path. For example, the namespace of the `ConventionBasedApiModelBuilderTests.cs` file should be `Microsoft.Restier.Core.Tests.Convention`.
+- **Project name correspondence** (`Microsoft.Restier.X` -> `Microsoft.Restier.Tests.X`). For instance, all the test code of the `Microsoft.Restier.Core` project should be placed in the `Microsoft.Restier.Tests.Core` project. Path and file name correspondence. (`X/Y/Z/A.cs -> X.Tests/Y/Z/ATests.cs`). For example, the test code of the `ConventionBasedApiModelBuilder` class (in the `Microsoft.Restier.Core/Convention/ConventionBasedApiModelBuilder.cs` file) should be placed in the `Microsoft.Restier.Tests.Core/Convention/ConventionBasedApiModelBuilderTests.cs` file.
+- **Namespace correspondence** (`X.Tests/Y/Z -> X.Tests.Y.Z`). The namespace of the file should strictly follow the path. For example, the namespace of the `ConventionBasedApiModelBuilderTests.cs` file should be `Microsoft.Restier.Tests.Core.Convention`.
 - **Utility classes**. The file for a utility class can be placed at the same level of its user or a shared level that is visible to all its users. But the file name must **NOT** be ended with `Tests` to avoid any confusion.
 - **Integration and scenario tests**. Those tests usually involve multiple modules and have some specific scenarios. They should be placed separately in `X.Tests/IntegrationTests` and `X.Tests/ScenarioTests`. There is no hard requirement of the folder structure for those tests. But they should be organized logically and systematically as possible. 
 

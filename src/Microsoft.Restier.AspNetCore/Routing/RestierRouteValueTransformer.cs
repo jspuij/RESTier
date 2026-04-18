@@ -208,7 +208,11 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
         var baseUri = $"{request.Scheme}://{request.Host}";
         if (request.PathBase.HasValue)
         {
-            baseUri += request.PathBase.Value;
+            var pathBase = request.PathBase.Value.TrimStart('/');
+            if (pathBase.Length > 0)
+            {
+                baseUri += "/" + pathBase;
+            }
         }
         if (!string.IsNullOrEmpty(routePrefix))
         {

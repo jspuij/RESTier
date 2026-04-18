@@ -496,6 +496,24 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
         }
 
         [Fact]
+        public async Task PathBase_RootSlash_DoesNotProduceDoubleSlash()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "Customers" };
+            var httpContext = CreateHttpContext("GET", "/Customers");
+            httpContext.Request.PathBase = new PathString("/");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().NotBeNull();
+            var feature = httpContext.ODataFeature();
+            feature.BaseAddress.Should().Be("https://localhost/");
+        }
+
+        [Fact]
         public async Task Get_NavigationProperty_ReturnsGetAction()
         {
             // Arrange

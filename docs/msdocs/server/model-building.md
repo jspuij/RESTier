@@ -271,7 +271,7 @@ services
             restierServices
                 .AddEFCoreProviderServices<TrippinContext>(...)
                 .AddChainedService<IModelBuilder>((sp, next) =>
-                    new CustomizedModelBuilder { Inner = next });
+                    new CustomizedModelBuilder());
         });
     });
 ```

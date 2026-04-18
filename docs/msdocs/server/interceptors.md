@@ -195,13 +195,15 @@ builder.Services.AddControllers().AddRestier(options =>
     {
         routeServices
             .AddEntityFrameworkServices<TrippinContext>()
-            .AddChainedService<IChangeSetItemFilter>((sp, inner) =>
-                new AuditLogFilter { Inner = inner });
+            .AddChainedService<IChangeSetItemFilter>((sp, next) =>
+                new AuditLogFilter());
     });
 });
 ```
 
-The `inner` parameter represents the next filter in the chain. By assigning it to the `Inner` property
+> **Note:** You do not need to set the `Inner` property yourself. RESTier's chain of responsibility factory
+> automatically wires `Inner` on each service in the chain at resolution time. Your implementation just needs
+> to call `Inner` when it wants to delegate to the next service in the chain.
 and calling it in your methods, you ensure that other filters (including the built-in convention-based
 filter) continue to execute.
 

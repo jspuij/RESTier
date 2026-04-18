@@ -181,8 +181,9 @@ services
                     dbOptions.UseSqlServer(connectionString));
 
             // Register the custom authorizer in the chain of responsibility.
+            // Inner is wired automatically by the chain factory — no need to set it here.
             restierServices.AddChainedService<IChangeSetItemAuthorizer>(
-                (sp, inner) => new CustomAuthorizer { Inner = inner });
+                (sp, next) => new CustomAuthorizer());
         });
     });
 ```
@@ -259,7 +260,7 @@ the `Inner` property will point to the `ConventionBasedChangeSetItemAuthorizer`,
 
 ```cs
 restierServices.AddChainedService<IChangeSetItemAuthorizer>(
-    (sp, inner) => new CustomAuthorizer { Inner = inner });
+    (sp, next) => new CustomAuthorizer());
 ```
 
 With the API class from the convention-based example, the authorization flow for a DELETE to the Trips entity set

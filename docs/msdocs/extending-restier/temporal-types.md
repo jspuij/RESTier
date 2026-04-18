@@ -1,6 +1,6 @@
 # Temporal Types
 
-When using the Microsoft.Restier.Providers.EntityFramework provider, temporal types are now supported. The table below 
+When using the Entity Framework providers (`Microsoft.Restier.EntityFrameworkCore` or `Microsoft.Restier.EntityFramework`), temporal types are supported. The table below 
 shows how Temporal Types map to SQL Types:
 
 |        EF Type        |      SQL Type      |      Edm Type      | Need ColumnAttribute? |

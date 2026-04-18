@@ -1,7 +1,7 @@
 <div align="center">
 <h1>Microsoft RESTier - OData Made Simple</h1>
 
-[Releases](https://github.com/OData/RESTier/releases)&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;Documentation&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[OData v4.01 Documentation](https://www.odata.org/documentation/)
+[Releases](https://github.com/OData/RESTier/releases)&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;Documentation&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[OData v4.01 Documentation](https://www.odata.org/documentation/)&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[License](license.md)
 
 </div>
 

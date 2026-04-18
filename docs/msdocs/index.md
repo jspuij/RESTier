@@ -70,3 +70,42 @@ There is a growing set of tools to support RESTier-based development:
 ### Contributing
 
 If you'd like to help out with the project, please see our [Contribution Guidelines](contribution-guidelines.md).
+
+## Contributors
+
+Special thanks to everyone involved in making RESTier the best API development platform for .NET. The following people
+have made various contributions to the codebase:
+
+| Microsoft     | External       |
+|---------------|----------------|
+| Lewis Cheng   | Cengiz Ilerler |
+| Challenh      | Kemal M        |
+| Eric Erhardt  | Robert McLaws  |
+| Vincent He    |                |
+| Dong Liu      |                |
+| Layla Liu     |                |
+| Fan Ouyang    |                |
+| Congyong S    |                |
+| Mark Stafford |                |
+| Ray Yao       |                |
+
+## 
+
+<!--
+Link References
+-->
+
+[devops-build]:https://dev.azure.com/cloudnimble/Restier/_build?definitionId=8
+[devops-release]:https://dev.azure.com/cloudnimble/Restier/_release?view=all&definitionId=1
+[nightly-feed]:https://www.myget.org/F/restier-nightly/api/v3/index.json
+[twitter-intent]:https://twitter.com/intent/tweet?url=https%3A%2F%2Fgithub.com%2FOData%2FRESTier&via=robertmclaws&text=Check%20out%20Restier%21%20It%27s%20the%20simple%2C%20queryable%20framework%20for%20building%20data-driven%20APIs%20in%20.NET%21&hashtags=odata
+[code-of-conduct]:https://opensource.microsoft.com/codeofconduct/
+
+[devops-build-img]:https://img.shields.io/azure-devops/build/cloudnimble/restier/8.svg?style=for-the-badge&logo=azuredevops
+[devops-release-img]:https://img.shields.io/azure-devops/release/cloudnimble/d3aaa016-9aea-4903-b6a6-abda1d4c84f0/1/1.svg?style=for-the-badge&logo=azuredevops
+[nightly-feed-img]:https://img.shields.io/badge/continuous%20integration-feed-0495dc.svg?style=for-the-badge&logo=nuget&logoColor=fff
+[github-version-img]:https://img.shields.io/github/release/ryanoasis/nerd-fonts.svg?style=for-the-badge
+[gitter-img]:https://img.shields.io/gitter/room/nwjs/nw.js.svg?style=for-the-badge
+[code-climate-img]:https://img.shields.io/codeclimate/issues/github/ryanoasis/nerd-fonts.svg?style=for-the-badge
+[code-of-conduct-img]: https://img.shields.io/badge/code%20of-conduct-00a1f1.svg?style=for-the-badge&logo=windows
+[twitter-img]:https://img.shields.io/badge/share-on%20twitter-55acee.svg?style=for-the-badge&logo=twitter

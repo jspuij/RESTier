@@ -1,24 +1,23 @@
 # Interceptors
 
-Interceptors allow you to process validation and business logic before *and after* Entities hit the database. For
-example, you may need to validate some external business rules before the object is saved, but then after it's saved,
-you may need to dump the object to an Azure Storage Queue to get picked up by a WebJob for further processing out-of-band.
+Interceptors allow you to run custom logic before *and after* entities are processed by the submit pipeline. For
+example, you may need to validate business rules before an entity is saved, or after it is saved you may need to
+publish a message to a queue for further out-of-band processing.
 
-The way RESTier accomplishes this is virtually identical to the [Method Authorization](/server/method-authorization/) 
-feature. This means there are once again two different approaches to tackle the task.
-
-As before, no matter what approach you chose, the concept is simple. Either technique uses a function that returns boolean. 
-Return `true`, and processing continues normally. Return `false`, and RESTier returns a 403 Unauthorized to the client.
+RESTier provides two approaches for interception: convention-based and centralized. Both approaches use methods
+that return `void` (synchronous) or `Task` (asynchronous). To reject an operation from an interceptor, throw an
+appropriate exception (for example, `ODataException`). Interceptors do **not** return a boolean --
+that pattern is used by [Method Authorization](/server/method-authorization/), which is a separate feature.
 
 ## Convention-Based Interception
-Users can control if one of the four submit operations is allowed on some entity set or action by putting some 
-`protected internal` methods into the `Api` class. The method name must conform to the convention
-`On{{BeforeOperation}/{AfterOperation}}{TargetName}`.
+
+You can hook into the submit pipeline by adding `protected internal` methods to your `Api` class. The method name
+must follow the convention `On{Operation}{TargetName}`.
 
 <table style="width: 100%;">
     <tr>
-        <td>The possible values for <code>{BeforeOperation}</code> are:</td>
-        <td>The possible values for <code>{AfterOperation}</code> are:</td>
+        <td>The possible values for <code>{Operation}</code> (before processing) are:</td>
+        <td>The possible values for <code>{Operation}</code> (after processing) are:</td>
         <td>The possible values for <code>{TargetName}</code> are:</td>
     </tr>
     <tr>
@@ -47,255 +46,224 @@ Users can control if one of the four submit operations is allowed on some entity
     </tr>
 </table>
 
+Both synchronous (`void`) and asynchronous (`Task`) return types are supported. Asynchronous methods use the
+`Async` suffix (e.g. `OnInsertingTripAsync`). The method receives a single parameter: the entity being processed.
+
 ### Example
 
-The example below demonstrates how both types of `{TargetName}` can be used. 
+The example below demonstrates convention-based interceptors on an entity set.
 
-- The first method shows a simple way to prevent *any*  user from deleting a particular EntitySet.
-- The second method shows how you can integrate role-based security using multiple techniques.
-- The third method shows how to prevent execution a custom Action.
+- The first method validates business rules **before** a `Trip` is inserted and throws an `ODataException` to reject invalid data.
+- The second method runs **after** a `Trip` is inserted and could be used for notifications or other post-processing.
 
 ```cs
-using Microsoft.Restier.Providers.EntityFramework;
-using System;
-using System.Security.Claims;
+using Microsoft.OData;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.EntityFrameworkCore;
+using System.Diagnostics;
 
-namespace Microsoft.OData.Service.Sample.Trippin.Api
+namespace Trippin.Api
 {
-
-    ///<summary>
-    /// Customizations to the EntityFrameworkApi for the TripPin service.
-    ///</summary>
-    ///<example>
-    /// Add the following line in WebApiConfig.cs to register this code:
-    /// await config.MapRestierRoute<TrippinApi>("Trippin", "api", new RestierBatchHandler(GlobalConfiguration.DefaultServer));
-    ///</example>
-    public class TrippinApi : EntityFrameworkApi<TrippinModel>
+    /// <summary>
+    /// RESTier API definition for the TripPin service.
+    /// </summary>
+    public class TrippinApi : EntityFrameworkApi<TrippinContext>
     {
-        
-        ///<summary>
-        /// Specifies whether or not a Trip can be deleted from an EntitySet.
-        ///</summary>
-        protected void OnInsertingTrip(Trip trip)
+        public TrippinApi(TrippinContext dbContext, IEdmModel model,
+            IQueryHandler queryHandler, ISubmitHandler submitHandler)
+            : base(dbContext, model, queryHandler, submitHandler)
         {
-            Trace.WriteLine($"{DateTime.Now.ToString()}: {trip.TripId} is being Inserted.");
-            
+        }
+
+        /// <summary>
+        /// Runs before a Trip is inserted. Validates that the description is not blank.
+        /// </summary>
+        protected internal void OnInsertingTrip(Trip trip)
+        {
+            Trace.WriteLine($"{DateTime.Now}: Trip {trip.TripId} is being inserted.");
+
             if (string.IsNullOrWhiteSpace(trip.Description))
             {
                 throw new ODataException("The Trip Description cannot be blank.");
             }
         }
 
-        ///<summary>
-        /// Specifies whether or not a Trip can be deleted from an EntitySet.
-        ///</summary>
-        protected void OnInsertedTrip(Trip trip)
+        /// <summary>
+        /// Runs after a Trip has been inserted. Can be used for post-processing.
+        /// </summary>
+        protected internal void OnInsertedTrip(Trip trip)
         {
-            Trace.WriteLine($"{DateTime.Now.ToString()}: {trip.tripId} has been Inserted.");
+            Trace.WriteLine($"{DateTime.Now}: Trip {trip.TripId} has been inserted.");
 
-            // Pseudocode that represents a real business process.
+            // Example: send a welcome email, publish to a queue, etc.
             // EmailManager.SendTripWelcome(trip);
         }
-
     }
-
 }
 ```
 
 ## Centralized Interception
 
-In addition to the more granular convention-based approach, you can also centralize processing into one location. This is
-useful if 
+In addition to the convention-based approach, you can centralize interception logic into a single class by
+implementing `IChangeSetItemFilter`. This is useful when you want to apply cross-cutting concerns (such as
+audit logging) to all entity operations in one place.
 
-User can use interface `IChangeSetItemAuthorizer` to define any customize authorize logic to see whether user is 
-authorized for the specified submit, if this method return false, then the related query will get error code 403 (Forbidden).
+The `IChangeSetItemFilter` interface defines two methods:
 
-There are two steps to plug in the centralized authorization logic.
+- `OnChangeSetItemProcessingAsync` -- called **before** each change set item is processed.
+- `OnChangeSetItemProcessedAsync` -- called **after** each change set item is processed.
 
-- Create a class that implements `IChangeSetItemAuthorizer`.
-- Register that class with RESTier through Dependency Injection (DI).
+There are two steps to add centralized interception:
+
+1. Create a class that implements `IChangeSetItemFilter`.
+2. Register that class with RESTier via `AddChainedService<IChangeSetItemFilter>()` in your route configuration.
 
 ### Example
 
 ```cs
-using Microsoft.OData.Core;
-using Microsoft.Restier.Providers.EntityFramework;
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Core.DependencyInjection;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace Microsoft.OData.Service.Sample.Trippin.Api
+namespace Trippin.Api
 {
-
-    ///<summary>
-    ///
-    ///</summary>
-    public class CustomAuthorizer : IChangeSetItemAuthorizer
+    /// <summary>
+    /// Logs all change set operations for audit purposes.
+    /// </summary>
+    public class AuditLogFilter : IChangeSetItemFilter
     {
+        /// <summary>
+        /// Gets or sets the next filter in the chain of responsibility.
+        /// </summary>
+        public IChangeSetItemFilter Inner { get; set; }
 
-        // The inner handler will call CanUpdate/Insert/Delete<EntitySet> method
-        private IChangeSetItemProcessor Inner { get; set; }
-
-        ///<summary>
-        ///
-        ///</summary>
-        public Task<bool> AuthorizeAsync(SubmitContext context, ChangeSetItem item, CancellationToken cancellationToken)
+        /// <summary>
+        /// Called before a change set item is processed.
+        /// </summary>
+        public async Task OnChangeSetItemProcessingAsync(
+            SubmitContext context, ChangeSetItem item, CancellationToken cancellationToken)
         {
-	        // TODO: RWM: Provide legitimate samples here, along with parameter documentation.
+            if (Inner != null)
+            {
+                await Inner.OnChangeSetItemProcessingAsync(context, item, cancellationToken);
+            }
+
+            if (item is DataModificationItem dataModification)
+            {
+                Trace.WriteLine(
+                    $"Audit: {dataModification.DataModificationItemAction} on " +
+                    $"{dataModification.ResourceSetName} is about to be processed.");
+            }
         }
 
-    }
-
-    ///<summary>
-    /// Customizations to the EntityFrameworkApi for the TripPin service.
-    ///</summary>
-    ///<example>
-    /// Add the following line in WebApiConfig.cs to register this code:
-    /// await config.MapRestierRoute<TrippinApi>("Trippin", "api", new RestierBatchHandler(GlobalConfiguration.DefaultServer));
-    ///</example>
-    public class TrippinApi : EntityFrameworkApi<TrippinModel>
-    {
-
-        ///<summary>
-        /// Allows us to leverage DI to inject additional capabilities into RESTier.
-        ///</summary>
-        protected override IServiceCollection ConfigureApi(IServiceCollection services)
+        /// <summary>
+        /// Called after a change set item has been processed.
+        /// </summary>
+        public async Task OnChangeSetItemProcessedAsync(
+            SubmitContext context, ChangeSetItem item, CancellationToken cancellationToken)
         {
-            return base.ConfigureApi(services)
-                .AddService<IChangeSetItemAuthorizer, CustomizedAuthorizer>();
+            if (Inner != null)
+            {
+                await Inner.OnChangeSetItemProcessedAsync(context, item, cancellationToken);
+            }
+
+            if (item is DataModificationItem dataModification)
+            {
+                Trace.WriteLine(
+                    $"Audit: {dataModification.DataModificationItemAction} on " +
+                    $"{dataModification.ResourceSetName} has been processed.");
+            }
         }
-
     }
-
 }
 ```
 
-NEEDS CLARIFICATION:
-In CustomizedAuthorizer, user can decide whether to call the RESTier logic, if user decide to call the RESTier logic,
-user can defined a property like "private IChangeSetItemAuthorizer Inner {get; set;}" in class CustomizedAuthorizer,
-then call Inner.Inspect() to call RESTier logic which call Authorize part logic defined in section 2.3.
+### Registering the Filter
+
+Register your custom filter in `Program.cs` (or wherever you configure Restier routes) using
+`AddChainedService<IChangeSetItemFilter>()`:
+
+```cs
+builder.Services.AddControllers().AddRestier(options =>
+{
+    options.AddRestierRoute<TrippinApi>("api/trippin", routeServices =>
+    {
+        routeServices
+            .AddEntityFrameworkServices<TrippinContext>()
+            .AddChainedService<IChangeSetItemFilter>((sp, inner) =>
+                new AuditLogFilter { Inner = inner });
+    });
+});
+```
+
+The `inner` parameter represents the next filter in the chain. By assigning it to the `Inner` property
+and calling it in your methods, you ensure that other filters (including the built-in convention-based
+filter) continue to execute.
 
 ## Unit Testing Considerations
 
-Because both of these methods are de-coupled from the code that interacts with the database, the Authorization
-logic is easily testable, without having to fire up the entire Web API + RESTier pipeline.
-
-### Setting up your Unit Test
-
-If you don't have a unit test project for your API project already, start by creating one. Repeat the process
-outlined in "Getting Started" to install the RESTier packages into your Unit Test project. The add the FluentAssertions
-package.
-
-Next, go back to your API project. Expand the "Properties" node, double-click AssemblyInfo.cs, and add the following line
-to the very end of the file: `[assembly: InternalsVisibleTo("{TestProjectAssembly}")]`, making sure you replace 
-{TestProjectAssembly} with the actual assembly name. This is important, because otherwise the tests won't be able to see 
-the `protected internal` methods the authorization conventions use.
+Because convention-based interceptor methods are `protected internal`, they are accessible from your test
+project. `InternalsVisibleTo` is auto-configured from each source project to its matching test project,
+so no manual `AssemblyInfo.cs` changes are needed.
 
 ### Example
 
-Given the [Convention-Based Authorization](#convention-based-authorization) example, the tests below should have 100% code 
-coverage, and should pass without any required changes.
+Given the convention-based example above, you can test the interceptor logic directly without spinning
+up the full Restier pipeline:
 
 ```cs
 using FluentAssertions;
-using Microsoft.OData.Core;
-using Microsoft.OData.Service.Sample.Trippin.Api;
-using Microsoft.Restier.Providers.EntityFramework;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Security.Claims;
+using Microsoft.OData;
+using NSubstitute;
+using Xunit;
 
 namespace Trippin.Tests.Api
 {
-
-    /// <summary>
-    /// Test cases for the RESTier Method Authorizers.
-    /// </summary>
-    [TestClass]
-    public class TrippinApiTests
+    public class TrippinApiInterceptorTests
     {
-
-        #region Trips EntitySet
-
-        /// <summary>
-        /// Tests if the Trips EntitySet is properly configured to reject delete requests.
-        /// </summary>
-        [TestMethod]
-        public void TrippinApi_Trips_CanDelete_IsConfigured()
+        [Fact]
+        public void OnInsertingTrip_WithBlankDescription_ThrowsODataException()
         {
-            var api = new TrippinApi();
-            api.CanDeleteTrips.Should().BeFalse();
+            // Arrange
+            var api = CreateTrippinApi();
+            var trip = new Trip { TripId = 1, Description = "" };
+
+            // Act
+            var act = () => api.OnInsertingTrip(trip);
+
+            // Assert
+            act.Should().Throw<ODataException>()
+                .WithMessage("*Description*blank*");
         }
 
-        /// <summary>
-        /// Tests if the Trips EntitySet is properly configured to accept Admin update requests.
-        /// </summary>
-        [TestMethod]
-        public void TrippinApi_Trips_CanUpdate_IsAdmin()
+        [Fact]
+        public void OnInsertingTrip_WithValidDescription_DoesNotThrow()
         {
-            var api = new TrippinApi();
+            // Arrange
+            var api = CreateTrippinApi();
+            var trip = new Trip { TripId = 1, Description = "A valid trip" };
 
-            // We won't be testing HttpContext-related security here, because that requires mocking,
-            // which is outside the scope of this document.
-            AuthenticateAsAdmin();
-            api.CanUpdateTrips.Should().BeTrue();
+            // Act
+            var act = () => api.OnInsertingTrip(trip);
+
+            // Assert
+            act.Should().NotThrow();
         }
 
-        /// <summary>
-        /// Tests if the Trips EntitySet is properly configured to reject non-Admin update requests.
-        /// </summary>
-        [TestMethod]
-        public void TrippinApi_Trips_CanUpdate_IsNotAdmin()
+        private static TrippinApi CreateTrippinApi()
         {
-            var api = new TrippinApi();
-            // We won't be testing HttpContext-related security here, because that requires mocking,
-            // which is outside the scope of this document.
-            AuthenticateAsNonAdmin();
-            api.CanUpdateTrips.Should().BeFalse();
+            var dbContext = Substitute.For<TrippinContext>();
+            var model = Substitute.For<IEdmModel>();
+            var queryHandler = Substitute.For<IQueryHandler>();
+            var submitHandler = Substitute.For<ISubmitHandler>();
+
+            return new TrippinApi(dbContext, model, queryHandler, submitHandler);
         }
-
-        #endregion
-
-        #region Actions
-
-        /// <summary>
-        /// Tests if the Trips EntitySet is properly configured to reject delete requests.
-        /// </summary>
-        [TestMethod]
-        public void TrippinApi_CanExecuteResetDataSource_IsConfigured()
-        {
-            var api = new TrippinApi();
-            api.CanExecuteResetDataSource.Should().BeFalse();
-        }
-
-        #endregion
-
-        #region Test Helpers
-
-        /// <summary>
-        /// Sets the Thread.CurrentPrincipal to a test user with an "admin" Role Claim.
-        /// </summary>
-        internal static void AuthenticateAsAdmin()
-        {
-            var claimsCollection = new List<Claim>
-            {
-                new Claim(ClaimTypes.Role, "admin")
-            };
-            var claimsIdentity = new ClaimsIdentity(claimsCollection, "Test User");
-            Thread.CurrentPrincipal = new ClaimsPrincipal(claimsIdentity);
-        }
-
-        /// <summary>
-        /// Sets the Thread.CurrentPrincipal to a test user without an "admin" Role Claim.
-        /// </summary>
-        internal static void AuthenticateAsNonAdmin()
-        {
-            var claimsCollection = new List<Claim>();
-            var claimsIdentity = new ClaimsIdentity(claimsCollection, "Test User");
-            Thread.CurrentPrincipal = new ClaimsPrincipal(claimsIdentity);
-        }
-
-        #endregion
-
     }
-
 }
-
 ```

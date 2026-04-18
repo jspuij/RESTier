@@ -65,3 +65,126 @@ namespace Microsoft.OData.Service.Sample.Trippin.Api
 >
 > This registers RESTier's `RestierClaimsPrincipalMiddleware`, which sets `ClaimsPrincipal.Current` from
 > the current `HttpContext.User` on each request.
+
+## Centralized Filtering
+
+In addition to the convention-based approach, you can centralize query filtering logic into a single class by
+implementing `IQueryExpressionProcessor`. This is useful when you want to apply cross-cutting query filters
+(such as multi-tenant row-level security or soft-delete exclusion) to all entity queries in one place.
+
+The `IQueryExpressionProcessor` interface defines a single method:
+
+- `Process(QueryExpressionContext context)` -- called during query expression traversal. Return a modified
+  expression to apply a filter, or `null` / the visited node to leave it unchanged.
+
+There are two steps to add centralized filtering:
+
+1. Create a class that implements `IQueryExpressionProcessor`.
+2. Register that class with RESTier via `AddChainedService<IQueryExpressionProcessor>()` in your route configuration.
+
+### Example
+
+```cs
+using System.Linq;
+using System.Linq.Expressions;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.DependencyInjection;
+using Microsoft.Restier.Core.Query;
+
+namespace Trippin.Api
+{
+    /// <summary>
+    /// Applies a soft-delete filter to all entity queries, excluding rows
+    /// where IsDeleted is true.
+    /// </summary>
+    public class SoftDeleteQueryFilter : IQueryExpressionProcessor
+    {
+        /// <summary>
+        /// Gets or sets the next processor in the chain of responsibility.
+        /// </summary>
+        public IQueryExpressionProcessor Inner { get; set; }
+
+        /// <summary>
+        /// Processes the query expression, delegating to the inner processor first.
+        /// </summary>
+        public Expression Process(QueryExpressionContext context)
+        {
+            // Delegate to the inner processor first (includes convention-based filters).
+            if (Inner is not null)
+            {
+                var innerResult = Inner.Process(context);
+                if (innerResult is not null && innerResult != context.VisitedNode)
+                {
+                    return innerResult;
+                }
+            }
+
+            // Only apply to top-level entity set queries.
+            if (context.ModelReference is not DataSourceStubModelReference dataSourceStub)
+            {
+                return null;
+            }
+
+            if (dataSourceStub.Element is not IEdmEntitySet entitySet)
+            {
+                return null;
+            }
+
+            // Example: you could inspect entitySet.Name or entitySet.EntityType
+            // to decide whether to apply this filter.
+
+            // Apply a Where clause if the entity type has an IsDeleted property.
+            var elementType = context.VisitedNode.Type
+                .GetGenericArguments().FirstOrDefault();
+            if (elementType is null)
+            {
+                return null;
+            }
+
+            var isDeletedProp = elementType.GetProperty("IsDeleted");
+            if (isDeletedProp is null)
+            {
+                return null;
+            }
+
+            // Build: source.Where(e => e.IsDeleted == false)
+            var parameter = Expression.Parameter(elementType, "e");
+            var predicate = Expression.Lambda(
+                Expression.Equal(
+                    Expression.Property(parameter, isDeletedProp),
+                    Expression.Constant(false)),
+                parameter);
+
+            return Expression.Call(
+                typeof(Queryable),
+                "Where",
+                new[] { elementType },
+                context.VisitedNode,
+                predicate);
+        }
+    }
+}
+```
+
+### Registering the Processor
+
+Register your custom processor in `Program.cs` (or wherever you configure Restier routes) using
+`AddChainedService<IQueryExpressionProcessor>()`:
+
+```cs
+builder.Services.AddControllers().AddRestier(options =>
+{
+    options.AddRestierRoute<TrippinApi>("api/trippin", routeServices =>
+    {
+        routeServices
+            .AddEntityFrameworkServices<TrippinContext>()
+            .AddChainedService<IQueryExpressionProcessor>((sp, next) =>
+                new SoftDeleteQueryFilter());
+    });
+});
+```
+
+> **Note:** You do not need to set the `Inner` property yourself. RESTier's chain of responsibility factory
+> automatically wires `Inner` on each service in the chain at resolution time. By calling `Inner` in your
+> `Process` method, you ensure that other processors (including the built-in convention-based filter) continue
+> to execute.

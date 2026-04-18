@@ -131,15 +131,19 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
     {
         var lastSegment = path.LastOrDefault();
 
-        // $metadata and service document requests need dedicated handling.
+        // $metadata and service document are read-only; reject non-GET requests.
         if (lastSegment is MetadataSegment)
         {
-            return MethodNameOfGetMetadata;
+            return string.Equals(httpMethod, "GET", StringComparison.OrdinalIgnoreCase)
+                ? MethodNameOfGetMetadata
+                : null;
         }
 
         if (path.Count == 0)
         {
-            return MethodNameOfGetServiceDocument;
+            return string.Equals(httpMethod, "GET", StringComparison.OrdinalIgnoreCase)
+                ? MethodNameOfGetServiceDocument
+                : null;
         }
 
         var isAction = IsAction(lastSegment);
@@ -202,6 +206,10 @@ internal sealed class RestierRouteValueTransformer : DynamicRouteValueTransforme
     private static string BuildBaseAddress(HttpRequest request, string routePrefix)
     {
         var baseUri = $"{request.Scheme}://{request.Host}";
+        if (request.PathBase.HasValue)
+        {
+            baseUri += request.PathBase.Value;
+        }
         if (!string.IsNullOrEmpty(routePrefix))
         {
             baseUri += "/" + routePrefix;

@@ -179,7 +179,7 @@ public static class RestierODataOptionsExtensions
 
             // OData already registers the ODataDeserializerProvider, so if we have 2, either the developer
             // added one, or we already did. OData resolves the right one so multiple can be registered.
-            if (services.HasServiceCount<IODataSerializerProvider>() < 2)
+            if (services.HasServiceCount<IODataDeserializerProvider>() < 2)
             {
                 services.AddSingleton<IODataDeserializerProvider, DefaultRestierDeserializerProvider>();
             }

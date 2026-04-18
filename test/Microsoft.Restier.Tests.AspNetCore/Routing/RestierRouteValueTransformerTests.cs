@@ -421,6 +421,80 @@ namespace Microsoft.Restier.Tests.AspNetCore.Routing
             result.Should().BeNull();
         }
 
+        [Theory]
+        [InlineData("POST")]
+        [InlineData("PUT")]
+        [InlineData("PATCH")]
+        [InlineData("DELETE")]
+        public async Task NonGet_Metadata_ReturnsNull(string method)
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "$metadata" };
+            var httpContext = CreateHttpContext(method, "/$metadata");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().BeNull();
+        }
+
+        [Theory]
+        [InlineData("POST")]
+        [InlineData("PUT")]
+        [InlineData("PATCH")]
+        [InlineData("DELETE")]
+        public async Task NonGet_ServiceDocument_ReturnsNull(string method)
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "" };
+            var httpContext = CreateHttpContext(method, "/");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task PathBase_IncludedInBaseAddress()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer();
+            var values = new RouteValueDictionary { ["odataPath"] = "Customers" };
+            var httpContext = CreateHttpContext("GET", "/Customers");
+            httpContext.Request.PathBase = new PathString("/myapp");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().NotBeNull();
+            var feature = httpContext.ODataFeature();
+            feature.BaseAddress.Should().Be("https://localhost/myapp/");
+        }
+
+        [Fact]
+        public async Task PathBase_WithRoutePrefix_IncludedInBaseAddress()
+        {
+            // Arrange
+            var (transformer, _) = CreateTransformer("api/v1");
+            var values = new RouteValueDictionary { ["odataPath"] = "Customers" };
+            var httpContext = CreateHttpContext("GET", "/api/v1/Customers");
+            httpContext.Request.PathBase = new PathString("/myapp");
+
+            // Act
+            var result = await transformer.TransformAsync(httpContext, values);
+
+            // Assert
+            result.Should().NotBeNull();
+            var feature = httpContext.ODataFeature();
+            feature.BaseAddress.Should().Be("https://localhost/myapp/api/v1/");
+        }
+
         [Fact]
         public async Task Get_NavigationProperty_ReturnsGetAction()
         {

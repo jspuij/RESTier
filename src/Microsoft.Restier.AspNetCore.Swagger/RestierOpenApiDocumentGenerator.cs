@@ -67,6 +67,7 @@ namespace Microsoft.Restier.AspNetCore.Swagger
                     //                Don't. The second slash will be added with the string.Join(). ;)
                     $"{request.Scheme}:/",
                     request.Host.Value,
+                    request.PathBase.HasValue ? request.PathBase.Value.TrimStart('/') : null,
                     routePrefix
                 };
                 settings.ServiceRoot = new Uri(string.Join("/", pathParts.Where(c => !string.IsNullOrWhiteSpace(c))));

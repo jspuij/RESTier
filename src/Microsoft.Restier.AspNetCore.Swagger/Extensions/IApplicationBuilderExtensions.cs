@@ -36,7 +36,7 @@ namespace Microsoft.AspNetCore.Builder
                         ? RestierOpenApiDocumentGenerator.DefaultDocumentName
                         : prefix;
 
-                    c.SwaggerEndpoint($"/swagger/{documentName}/swagger.json", documentName);
+                    c.SwaggerEndpoint($"swagger/{documentName}/swagger.json", documentName);
                 }
             });
 

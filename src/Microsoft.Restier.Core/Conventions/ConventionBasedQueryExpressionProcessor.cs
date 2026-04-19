@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.Core.Query;
 
@@ -140,10 +141,11 @@ namespace Microsoft.Restier.Core
                 }
             }
 
-            // The LINQ expression built below has three cases
+            // The LINQ expression built below has four cases
             // For navigation property, just add a where condition from OnFilter method
             // For collection property, will be like "Param_0.Prop.AsQueryable().Where(...)"
             // For collection property of derived type, will be like "Param_0.Prop.AsQueryable().Where(...).OfType()"
+            // For single navigation property, apply filter as conditional: predicate(entity) ? entity : null
             var returnType = context.VisitedNode.Type.FindGenericType(typeof(IQueryable<>));
             var enumerableQueryParameter = (object)context.VisitedNode;
             Type elementType;
@@ -153,7 +155,8 @@ namespace Microsoft.Restier.Core
                 var collectionType = context.VisitedNode.Type.FindGenericType(typeof(ICollection<>));
                 if (collectionType is null)
                 {
-                    return null;
+                    // Single navigation property case (e.g., Book.Publisher)
+                    return ApplySingleNavigationFilter(context, expectedMethod, apiBase);
                 }
 
                 elementType = collectionType.GetGenericArguments()[0];
@@ -189,6 +192,126 @@ namespace Microsoft.Restier.Core
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Applies an OnFilter method to a single navigation property by extracting the filter
+        /// predicate and converting it to a conditional expression: predicate(entity) ? entity : null.
+        /// </summary>
+        private static Expression ApplySingleNavigationFilter(
+            QueryExpressionContext context, MethodInfo expectedMethod, object apiBase)
+        {
+            var elementType = context.VisitedNode.Type;
+            var returnType = typeof(IQueryable<>).MakeGenericType(elementType);
+
+            // Verify the expected method's return type is compatible
+            if (expectedMethod.ReturnType != returnType)
+            {
+                return null;
+            }
+
+            // Create a dummy empty queryable to invoke the filter method and capture its expression
+            var emptyArray = Array.CreateInstance(elementType, 0);
+            var queryType = typeof(EnumerableQuery<>).MakeGenericType(elementType);
+            var query = Activator.CreateInstance(queryType, new object[] { emptyArray });
+
+            if (expectedMethod.Invoke(apiBase, new object[] { query }) is not IQueryable result)
+            {
+                return null;
+            }
+
+            // If the filter method didn't modify the query, no filter to apply
+            if (result == query)
+            {
+                return null;
+            }
+
+            // Extract Where predicates from the filtered expression
+            var predicate = ExtractCombinedPredicate(result.Expression, elementType);
+            if (predicate is null)
+            {
+                return null;
+            }
+
+            // Replace the predicate's parameter with the actual entity expression
+            var replacedBody = new ParameterReplacingVisitor(
+                predicate.Parameters[0], context.VisitedNode).Visit(predicate.Body);
+
+            // Build: predicate(entity) ? entity : default(EntityType)
+            // This produces e.g. "book.Publisher.IsActive ? book.Publisher : null"
+            return Expression.Condition(replacedBody, context.VisitedNode, Expression.Default(elementType));
+        }
+
+        /// <summary>
+        /// Extracts and combines all Where predicates from a queryable expression tree into a single lambda.
+        /// Walks the full expression chain, skipping non-Where operators (e.g. OrderBy) to find all
+        /// Queryable.Where calls, then combines their predicates with AND.
+        /// </summary>
+        private static LambdaExpression ExtractCombinedPredicate(Expression expression, Type elementType)
+        {
+            var predicates = new List<LambdaExpression>();
+
+            // Walk the entire Queryable method call chain, extracting predicates from Where calls
+            // and skipping past other operators (OrderBy, Select, etc.)
+            while (expression is MethodCallExpression methodCall &&
+                   methodCall.Method.DeclaringType == typeof(Queryable))
+            {
+                if (methodCall.Method.Name == nameof(Queryable.Where))
+                {
+                    var predicateArg = methodCall.Arguments[1];
+
+                    // Unwrap Quote expressions to get the underlying lambda
+                    if (predicateArg is UnaryExpression quote && quote.NodeType == ExpressionType.Quote)
+                    {
+                        predicateArg = quote.Operand;
+                    }
+
+                    if (predicateArg is LambdaExpression lambda)
+                    {
+                        predicates.Add(lambda);
+                    }
+                }
+
+                // Move to the source expression (first argument of any Queryable extension method)
+                expression = methodCall.Arguments[0];
+            }
+
+            if (predicates.Count == 0)
+            {
+                return null;
+            }
+
+            // Combine all predicates using a single shared parameter
+            var parameter = Expression.Parameter(elementType, "entity");
+            Expression combinedBody = null;
+
+            foreach (var pred in predicates)
+            {
+                var body = new ParameterReplacingVisitor(pred.Parameters[0], parameter).Visit(pred.Body);
+                combinedBody = combinedBody is null ? body : Expression.AndAlso(combinedBody, body);
+            }
+
+            return Expression.Lambda(combinedBody, parameter);
+        }
+
+        /// <summary>
+        /// An expression visitor that replaces all occurrences of a specific parameter with another expression.
+        /// </summary>
+        private class ParameterReplacingVisitor : ExpressionVisitor
+        {
+            private readonly ParameterExpression oldParameter;
+            private readonly Expression newExpression;
+
+            public ParameterReplacingVisitor(ParameterExpression oldParameter, Expression newExpression)
+            {
+                this.oldParameter = oldParameter;
+                this.newExpression = newExpression;
+            }
+
+            protected override Expression VisitParameter(ParameterExpression node)
+            {
+                return node == oldParameter ? newExpression : base.VisitParameter(node);
+            }
         }
     }
 }

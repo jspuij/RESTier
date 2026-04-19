@@ -34,7 +34,10 @@ namespace Microsoft.Restier.AspNetCore.Formatter
                 return enumDeserializer;
             }
 
-            if (edmType.IsEntity() || edmType.IsComplex())
+            // Only use RestierResourceDeserializer for non-delta entity/complex types.
+            // Delta payloads (PATCH with delta) use OData's built-in delta deserializer
+            // which handles property tracking differently.
+            if (!isDelta && (edmType.IsEntity() || edmType.IsComplex()))
             {
                 return resourceDeserializer;
             }

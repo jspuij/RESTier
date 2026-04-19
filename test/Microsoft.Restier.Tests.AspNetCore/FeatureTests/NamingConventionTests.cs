@@ -152,11 +152,11 @@ public abstract class NamingConventionTests<TApi, TContext> : RestierTestBase<TA
     [Fact]
     public async Task PatchPublisher_WithCamelCasePayload_Succeeds()
     {
-        // PATCH against a seeded publisher (no authorization blocking updates)
+        // PATCH against a seeded publisher with a camelCase property change
         using var client = CreateCamelCaseClient();
         var patchResponse = await SendJsonAsync(client, HttpMethod.Patch,
             "/Publishers('Publisher1')",
-            json: """{}""");
+            json: """{"id":"Publisher1"}""");
         var content = await patchResponse.Content.ReadAsStringAsync();
         patchResponse.IsSuccessStatusCode.Should().BeTrue($"PATCH failed ({patchResponse.StatusCode}): {content}");
     }
@@ -201,6 +201,26 @@ public abstract class NamingConventionTests<TApi, TContext> : RestierTestBase<TA
             serviceCollection: ConfigureServices, namingConvention: RestierNamingConvention.LowerCamelCase);
         response.StatusCode.Should().Be((HttpStatusCode)428,
             $"DELETE without ETag should return 428. Got {response.StatusCode}: {await TraceListener.LogAndReturnMessageContentAsync(response)}");
+    }
+
+    [Fact]
+    public async Task PatchPublisher_WithIfMatchETag_WorksWithCamelCase()
+    {
+        // Test the ETag normalization path: PATCH with If-Match wildcard ETag.
+        // Uses a shared server so GET and PATCH hit the same in-memory DB.
+        using var client = CreateCamelCaseClient();
+
+        // PATCH with If-Match: * wildcard ETag header
+        using var patchRequest = new HttpRequestMessage(new HttpMethod("PATCH"),
+            "http://localhost/api/tests/Publishers('Publisher1')")
+        {
+            Content = new StringContent("""{"id":"Publisher1"}""", Encoding.UTF8, "application/json"),
+        };
+        patchRequest.Headers.Add("Accept", WebApiConstants.DefaultAcceptHeader);
+        patchRequest.Headers.TryAddWithoutValidation("If-Match", "*");
+        var patchResponse = await client.SendAsync(patchRequest);
+        var patchContent = await TraceListener.LogAndReturnMessageContentAsync(patchResponse);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue($"PATCH with ETag failed: {patchContent}");
     }
 
     #endregion

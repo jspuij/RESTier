@@ -5,8 +5,9 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.OData.Edm;
-using Microsoft.Restier.Core.Model;
 using Microsoft.OData.ModelBuilder;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Model;
 using System.Collections.Generic;
 
 
@@ -31,18 +32,21 @@ namespace Microsoft.Restier.EntityFrameworkCore
     {
         private readonly TDbContext _dbContext;
         private readonly ModelMerger _modelMerger;
+        private readonly RestierNamingConvention _namingConvention;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EFModelBuilder{TDbContext}"/> class.
         /// </summary>
         /// <param name="dbContext">The DbContext to use for model building.</param>
         /// <param name="modelMerger">The model merger to use.</param>
-        public EFModelBuilder(TDbContext dbContext, ModelMerger modelMerger)
+        /// <param name="namingConvention">The naming convention to use for the EDM model.</param>
+        public EFModelBuilder(TDbContext dbContext, ModelMerger modelMerger, RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
         {
             Ensure.NotNull(dbContext, nameof(dbContext));
             Ensure.NotNull(modelMerger, nameof(modelMerger));
             this._dbContext = dbContext;
             this._modelMerger = modelMerger;
+            this._namingConvention = namingConvention;
         }
 
         /// <summary>
@@ -65,7 +69,7 @@ namespace Microsoft.Restier.EntityFrameworkCore
             var innerModel = Inner?.GetEdmModel();
 
             // Build the model from the Entity Framework Entity Sets.
-            var result = BuildEdmModelFromEntitySetMaps(entitySetMap, entitySetKeyMap);
+            var result = BuildEdmModelFromEntitySetMaps(entitySetMap, entitySetKeyMap, _namingConvention);
 
             // merge the inner model into the result.
             if (innerModel is not null)
@@ -76,7 +80,7 @@ namespace Microsoft.Restier.EntityFrameworkCore
             return result;
         }
 
-        private static EdmModel BuildEdmModelFromEntitySetMaps(Dictionary<string, Type> entitySetMap, Dictionary<Type, ICollection<PropertyInfo>> entitySetKeyMap)
+        private static EdmModel BuildEdmModelFromEntitySetMaps(Dictionary<string, Type> entitySetMap, Dictionary<Type, ICollection<PropertyInfo>> entitySetKeyMap, RestierNamingConvention namingConvention)
         {
             if (!entitySetMap.Any())
             {
@@ -126,6 +130,16 @@ namespace Microsoft.Restier.EntityFrameworkCore
                     edmTypeConfiguration.HasKey(property);
                 }
             }
+            switch (namingConvention)
+            {
+                case RestierNamingConvention.LowerCamelCase:
+                    builder.EnableLowerCamelCase();
+                    break;
+                case RestierNamingConvention.LowerCamelCaseWithEnumMembers:
+                    builder.EnableLowerCamelCaseForPropertiesAndEnums();
+                    break;
+            }
+
             return (EdmModel)builder.GetEdmModel();
         }
     }

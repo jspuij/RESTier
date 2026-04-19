@@ -149,9 +149,9 @@ public abstract class UpdateTests<TApi, TContext> : RestierTestBase<TApi> where 
 
         var (publisher, _) = await publisherRequest.DeserializeResponseAsync<Publisher>();
         publisher.Should().NotBeNull();
-        publisher.LastUpdated.Should().NotBeCloseTo(DateTimeOffset.Now, new TimeSpan(0, 0, 0, 5));
 
         publisher.Books = null;
+        publisher.LastUpdated = DateTimeOffset.MinValue;
 
         var updateResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Put,

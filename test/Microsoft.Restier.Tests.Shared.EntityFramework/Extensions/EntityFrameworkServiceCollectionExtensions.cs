@@ -11,6 +11,7 @@
 #endif
 #if EFCore
 using System;
+using System.Collections.Concurrent;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -56,24 +57,24 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             var connectionString = Configuration.GetConnectionString(typeof(TDbContext).Name);
 
-            if (!string.IsNullOrEmpty(connectionString))
+            if (string.IsNullOrEmpty(connectionString))
             {
-                // Append the runtime version to the database name so that parallel TFM test runs
-                // (e.g. net8.0 and net9.0) don't collide on the same database.
-                var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-                if (builder.ContainsKey("Initial Catalog"))
-                {
-                    builder["Initial Catalog"] = $"{builder["Initial Catalog"]}_{Environment.Version.Major}";
-                }
-                else if (builder.ContainsKey("Database"))
-                {
-                    builder["Database"] = $"{builder["Database"]}_{Environment.Version.Major}";
-                }
-
-                return services.AddEF6ProviderServices<TDbContext>(builder.ConnectionString);
+                throw new InvalidOperationException($"Connection string 'ConnectionStrings:{typeof(TDbContext).Name}' is required. Add it with dotnet user-secrets.");
             }
 
-            return services.AddEF6ProviderServices<TDbContext>();
+            // Append the runtime version to the database name so that parallel TFM test runs
+            // (e.g. net8.0 and net9.0) don't collide on the same database.
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (builder.ContainsKey("Initial Catalog"))
+            {
+                builder["Initial Catalog"] = $"{builder["Initial Catalog"]}_{Environment.Version.Major}";
+            }
+            else if (builder.ContainsKey("Database"))
+            {
+                builder["Database"] = $"{builder["Database"]}_{Environment.Version.Major}";
+            }
+
+            return services.AddEF6ProviderServices<TDbContext>(builder.ConnectionString);
         }
 
 #endif
@@ -81,6 +82,8 @@ namespace Microsoft.Extensions.DependencyInjection
 #if EFCore
 
         private static IConfiguration _configuration;
+        private static readonly ConcurrentDictionary<string, object> DatabaseLocks = new();
+        private static readonly ConcurrentDictionary<string, bool> InitializedDatabases = new();
 
         /// <summary>
         /// Gets the test configuration, loading user secrets if available.
@@ -101,7 +104,7 @@ namespace Microsoft.Extensions.DependencyInjection
 
         /// <summary>
         /// Adds Entity Framework Core provider services for the specified DbContext.
-        /// Uses SQL Server when a connection string is configured; falls back to in-memory.
+        /// Uses the SQL Server connection string configured in user secrets.
         /// </summary>
         /// <typeparam name="TDbContext">The type of the DbContext.</typeparam>
         /// <param name="services">The service collection.</param>
@@ -110,28 +113,23 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             var connectionString = Configuration.GetConnectionString(typeof(TDbContext).Name);
 
-            if (!string.IsNullOrEmpty(connectionString))
+            if (string.IsNullOrEmpty(connectionString))
             {
-                var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-                if (builder.ContainsKey("Initial Catalog"))
-                {
-                    builder["Initial Catalog"] = $"{builder["Initial Catalog"]}_{Environment.Version.Major}_EFCore";
-                }
-                else if (builder.ContainsKey("Database"))
-                {
-                    builder["Database"] = $"{builder["Database"]}_{Environment.Version.Major}_EFCore";
-                }
-
-                services.AddDbContext<TDbContext>(options =>
-                    options.UseSqlServer(builder.ConnectionString));
-            }
-            else
-            {
-                services.AddDbContext<TDbContext>(options =>
-                    options.UseInMemoryDatabase(typeof(TDbContext).Name));
+                throw new InvalidOperationException($"Connection string 'ConnectionStrings:{typeof(TDbContext).Name}' is required. Add it with dotnet user-secrets.");
             }
 
-            services.AddEFCoreProviderServices<TDbContext>((Action<DbContextOptionsBuilder>)null);
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (builder.ContainsKey("Initial Catalog"))
+            {
+                builder["Initial Catalog"] = $"{builder["Initial Catalog"]}_{Environment.Version.Major}_EFCore";
+            }
+            else if (builder.ContainsKey("Database"))
+            {
+                builder["Database"] = $"{builder["Database"]}_{Environment.Version.Major}_EFCore";
+            }
+
+            services.AddEFCoreProviderServices<TDbContext>(options =>
+                options.UseSqlServer(builder.ConnectionString));
 
             if (typeof(TDbContext) == typeof(LibraryContext))
             {
@@ -162,11 +160,21 @@ namespace Microsoft.Extensions.DependencyInjection
             using var scope = scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetService<TContext>();
 
-            // EnsureCreated() returns false if the database already exists
-            if (dbContext.Database.EnsureCreated())
+            var databaseKey = dbContext.Database.IsRelational()
+                ? dbContext.Database.GetConnectionString()
+                : $"{dbContext.Database.ProviderName}:{typeof(TContext).FullName}";
+            var databaseLock = DatabaseLocks.GetOrAdd(databaseKey, _ => new object());
+            lock (databaseLock)
             {
-                var initializer = new TInitializer();
-                initializer.Seed(dbContext);
+                if (!InitializedDatabases.ContainsKey(databaseKey))
+                {
+                    dbContext.Database.EnsureDeleted();
+                    dbContext.Database.EnsureCreated();
+
+                    var initializer = new TInitializer();
+                    initializer.Seed(dbContext);
+                    InitializedDatabases[databaseKey] = true;
+                }
             }
 
         }

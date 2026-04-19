@@ -84,14 +84,6 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
 
         #region Overrides
 
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            if (!optionsBuilder.IsConfigured)
-            {
-                optionsBuilder.UseInMemoryDatabase(nameof(LibraryContext));
-            }
-        }
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
 #pragma warning disable CS0618 // TimeOfDay is obsolete but still used by OData

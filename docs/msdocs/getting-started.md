@@ -188,6 +188,7 @@ Now that you have a working RESTier API, explore these topics to add more capabi
 - **[Method Authorization](server/method-authorization.md)** -- Control which CRUD operations are allowed on each EntitySet.
 - **[Interceptors](server/interceptors.md)** -- Run custom logic before and after entities are inserted, updated, or deleted.
 - **[Customizing the Entity Model](server/model-building.md)** -- Adjust the OData model that RESTier generates from your DbContext.
+- **[Naming Conventions](server/naming-conventions.md)** -- Use camelCase property names in JSON payloads for JavaScript-friendly APIs.
 - **[Operations](server/operations.md)** -- Add custom OData actions and functions to your API.
 - **[OpenAPI / Swagger](server/swagger.md)** -- Generate interactive API documentation.
 - **[Testing with Breakdance](server/testing.md)** -- Write in-memory integration tests for your API.

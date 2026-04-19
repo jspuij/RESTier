@@ -1,38 +1,24 @@
-﻿using Microsoft.Restier.AspNetCore.Model;
-using Microsoft.Restier.EntityFrameworkCore;
-using Microsoft.Restier.Samples.Postgres.AspNetCore.Models;
 using System;
 using System.Diagnostics;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.AspNetCore.Model;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.EntityFrameworkCore;
+using Microsoft.Restier.Samples.Postgres.AspNetCore.Models;
 
 namespace Microsoft.Restier.Samples.Postgres.AspNetCore.Controllers
 {
     public class RestierTestContextApi : EntityFrameworkApi<RestierTestContext>
     {
-
-        #region Public Properties
-
-        ///// <summary>
-        ///// Gets or sets the message publisher.
-        ///// </summary>
-        //public IMessagePublisher MessagePublisher { get; set; }
-
-        #endregion
-
-        #region Constructors
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PartnerProfileContextApi"/> class.
-        /// </summary>
-        /// <param name="serviceProvider">The service provider.</param>
-        /// <param name="messagePublisher">The message publisher.</param>
-        public RestierTestContextApi(IServiceProvider serviceProvider/*, IMessagePublisher messagePublisher*/) : base(serviceProvider)
+        public RestierTestContextApi(
+            RestierTestContext dbContext,
+            IEdmModel model,
+            IQueryHandler queryHandler,
+            ISubmitHandler submitHandler)
+            : base(dbContext, model, queryHandler, submitHandler)
         {
-            //this.MessagePublisher = messagePublisher;
         }
-
-        #endregion
-
-        #region Public Methods
 
         /// <summary>
         /// Checks if the database is online.
@@ -53,8 +39,5 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore.Controllers
                 return false;
             }
         }
-
-        #endregion
-
     }
 }

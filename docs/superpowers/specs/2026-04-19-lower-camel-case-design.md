@@ -83,9 +83,18 @@ When `EnableLowerCamelCase()` has been called, the annotation maps e.g. `firstNa
 
 ### Modified API Surface
 
-**`AddRestierRoute` overloads** gain a new optional parameter:
+**All `AddRestierRoute` overloads** gain a new optional parameter. Both the prefixless overload (line 43) and the routePrefix overload (line 58) must be updated, as well as the private `AddRestierRoute` helper (line 86):
 
 ```csharp
+// Prefixless overload
+public static ODataOptions AddRestierRoute<TApi>(
+    this ODataOptions oDataOptions,
+    Action<IServiceCollection> configureRouteServices,
+    bool useRestierBatching = true,
+    RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
+    where TApi : ApiBase
+
+// Prefix overload
 public static ODataOptions AddRestierRoute<TApi>(
     this ODataOptions oDataOptions,
     string routePrefix,
@@ -93,6 +102,14 @@ public static ODataOptions AddRestierRoute<TApi>(
     bool useRestierBatching = true,
     RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
     where TApi : ApiBase
+
+// Private helper (receives the value from both public overloads)
+private static ODataOptions AddRestierRoute(
+    ODataOptions oDataOptions,
+    Type type, string routePrefix,
+    Action<IServiceCollection> configureRouteServices,
+    bool useRestierBatching,
+    RestierNamingConvention namingConvention)
 ```
 
 The naming convention is registered in both DI containers:
@@ -174,6 +191,48 @@ foreach (var propertyName in entity.GetChangedPropertyNames())
 
 This normalization means `DataModificationItem.LocalValues` and `DataModificationItem.ResourceKey` always contain CLR property names, so `EFChangeSetInitializer.SetValues()` works unchanged.
 
+### ETag / OriginalValues Normalization
+
+**`RestierController.GetOriginalValues()`** (`RestierController.cs`, line 657-689) copies ETag concurrency properties via `etag.ApplyTo(originalValues)`. Under camelCase EDM, the ETag property names are EDM names (camelCase), but `DataModificationItem.ValidateEtag()` (`ChangeSetItem.cs`, line 258-293) calls `ApplyPredicate()` which uses `Expression.Property(param, item.Key)` at line 304 - requiring CLR property names.
+
+Without normalization, concurrency-enabled PATCH/PUT/DELETE will fail because ETag keys like `rowVersion` won't match CLR property `RowVersion`.
+
+**Fix:** Normalize the OriginalValues dictionary in the controller after `etag.ApplyTo()` returns, before constructing the `DataModificationItem`. The controller already has access to the model and entity type:
+
+```csharp
+private IReadOnlyDictionary<string, object> GetOriginalValues(IEdmEntitySet entitySet)
+{
+    var originalValues = new Dictionary<string, object>();
+    // ... existing ETag extraction ...
+
+    // Normalize EDM property names to CLR property names
+    return NormalizePropertyNames(originalValues, entitySet.EntityType, api.Model);
+}
+
+private static IReadOnlyDictionary<string, object> NormalizePropertyNames(
+    Dictionary<string, object> values, IEdmStructuredType edmType, IEdmModel model)
+{
+    var normalized = new Dictionary<string, object>(values.Count);
+    foreach (var kvp in values)
+    {
+        if (kvp.Key.StartsWith("@", StringComparison.Ordinal))
+        {
+            // Preserve internal keys like @IfMatchKey, @IfNoneMatchKey
+            normalized.Add(kvp.Key, kvp.Value);
+            continue;
+        }
+        var edmProperty = edmType.FindProperty(kvp.Key);
+        var clrName = edmProperty is not null
+            ? EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model)
+            : kvp.Key;
+        normalized.Add(clrName, kvp.Value);
+    }
+    return normalized;
+}
+```
+
+This ensures `DataModificationItem.OriginalValues` always uses CLR property names, so `ValidateEtag()` -> `ApplyPredicate()` -> `Expression.Property()` works correctly.
+
 ### What Doesn't Need Changes
 
 | Component | Reason |
@@ -193,7 +252,7 @@ This normalization means `DataModificationItem.LocalValues` and `DataModificatio
 
 ### Unit Tests
 
-**`EdmClrPropertyMapperTests`** in `Microsoft.Restier.Tests.Core`:
+**`EdmClrPropertyMapperTests`** in `Microsoft.Restier.Tests.AspNetCore` (the mapper is internal to `Microsoft.Restier.AspNetCore`, which exposes internals to this test project):
 - Returns EDM property name when no `ClrPropertyInfoAnnotation` exists (PascalCase model)
 - Returns CLR property name when annotation exists (camelCase model)
 - Handles null/missing annotation gracefully
@@ -220,19 +279,49 @@ This normalization means `DataModificationItem.LocalValues` and `DataModificatio
 - GET by key (`/Books(1)`) works
 - DELETE by key works
 
+**Concurrency (ETag):**
+- PATCH with If-Match ETag header on concurrency-enabled entity works with camelCase
+- PUT with If-Match ETag header works with camelCase
+- DELETE with If-Match ETag header works with camelCase
+
 **Enum members (with `LowerCamelCaseWithEnumMembers`):**
 - Enum values in response are camelCase
+- POST/PATCH with camelCase enum values in payload deserializes correctly
 
 **Backward compatibility:**
 - Default configuration (no naming convention specified) uses PascalCase (existing tests cover this implicitly)
 
 ### Test Infrastructure
 
-`RestierTestHelpers.GetTestBaseInstance<TApi>()` and `ExecuteTestRequest<TApi>()` need a way to pass the `RestierNamingConvention` to the route configuration. Options:
-- Add an optional parameter to `ExecuteTestRequest`
-- Register it via the `serviceCollection` action (simpler, no API change to test helpers)
+`RestierTestHelpers.GetTestBaseInstance<TApi>()` and `ExecuteTestRequest<TApi>()` gain an optional `RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase` parameter. This is passed through to the `AddRestierRoute` call inside `GetTestBaseInstance` (line 400). This ensures tests exercise the public route-level API rather than a DI backdoor:
 
-The simpler approach: the test's `ConfigureServices` action registers the naming convention, and `AddRestierRoute` reads it from DI if the parameter isn't explicitly passed. However, since the naming convention is a route-level concern (not a service), the cleaner approach is to add an optional parameter to the test helper methods.
+```csharp
+public static async Task<HttpResponseMessage> ExecuteTestRequest<TApi>(
+    HttpMethod httpMethod,
+    // ... existing parameters ...
+    RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase,
+    // ... existing parameters ...
+    ) where TApi : ApiBase
+
+public static RestierBreakdanceTestBase<TApi> GetTestBaseInstance<TApi>(
+    string routeName = WebApiConstants.RouteName,
+    string routePrefix = WebApiConstants.RoutePrefix,
+    Action<IServiceCollection> apiServiceCollection = default,
+    RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
+    where TApi : ApiBase
+```
+
+Inside `GetTestBaseInstance`, the call becomes:
+```csharp
+odataOptions.AddRestierRoute<TApi>(routeName, restierServices => { ... },
+    namingConvention: namingConvention);
+```
+
+## Scope Clarifications
+
+**Non-EF model builders:** The `RestierNamingConvention` enum is registered in DI and accessible to any `IModelBuilder` implementation. However, the automatic `EnableLowerCamelCase()` call only happens in `EFModelBuilder`, which is the only built-in model builder that uses `ODataConventionModelBuilder`. Custom `IModelBuilder` implementations that build EDM models directly (without `ODataConventionModelBuilder`) would need to handle naming conventions themselves. This is acceptable since custom model builders are an advanced scenario where the developer already controls property naming.
+
+**Enum member deserialization:** When `LowerCamelCaseWithEnumMembers` is used, both serialization and deserialization handle camelCase enum values. The `ODataConventionModelBuilder.EnableLowerCamelCaseForPropertiesAndEnums()` transforms enum member names in the EDM model itself, and OData's deserialization matches incoming values against EDM enum member names. This is bidirectional by design.
 
 ## File Change Summary
 
@@ -240,12 +329,12 @@ The simpler approach: the test's `ConfigureServices` action registers the naming
 |------|-------------|-------------|
 | `src/Microsoft.Restier.Core/RestierNamingConvention.cs` | **New** | Enum definition |
 | `src/Microsoft.Restier.AspNetCore/EdmClrPropertyMapper.cs` | **New** | EDM-to-CLR property name mapping utility |
-| `src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs` | Modified | New parameter on `AddRestierRoute`, register in DI |
+| `src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs` | Modified | New parameter on all `AddRestierRoute` overloads + private helper, register in DI |
 | `src/Microsoft.Restier.EntityFramework.Shared/Model/EFModelBuilder.cs` | Modified | Inject naming convention, call `EnableLowerCamelCase()` |
 | `src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs` | Modified | Use `EdmClrPropertyMapper` for LINQ expression property access |
 | `src/Microsoft.Restier.AspNetCore/Extensions/Extensions.cs` | Modified | Normalize property dict keys to CLR names |
-| `src/Microsoft.Restier.AspNetCore/RestierController.cs` | Modified | Pass model to `GetPathKeyValues` |
-| `src/Microsoft.Restier.Breakdance/RestierTestHelpers.cs` | Modified | Optional naming convention parameter |
+| `src/Microsoft.Restier.AspNetCore/RestierController.cs` | Modified | Pass model to `GetPathKeyValues`, normalize OriginalValues from ETag |
+| `src/Microsoft.Restier.Breakdance/RestierTestHelpers.cs` | Modified | Optional naming convention parameter on `ExecuteTestRequest` and `GetTestBaseInstance` |
 | `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs` | **New** | Abstract integration tests |
 | `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/EFCore/NamingConventionTests.cs` | **New** | Concrete EFCore integration tests |
-| `test/Microsoft.Restier.Tests.Core/EdmClrPropertyMapperTests.cs` | **New** | Unit tests for mapper |
+| `test/Microsoft.Restier.Tests.AspNetCore/EdmClrPropertyMapperTests.cs` | **New** | Unit tests for mapper |

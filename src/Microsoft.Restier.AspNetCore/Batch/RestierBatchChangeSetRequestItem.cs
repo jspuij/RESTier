@@ -2,6 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.OData.Batch;
 using Microsoft.AspNetCore.OData.Extensions;
 using Microsoft.Restier.Core;
@@ -11,6 +12,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Transactions;
 
 namespace Microsoft.Restier.AspNetCore.Batch
 {
@@ -45,13 +47,39 @@ namespace Microsoft.Restier.AspNetCore.Batch
         {
             Ensure.NotNull(handler, nameof(handler));
 
+            IDictionary<string, string> contentIdToLocationMapping = this.ContentIdToLocationMapping ?? new ConcurrentDictionary<string, string>();
+
+            // Detect $ContentId dependencies across changeset requests.
+            var dependencies = DetectDependencies();
+
+            if (dependencies is not null)
+            {
+                // Dependencies found — attempt pre-resolution using the EDM model.
+                if (!TryPreResolve(dependencies, contentIdToLocationMapping))
+                {
+                    // Pre-resolution failed — fall back to sequential execution.
+                    return await SendRequestsSequentiallyAsync(handler, contentIdToLocationMapping)
+                        .ConfigureAwait(false);
+                }
+            }
+
+            // No dependencies, or pre-resolution succeeded — execute concurrently.
+            return await SendRequestsConcurrentlyAsync(handler, contentIdToLocationMapping)
+                .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Sends all changeset requests concurrently with a shared <see cref="ChangeSet"/>.
+        /// </summary>
+        private async Task<ODataBatchResponseItem> SendRequestsConcurrentlyAsync(
+            RequestDelegate handler,
+            IDictionary<string, string> contentIdToLocationMapping)
+        {
             var changeSetProperty = new RestierChangeSetProperty(this)
             {
                 ChangeSet = new ChangeSet(),
             };
             SetChangeSetProperty(changeSetProperty);
-
-            IDictionary<string, string> contentIdToLocationMapping = this.ContentIdToLocationMapping ?? new ConcurrentDictionary<string, string>();
 
             var responseTasks = new List<Task<Task<HttpContext>>>();
 
@@ -95,14 +123,13 @@ namespace Microsoft.Restier.AspNetCore.Batch
             // - the responses are created and
             // - the controller actions have returned
 
-            // RWM: Process these in series for now, but I want this to be much smarter.
-            responseTasks.ForEach(async request => await request.ConfigureAwait(false));
+            await Task.WhenAll(responseTasks).ConfigureAwait(false);
 
             var returnContexts = new List<HttpContext>();
 
             foreach (var responseTask in responseTasks)
             {
-                var returnContext = responseTask.Result.Result;
+                var returnContext = await (await responseTask.ConfigureAwait(false)).ConfigureAwait(false);
                 if (returnContext.Response.IsSuccessStatusCode())
                 {
                     returnContexts.Add(returnContext);
@@ -115,7 +142,89 @@ namespace Microsoft.Restier.AspNetCore.Batch
                 }
             }
 
-            return await Task.FromResult(new ChangeSetResponseItem(returnContexts));
+            return new ChangeSetResponseItem(returnContexts);
+        }
+
+        /// <summary>
+        /// Sends all changeset requests sequentially within a <see cref="TransactionScope"/>.
+        /// Used as a fallback when $ContentId pre-resolution fails.
+        /// </summary>
+        private async Task<ODataBatchResponseItem> SendRequestsSequentiallyAsync(
+            RequestDelegate handler,
+            IDictionary<string, string> contentIdToLocationMapping)
+        {
+            var returnContexts = new List<HttpContext>();
+
+            using var scope = new TransactionScope(
+                TransactionScopeOption.Required,
+                TransactionScopeAsyncFlowOption.Enabled);
+
+            foreach (var context in Contexts)
+            {
+                // No changeset property set — controller submits individually.
+                await ODataBatchRequestItem.SendRequestAsync(handler, context, contentIdToLocationMapping)
+                    .ConfigureAwait(false);
+
+                if (context.Response.IsSuccessStatusCode())
+                {
+                    returnContexts.Add(context);
+                }
+                else
+                {
+                    returnContexts.Clear();
+                    returnContexts.Add(context);
+                    return new ChangeSetResponseItem(returnContexts);
+                }
+            }
+
+            scope.Complete();
+            return new ChangeSetResponseItem(returnContexts);
+        }
+
+        /// <summary>
+        /// Builds a ContentId-to-URL map from the changeset contexts and detects dependencies.
+        /// </summary>
+        /// <returns>
+        /// A dependency map if any request references another via $ContentId; otherwise null.
+        /// </returns>
+        private Dictionary<string, List<string>> DetectDependencies()
+        {
+            var contentIdToUrl = new Dictionary<string, string>();
+
+            foreach (var context in Contexts)
+            {
+                var contentId = context.Request.GetODataContentId();
+                if (!string.IsNullOrEmpty(contentId))
+                {
+                    contentIdToUrl[contentId] = context.Request.GetEncodedUrl();
+                }
+            }
+
+            if (contentIdToUrl.Count == 0)
+            {
+                return null;
+            }
+
+            var dependencies = ChangeSetDependencyResolver.DetectDependencies(contentIdToUrl);
+
+            return dependencies.Count > 0 ? dependencies : null;
+        }
+
+        /// <summary>
+        /// Attempts to pre-resolve $ContentId references in dependent request URLs.
+        /// </summary>
+        /// <param name="dependencies">The dependency map from <see cref="DetectDependencies"/>.</param>
+        /// <param name="contentIdToLocationMapping">The mapping to populate with resolved entity URLs.</param>
+        /// <returns>True if all references were resolved; false otherwise.</returns>
+        private bool TryPreResolve(
+            Dictionary<string, List<string>> dependencies,
+            IDictionary<string, string> contentIdToLocationMapping)
+        {
+            return ChangeSetDependencyResolver.PreResolveContentIdReferences(
+                Contexts,
+                dependencies,
+                api.Model,
+                contentIdToLocationMapping);
         }
 
         /// <summary>

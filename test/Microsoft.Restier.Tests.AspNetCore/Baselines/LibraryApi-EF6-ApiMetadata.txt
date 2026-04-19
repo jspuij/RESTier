@@ -9,6 +9,7 @@
         <Property Name="Isbn" Type="Edm.String" MaxLength="13" />
         <Property Name="Title" Type="Edm.String" />
         <Property Name="IsActive" Type="Edm.Boolean" Nullable="false" />
+        <Property Name="Category" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.BookCategory" />
         <NavigationProperty Name="Publisher" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Publisher" />
       </EntityType>
       <EntityType Name="Publisher">
@@ -60,6 +61,11 @@
         <Property Name="StringProperty" Type="Edm.String" />
         <Property Name="TimeOfDayProperty" Type="Edm.TimeOfDay" Nullable="false" />
       </ComplexType>
+      <EnumType Name="BookCategory">
+        <Member Name="Fiction" Value="0" />
+        <Member Name="NonFiction" Value="1" />
+        <Member Name="Science" Value="2" />
+      </EnumType>
       <Action Name="CheckoutBook">
         <Parameter Name="book" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book" />
         <ReturnType Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book" />
@@ -102,7 +108,13 @@
         <EntitySet Name="Publishers" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Publisher">
           <NavigationPropertyBinding Path="Books" Target="Books" />
         </EntitySet>
-        <EntitySet Name="LibraryCards" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.LibraryCard" />
+        <EntitySet Name="LibraryCards" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.LibraryCard">
+          <Annotation Term="Org.OData.Core.V1.OptimisticConcurrency">
+            <Collection>
+              <PropertyPath>DateRegistered</PropertyPath>
+            </Collection>
+          </Annotation>
+        </EntitySet>
         <EntitySet Name="Readers" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Employee" />
         <Singleton Name="MyFavoriteBook" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book">
           <NavigationPropertyBinding Path="Publisher" Target="Publishers" />

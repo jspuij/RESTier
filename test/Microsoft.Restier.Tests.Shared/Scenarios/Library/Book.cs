@@ -33,9 +33,14 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         public Publisher Publisher { get; set; }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public bool IsActive { get; set; }
+
+        /// <summary>
+        /// The category of the book.
+        /// </summary>
+        public BookCategory? Category { get; set; }
 
     }
 

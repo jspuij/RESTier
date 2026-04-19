@@ -27,4 +27,5 @@ public class MetadataTests : MetadataTests<LibraryApi, LibraryContext>
         return await RestierTestHelpers.GetApiMetadataAsync<MarvelApi>(
             serviceCollection: services => services.AddEntityFrameworkServices<MarvelContext>());
     }
+
 }

@@ -115,14 +115,16 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                          Id = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59"),
                          Isbn = "9476324472648",
                          Title = "A Clockwork Orange",
-                         IsActive = true
+                         IsActive = true,
+                         Category = BookCategory.Fiction,
                     },
                     new Book
                     {
                         Id = new Guid("c2081e58-21a5-4a15-b0bd-fff03ebadd30"),
                         Isbn = "7273389962644",
                         Title = "Jungle Book, The",
-                        IsActive = true
+                        IsActive = true,
+                        Category = BookCategory.Fiction,
                     },
                     new Book
                     {
@@ -170,6 +172,12 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 Isbn = "1122334455667",
                 Title = "Sea of Rust",
                 IsActive = true
+            });
+
+            libraryContext.LibraryCards.Add(new LibraryCard
+            {
+                Id = new Guid("A1111111-1111-1111-1111-111111111111"),
+                DateRegistered = new DateTimeOffset(2025, 1, 15, 0, 0, 0, TimeSpan.Zero),
             });
 
             libraryContext.SaveChanges();

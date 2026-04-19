@@ -14,12 +14,17 @@ namespace Microsoft.Restier.AspNetCore.Formatter
     public class DefaultRestierDeserializerProvider : ODataDeserializerProvider
     {
         private readonly RestierEnumDeserializer enumDeserializer;
+        private readonly RestierResourceDeserializer resourceDeserializer;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultRestierDeserializerProvider" /> class.
         /// </summary>
         /// <param name="rootContainer">The container to get the service</param>
-        public DefaultRestierDeserializerProvider(IServiceProvider rootContainer) : base(rootContainer) => enumDeserializer = new RestierEnumDeserializer();
+        public DefaultRestierDeserializerProvider(IServiceProvider rootContainer) : base(rootContainer)
+        {
+            enumDeserializer = new RestierEnumDeserializer();
+            resourceDeserializer = new RestierResourceDeserializer(this);
+        }
 
         /// <inheritdoc />
         public override IODataEdmTypeDeserializer GetEdmTypeDeserializer(IEdmTypeReference edmType, bool isDelta = false)
@@ -27,6 +32,11 @@ namespace Microsoft.Restier.AspNetCore.Formatter
             if (edmType.IsEnum())
             {
                 return enumDeserializer;
+            }
+
+            if (edmType.IsEntity() || edmType.IsComplex())
+            {
+                return resourceDeserializer;
             }
 
             return base.GetEdmTypeDeserializer(edmType, isDelta);

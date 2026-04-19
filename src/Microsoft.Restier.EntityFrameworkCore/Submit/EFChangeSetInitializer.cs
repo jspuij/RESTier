@@ -75,9 +75,10 @@ namespace Microsoft.Restier.EntityFrameworkCore
         public virtual object ConvertToEfValue(Type type, object value)
         {
             // string[EdmType = Enum] => System.Enum
+            // Use ignoreCase to support camelCase enum member names from EnableLowerCamelCase
             if (TypeHelper.IsEnum(type))
             {
-                return Enum.Parse(TypeHelper.GetUnderlyingTypeOrSelf(type), (string)value);
+                return Enum.Parse(TypeHelper.GetUnderlyingTypeOrSelf(type), (string)value, ignoreCase: true);
             }
 
             // Edm.Date => System.DateOnly

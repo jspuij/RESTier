@@ -101,6 +101,14 @@ public static class RestierODataOptionsExtensions
         // Restier does not support qualified operation calls.
         oDataOptions.RouteOptions.EnableQualifiedOperationCall = false;
 
+        // When camelCase naming is enabled, the EDM property names differ from the CLR property names.
+        // OData's deserialization needs case-insensitive property matching to handle incoming JSON
+        // that may use either casing convention.
+        if (namingConvention != RestierNamingConvention.PascalCase)
+        {
+            oDataOptions.RouteOptions.EnablePropertyNameCaseInsensitive = true;
+        }
+
         // We have to do some trickery here. The model building process in OData is now separate from the route building process,
         // but Restier is not really expecting that. So we have to build the model first and then add the model and the model extender
         // to the route services. That also means that we have to invoke the service configuring action twice: once for the model building container

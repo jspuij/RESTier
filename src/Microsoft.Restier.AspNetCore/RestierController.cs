@@ -665,7 +665,7 @@ namespace Microsoft.Restier.AspNetCore
                 etag.ApplyTo(originalValues);
 
                 originalValues.Add(IfMatchKey, etagHeaderValue.Tag);
-                return originalValues;
+                return NormalizePropertyNames(originalValues, entitySet.EntityType, api.Model);
             }
 
             if (Request.Headers.TryGetValue("IfNoneMatch", out var ifNoneMatchValues))
@@ -675,7 +675,7 @@ namespace Microsoft.Restier.AspNetCore
                 etag.ApplyTo(originalValues);
 
                 originalValues.Add(IfNoneMatchKey, etagHeaderValue.Tag);
-                return originalValues;
+                return NormalizePropertyNames(originalValues, entitySet.EntityType, api.Model);
             }
 
             // return 428(Precondition Required) if entity requires concurrency check.
@@ -686,6 +686,29 @@ namespace Microsoft.Restier.AspNetCore
             }
 
             return originalValues;
+        }
+
+        private static IReadOnlyDictionary<string, object> NormalizePropertyNames(
+            Dictionary<string, object> values, IEdmStructuredType edmType, IEdmModel model)
+        {
+            var normalized = new Dictionary<string, object>(values.Count);
+            foreach (var kvp in values)
+            {
+                if (kvp.Key.StartsWith("@", StringComparison.Ordinal))
+                {
+                    // Preserve internal keys like @IfMatchKey, @IfNoneMatchKey
+                    normalized.Add(kvp.Key, kvp.Value);
+                    continue;
+                }
+
+                var edmProperty = edmType.FindProperty(kvp.Key);
+                var clrName = edmProperty is not null
+                    ? EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model)
+                    : kvp.Key;
+                normalized.Add(clrName, kvp.Value);
+            }
+
+            return normalized;
         }
 
         private static IActionResult CreateCreatedODataResult(object entity) => CreateResult(typeof(CreatedODataResult<>), entity);

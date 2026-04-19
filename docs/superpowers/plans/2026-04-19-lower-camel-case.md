@@ -25,7 +25,11 @@
 | `src/Microsoft.Restier.AspNetCore/RestierController.cs` | **Modify.** Pass model to `GetPathKeyValues`; normalize ETag OriginalValues |
 | `src/Microsoft.Restier.Breakdance/RestierTestHelpers.cs` | **Modify.** Add naming convention parameter to test helpers |
 | `test/Microsoft.Restier.Tests.AspNetCore/EdmClrPropertyMapperTests.cs` | **New.** Unit tests for mapper |
-| `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs` | **New.** Abstract integration tests |
+| `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/BookCategory.cs` | **New.** Enum for testing LowerCamelCaseWithEnumMembers |
+| `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Book.cs` | **Modify.** Add nullable `Category` property |
+| `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/LibraryCard.cs` | **Modify.** Add `[ConcurrencyCheck]` to `DateRegistered` |
+| `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryTestInitializer.cs` | **Modify.** Seed category values and LibraryCard data |
+| `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs` | **New.** Abstract integration tests (15 tests) |
 | `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/EFCore/NamingConventionTests.cs` | **New.** Concrete EFCore tests |
 
 ---
@@ -399,14 +403,17 @@ git commit -m "feat: call EnableLowerCamelCase in EFModelBuilder when configured
 
 ---
 
-### Task 5: RestierQueryBuilder — Use CLR Property Names
+### Task 5: RestierQueryBuilder + RestierController Call Sites — Use CLR Property Names
+
+This task merges query builder changes with their controller call sites so the build stays green.
 
 **Files:**
 - Modify: `src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs`
+- Modify: `src/Microsoft.Restier.AspNetCore/RestierController.cs`
 
 - [ ] **Step 1: Fix HandleNavigationPathSegment**
 
-In `HandleNavigationPathSegment` (around line 211), change:
+In `RestierQueryBuilder.cs` `HandleNavigationPathSegment` (around line 211), change:
 
 ```csharp
             var navigationPropertyExpression =
@@ -517,18 +524,47 @@ Change the private `GetPathKeyValues(KeySegment)` to accept `IEdmModel` and reso
         }
 ```
 
-- [ ] **Step 5: Verify it builds**
+- [ ] **Step 5: Update RestierController GetPathKeyValues call sites**
 
-Run: `dotnet build src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj`
-Expected: Build error — callers of `GetPathKeyValues` in `RestierController.cs` need to pass the model. This is expected and will be fixed in Task 7.
+In `RestierController.cs`, in the `Update` method (around line 433), change:
 
-- [ ] **Step 6: Commit (work in progress)**
+```csharp
+                RestierQueryBuilder.GetPathKeyValues(path),
+```
+
+to:
+
+```csharp
+                RestierQueryBuilder.GetPathKeyValues(path, api.Model),
+```
+
+In the `Delete` method (around line 287), change:
+
+```csharp
+                RestierQueryBuilder.GetPathKeyValues(path),
+```
+
+to:
+
+```csharp
+                RestierQueryBuilder.GetPathKeyValues(path, api.Model),
+```
+
+- [ ] **Step 6: Verify the solution builds**
+
+Run: `dotnet build RESTier.slnx`
+Expected: Build succeeded
+
+- [ ] **Step 7: Run existing tests to verify no regression**
+
+Run: `dotnet test RESTier.slnx`
+Expected: All existing tests pass
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs
-git commit -m "feat: use EdmClrPropertyMapper in RestierQueryBuilder (#549)
-
-Build will break until RestierController callers are updated in next task."
+git add src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs src/Microsoft.Restier.AspNetCore/RestierController.cs
+git commit -m "feat: use EdmClrPropertyMapper in RestierQueryBuilder and update call sites (#549)"
 ```
 
 ---
@@ -603,10 +639,10 @@ to:
                     propertiesAttributes.Add(clrName, attributes);
 ```
 
-- [ ] **Step 3: Verify it builds (may still have RestierController issue from Task 5)**
+- [ ] **Step 3: Verify it builds and tests pass**
 
-Run: `dotnet build src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj 2>&1 || true`
-Expected: May still have build errors from `GetPathKeyValues` signature change. That's OK — Task 7 fixes it.
+Run: `dotnet build RESTier.slnx && dotnet test RESTier.slnx`
+Expected: Build succeeded, all tests pass
 
 - [ ] **Step 4: Commit**
 
@@ -617,40 +653,14 @@ git commit -m "feat: normalize property dictionary keys to CLR names (#549)"
 
 ---
 
-### Task 7: RestierController — Fix GetPathKeyValues Callers + ETag Normalization
+### Task 7: RestierController — ETag / OriginalValues Normalization
 
 **Files:**
 - Modify: `src/Microsoft.Restier.AspNetCore/RestierController.cs`
 
-- [ ] **Step 1: Update GetPathKeyValues call sites to pass model**
+- [ ] **Step 1: Add NormalizePropertyNames helper**
 
-In the `Update` method (around line 433), change:
-
-```csharp
-                RestierQueryBuilder.GetPathKeyValues(path),
-```
-
-to:
-
-```csharp
-                RestierQueryBuilder.GetPathKeyValues(path, api.Model),
-```
-
-In the `Delete` method (around line 287), change:
-
-```csharp
-                RestierQueryBuilder.GetPathKeyValues(path),
-```
-
-to:
-
-```csharp
-                RestierQueryBuilder.GetPathKeyValues(path, api.Model),
-```
-
-- [ ] **Step 2: Add ETag OriginalValues normalization**
-
-Add a new private method after `GetOriginalValues`:
+Add a new private method after `GetOriginalValues` in `RestierController.cs`:
 
 ```csharp
         private static IReadOnlyDictionary<string, object> NormalizePropertyNames(
@@ -677,7 +687,7 @@ Add a new private method after `GetOriginalValues`:
         }
 ```
 
-- [ ] **Step 3: Update GetOriginalValues to normalize and accept entity type**
+- [ ] **Step 2: Update GetOriginalValues to normalize ETag property names**
 
 Replace the `GetOriginalValues` method (lines 657-689) with:
 
@@ -717,21 +727,16 @@ Replace the `GetOriginalValues` method (lines 657-689) with:
         }
 ```
 
-- [ ] **Step 4: Verify the full solution builds**
+- [ ] **Step 3: Verify everything builds and tests pass**
 
-Run: `dotnet build RESTier.slnx`
-Expected: Build succeeded
+Run: `dotnet build RESTier.slnx && dotnet test RESTier.slnx`
+Expected: Build succeeded, all tests pass
 
-- [ ] **Step 5: Run all existing tests to verify no regression**
-
-Run: `dotnet test RESTier.slnx`
-Expected: All existing tests pass
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/Microsoft.Restier.AspNetCore/RestierController.cs
-git commit -m "feat: update RestierController for CLR property name resolution and ETag normalization (#549)"
+git commit -m "feat: normalize ETag OriginalValues to CLR property names (#549)"
 ```
 
 ---
@@ -751,7 +756,7 @@ using Microsoft.Restier.Core;
 
 - [ ] **Step 2: Update ExecuteTestRequest signature**
 
-Change the `ExecuteTestRequest` method signature (around line 88) to add the parameter. Replace:
+Change the `ExecuteTestRequest` method signature (around line 88). Replace:
 
 ```csharp
         public static async Task<HttpResponseMessage> ExecuteTestRequest<TApi>(HttpMethod httpMethod, string host = WebApiConstants.Localhost, string routeName = WebApiConstants.RouteName,
@@ -814,29 +819,6 @@ Change (around line 392):
         public static RestierBreakdanceTestBase<TApi> GetTestBaseInstance<TApi>(string routeName = WebApiConstants.RouteName, 
             string routePrefix = WebApiConstants.RoutePrefix, Action<IServiceCollection> apiServiceCollection = default)
             where TApi : ApiBase
-        {
-            using var restierTests = new RestierBreakdanceTestBase<TApi>();
-
-            restierTests.AddRestierAction = (odataOptions) =>
-            {
-                odataOptions.AddRestierRoute<TApi>(routeName, restierServices =>
-                {
-                    restierServices
-                        .AddSingleton(new ODataValidationSettings
-                        {
-                            MaxTop = 5,
-                            MaxAnyAllExpressionDepth = 3,
-                            MaxExpansionDepth = 3,
-                        });
-                    apiServiceCollection?.Invoke(restierServices);
-                });
-            };
-
-            // make sure the TestServer has been started
-            restierTests.TestSetup();
-
-            return restierTests;
-        }
 ```
 
 to:
@@ -846,11 +828,17 @@ to:
             string routePrefix = WebApiConstants.RoutePrefix, Action<IServiceCollection> apiServiceCollection = default,
             RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
             where TApi : ApiBase
-        {
-            using var restierTests = new RestierBreakdanceTestBase<TApi>();
+```
 
-            restierTests.AddRestierAction = (odataOptions) =>
-            {
+Inside the method, change the `AddRestierRoute` call from:
+
+```csharp
+                odataOptions.AddRestierRoute<TApi>(routeName, restierServices =>
+```
+
+to include the naming convention:
+
+```csharp
                 odataOptions.AddRestierRoute<TApi>(routeName, restierServices =>
                 {
                     restierServices
@@ -862,14 +850,9 @@ to:
                         });
                     apiServiceCollection?.Invoke(restierServices);
                 }, namingConvention: namingConvention);
-            };
-
-            // make sure the TestServer has been started
-            restierTests.TestSetup();
-
-            return restierTests;
-        }
 ```
+
+(Replace the entire lambda + closing `);` to add the `namingConvention:` named argument.)
 
 - [ ] **Step 5: Verify everything builds and existing tests pass**
 
@@ -885,7 +868,126 @@ git commit -m "feat: add RestierNamingConvention parameter to test helpers (#549
 
 ---
 
-### Task 9: Integration Tests — GET / Query Operations
+### Task 9: Test Model Additions — BookCategory Enum + Concurrency Token
+
+The existing Library test models lack enums and concurrency tokens. We need both to test `LowerCamelCaseWithEnumMembers` and ETag normalization.
+
+**Files:**
+- Create: `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/BookCategory.cs`
+- Modify: `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Book.cs`
+- Modify: `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/LibraryCard.cs`
+- Modify: `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryContext.cs` (EFCore section)
+- Modify: `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryTestInitializer.cs`
+
+- [ ] **Step 1: Create BookCategory enum**
+
+Create `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/BookCategory.cs`:
+
+```csharp
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Licensed under the MIT License.  See License.txt in the project root for license information.
+
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
+{
+    /// <summary>
+    /// Category of a book.
+    /// </summary>
+    public enum BookCategory
+    {
+        Fiction = 0,
+        NonFiction = 1,
+        Science = 2,
+    }
+}
+```
+
+- [ ] **Step 2: Add Category property to Book**
+
+In `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Book.cs`, add inside the class:
+
+```csharp
+        /// <summary>
+        /// The category of the book.
+        /// </summary>
+        public BookCategory? Category { get; set; }
+```
+
+- [ ] **Step 3: Add ConcurrencyCheck to LibraryCard**
+
+In `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/LibraryCard.cs`, add `using System.ComponentModel.DataAnnotations;` to the usings and add `[ConcurrencyCheck]` to `DateRegistered`:
+
+```csharp
+using System;
+using System.ComponentModel.DataAnnotations;
+
+namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
+{
+    /// <summary>
+    /// An object in the model that is supposed to remain empty for unit tests.
+    /// </summary>
+    public class LibraryCard
+    {
+        public Guid Id { get; set; }
+
+        [ConcurrencyCheck]
+        public DateTimeOffset DateRegistered { get; set; }
+    }
+}
+```
+
+- [ ] **Step 4: Seed LibraryCard and Book Category data**
+
+In `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryTestInitializer.cs`, add `BookCategory` values to some existing Book seeds. In the first Publisher's books, update:
+
+```csharp
+                    new Book
+                    {
+                         Id = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59"),
+                         Isbn = "9476324472648",
+                         Title = "A Clockwork Orange",
+                         IsActive = true,
+                         Category = BookCategory.Fiction,
+                    },
+```
+
+And for the second book:
+
+```csharp
+                    new Book
+                    {
+                        Id = new Guid("c2081e58-21a5-4a15-b0bd-fff03ebadd30"),
+                        Isbn = "7273389962644",
+                        Title = "Jungle Book, The",
+                        IsActive = true,
+                        Category = BookCategory.Fiction,
+                    },
+```
+
+Before `libraryContext.SaveChanges();`, add a seeded LibraryCard:
+
+```csharp
+            libraryContext.LibraryCards.Add(new LibraryCard
+            {
+                Id = new Guid("A1111111-1111-1111-1111-111111111111"),
+                DateRegistered = new DateTimeOffset(2025, 1, 15, 0, 0, 0, TimeSpan.Zero),
+            });
+```
+
+- [ ] **Step 5: Verify build and tests**
+
+Run: `dotnet build RESTier.slnx && dotnet test RESTier.slnx`
+Expected: Build succeeded, all existing tests pass (nullable `Category` defaults to null; LibraryCard tests only check for empty set)
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add test/Microsoft.Restier.Tests.Shared/Scenarios/Library/BookCategory.cs test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Book.cs test/Microsoft.Restier.Tests.Shared/Scenarios/Library/LibraryCard.cs test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryTestInitializer.cs
+git commit -m "test: add BookCategory enum and ConcurrencyCheck to LibraryCard for naming tests (#549)"
+```
+
+---
+
+### Task 10: Integration Tests — GET / Query / Key Handling
 
 **Files:**
 - Create: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs`
@@ -899,6 +1001,8 @@ Create `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTes
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using CloudNimble.Breakdance.AspNetCore;
+using CloudNimble.EasyAF.Http.OData;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
@@ -907,8 +1011,10 @@ using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -917,6 +1023,18 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests;
 public abstract class NamingConventionTests<TApi, TContext> : RestierTestBase<TApi> where TApi : ApiBase where TContext : class
 {
     protected abstract Action<IServiceCollection> ConfigureServices { get; }
+
+    private static readonly JsonSerializerOptions CamelCaseSerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    private static readonly JsonSerializerOptions CamelCaseDeserializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    #region GET / Query
 
     [Fact]
     public async Task GetEntitySet_ReturnsCamelCasePropertyNames()
@@ -929,31 +1047,13 @@ public abstract class NamingConventionTests<TApi, TContext> : RestierTestBase<TA
         var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeTrue();
-        // camelCase property names should be present
         content.Should().Contain("\"title\"");
         content.Should().Contain("\"isbn\"");
         content.Should().Contain("\"id\"");
         content.Should().Contain("\"isActive\"");
-        // PascalCase should NOT be present as property names
         content.Should().NotContain("\"Title\"");
         content.Should().NotContain("\"Isbn\"");
         content.Should().NotContain("\"IsActive\"");
-    }
-
-    [Fact]
-    public async Task GetSingleEntity_ReturnsCamelCasePropertyNames()
-    {
-        // First get a book ID
-        var listResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            HttpMethod.Get,
-            resource: "/Books?$top=1",
-            serviceCollection: ConfigureServices,
-            namingConvention: RestierNamingConvention.LowerCamelCase);
-        var listContent = await TraceListener.LogAndReturnMessageContentAsync(listResponse);
-        listResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        listContent.Should().Contain("\"title\"");
-        listContent.Should().NotContain("\"Title\"");
     }
 
     [Fact]
@@ -968,7 +1068,6 @@ public abstract class NamingConventionTests<TApi, TContext> : RestierTestBase<TA
         var content = await response.Content.ReadAsStringAsync();
 
         response.IsSuccessStatusCode.Should().BeTrue();
-        // EDM metadata should show camelCase property names
         content.Should().Contain("Name=\"title\"");
         content.Should().Contain("Name=\"isbn\"");
         content.Should().Contain("Name=\"isActive\"");
@@ -1029,6 +1128,247 @@ public abstract class NamingConventionTests<TApi, TContext> : RestierTestBase<TA
 
         response.IsSuccessStatusCode.Should().BeTrue();
     }
+
+    #endregion
+
+    #region Key Handling
+
+    [Fact]
+    public async Task GetByKey_WorksWithCamelCase()
+    {
+        // First get a book to get its ID
+        var listResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Books?$top=1",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        listResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (bookList, _) = await listResponse.DeserializeResponseAsync<ODataV4List<Book>>(CamelCaseDeserializerOptions);
+        var bookId = bookList.Items[0].Id;
+
+        // GET by key
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({bookId})",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+        content.Should().Contain("\"title\"");
+        content.Should().Contain("\"id\"");
+    }
+
+    [Fact]
+    public async Task DeleteByKey_WorksWithCamelCase()
+    {
+        // Insert a book we can safely delete
+        var book = new Book
+        {
+            Title = "Book To Delete",
+            Isbn = "9999999999999",
+        };
+
+        var insertResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers('Publisher1')/Books",
+            payload: book,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            jsonSerializerSettings: CamelCaseSerializerOptions,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        insertResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var (createdBook, _) = await insertResponse.DeserializeResponseAsync<Book>(CamelCaseDeserializerOptions);
+
+        // DELETE by key
+        var deleteResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Delete,
+            resource: $"/Books({createdBook.Id})",
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+
+        deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    #endregion
+
+    #region POST / PATCH / PUT with camelCase payloads
+
+    [Fact]
+    public async Task PostBook_WithCamelCasePayload_CreatesEntity()
+    {
+        var book = new Book
+        {
+            Title = "CamelCase Insert Test",
+            Isbn = "0118006345789",
+        };
+
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers('Publisher1')/Books",
+            payload: book,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            jsonSerializerSettings: CamelCaseSerializerOptions,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("\"title\"");
+        content.Should().Contain("CamelCase Insert Test");
+    }
+
+    [Fact]
+    public async Task PatchBook_WithCamelCasePayload_UpdatesEntity()
+    {
+        // Get a book
+        var listResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Books?$top=1",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        listResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (bookList, _) = await listResponse.DeserializeResponseAsync<ODataV4List<Book>>(CamelCaseDeserializerOptions);
+        var book = bookList.Items[0];
+        var originalTitle = book.Title;
+
+        // PATCH with camelCase anonymous payload (lowercase property names)
+        var payload = new { title = $"{originalTitle} | CamelCase Patch" };
+
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            new HttpMethod("PATCH"),
+            resource: $"/Books({book.Id})",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Verify the change persisted
+        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({book.Id})",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        checkResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var (updatedBook, _) = await checkResponse.DeserializeResponseAsync<Book>(CamelCaseDeserializerOptions);
+        updatedBook.Title.Should().Be($"{originalTitle} | CamelCase Patch");
+    }
+
+    [Fact]
+    public async Task PutBook_WithCamelCasePayload_ReplacesEntity()
+    {
+        // Get a book
+        var listResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Books?$top=1",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        listResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (bookList, _) = await listResponse.DeserializeResponseAsync<ODataV4List<Book>>(CamelCaseDeserializerOptions);
+        var book = bookList.Items[0];
+        var originalTitle = book.Title;
+        book.Title = $"{originalTitle} | CamelCase Put";
+
+        // PUT with camelCase payload
+        var putResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Put,
+            resource: $"/Books({book.Id})",
+            payload: book,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            jsonSerializerSettings: CamelCaseSerializerOptions,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        putResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Verify the change persisted
+        var checkResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({book.Id})",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        checkResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var (updatedBook, _) = await checkResponse.DeserializeResponseAsync<Book>(CamelCaseDeserializerOptions);
+        updatedBook.Title.Should().Be($"{originalTitle} | CamelCase Put");
+    }
+
+    #endregion
+
+    #region Concurrency (ETag)
+
+    [Fact]
+    public async Task PatchLibraryCard_WithETag_WorksWithCamelCase()
+    {
+        // GET the seeded LibraryCard (has [ConcurrencyCheck] on DateRegistered)
+        var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/LibraryCards(a1111111-1111-1111-1111-111111111111)",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCase);
+        getResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var content = await getResponse.Content.ReadAsStringAsync();
+        content.Should().Contain("\"dateRegistered\"");
+
+        // The response should include an ETag header for the concurrency-enabled entity
+        var etag = getResponse.Headers.ETag;
+        etag.Should().NotBeNull("LibraryCard has [ConcurrencyCheck] so responses should include ETag");
+    }
+
+    #endregion
+
+    #region Enum Members (LowerCamelCaseWithEnumMembers)
+
+    [Fact]
+    public async Task GetBooks_WithEnumMembers_ReturnsCamelCaseEnumValues()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Books?$filter=category ne null",
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCaseWithEnumMembers);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+        // With LowerCamelCaseWithEnumMembers, enum values should be camelCase
+        content.Should().Contain("\"category\"");
+        // The enum value "Fiction" should appear as "fiction" in the response
+        content.Should().Contain("fiction");
+    }
+
+    [Fact]
+    public async Task PostBook_WithCamelCaseEnumValue_CreatesEntity()
+    {
+        // POST with camelCase enum value
+        var payload = new { title = "Enum Test Book", isbn = "5555555555555", category = "fiction" };
+
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers('Publisher1')/Books",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices,
+            namingConvention: RestierNamingConvention.LowerCamelCaseWithEnumMembers);
+
+        response.IsSuccessStatusCode.Should().BeTrue();
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("fiction");
+    }
+
+    #endregion
 }
 ```
 
@@ -1058,138 +1398,13 @@ public class NamingConventionTests : NamingConventionTests<LibraryApi, LibraryCo
 - [ ] **Step 3: Run the tests**
 
 Run: `dotnet test test/Microsoft.Restier.Tests.AspNetCore/Microsoft.Restier.Tests.AspNetCore.csproj --filter "FullyQualifiedName~NamingConventionTests"`
-Expected: All 7 GET tests pass
+Expected: All tests pass (7 GET/query + 2 key handling + 3 write + 1 concurrency + 2 enum = 15 tests)
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/EFCore/NamingConventionTests.cs
-git commit -m "test: add integration tests for camelCase GET/query operations (#549)"
-```
-
----
-
-### Task 10: Integration Tests — POST / PATCH / PUT Operations
-
-**Files:**
-- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs`
-
-- [ ] **Step 1: Add write operation tests to NamingConventionTests**
-
-Add these imports at the top of `NamingConventionTests.cs`:
-
-```csharp
-using CloudNimble.EasyAF.Http.OData;
-using CloudNimble.Breakdance.AspNetCore;
-using System.Linq;
-using System.Text.Json;
-```
-
-Add a helper property to the class for case-insensitive deserialization (needed because response JSON has camelCase keys but CLR types have PascalCase properties):
-
-```csharp
-    private static readonly JsonSerializerOptions CamelCaseDeserializerOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-```
-
-Add these test methods to the `NamingConventionTests` class:
-
-```csharp
-    [Fact]
-    public async Task PostBook_WithCamelCasePayload_CreatesEntity()
-    {
-        var book = new Book
-        {
-            Title = "CamelCase Insert Test",
-            Isbn = "0118006345789",
-        };
-
-        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            HttpMethod.Post,
-            resource: "/Publishers('Publisher1')/Books",
-            payload: book,
-            acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: ConfigureServices,
-            namingConvention: RestierNamingConvention.LowerCamelCase);
-
-        response.IsSuccessStatusCode.Should().BeTrue();
-
-        var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("\"title\"");
-        content.Should().Contain("CamelCase Insert Test");
-    }
-
-    [Fact]
-    public async Task PatchBook_WithCamelCasePayload_UpdatesEntity()
-    {
-        // Get a book first
-        var listResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            HttpMethod.Get,
-            resource: "/Books?$top=1",
-            acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: ConfigureServices,
-            namingConvention: RestierNamingConvention.LowerCamelCase);
-        listResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        var (bookList, _) = await listResponse.DeserializeResponseAsync<ODataV4List<Book>>(CamelCaseDeserializerOptions);
-        var book = bookList.Items[0];
-
-        var payload = new
-        {
-            Title = $"{book.Title} | CamelCase Patch",
-        };
-
-        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            new HttpMethod("PATCH"),
-            resource: $"/Books({book.Id})",
-            payload: payload,
-            acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: ConfigureServices,
-            namingConvention: RestierNamingConvention.LowerCamelCase);
-
-        patchResponse.IsSuccessStatusCode.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task PutBook_WithCamelCasePayload_ReplacesEntity()
-    {
-        // Get a book first
-        var listResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            HttpMethod.Get,
-            resource: "/Books?$top=1",
-            acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: ConfigureServices,
-            namingConvention: RestierNamingConvention.LowerCamelCase);
-        listResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        var (bookList, _) = await listResponse.DeserializeResponseAsync<ODataV4List<Book>>(CamelCaseDeserializerOptions);
-        var book = bookList.Items[0];
-        book.Title += " | CamelCase Put";
-
-        var putResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            HttpMethod.Put,
-            resource: $"/Books({book.Id})",
-            payload: book,
-            acceptHeader: WebApiConstants.DefaultAcceptHeader,
-            serviceCollection: ConfigureServices,
-            namingConvention: RestierNamingConvention.LowerCamelCase);
-
-        putResponse.IsSuccessStatusCode.Should().BeTrue();
-    }
-```
-
-- [ ] **Step 2: Run the new tests**
-
-Run: `dotnet test test/Microsoft.Restier.Tests.AspNetCore/Microsoft.Restier.Tests.AspNetCore.csproj --filter "FullyQualifiedName~NamingConventionTests"`
-Expected: All 10 tests pass (7 GET + 3 write)
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/NamingConventionTests.cs
-git commit -m "test: add integration tests for camelCase POST/PATCH/PUT operations (#549)"
+git commit -m "test: add comprehensive integration tests for camelCase naming convention (#549)"
 ```
 
 ---

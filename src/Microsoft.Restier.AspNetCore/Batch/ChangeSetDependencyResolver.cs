@@ -118,6 +118,7 @@ namespace Microsoft.Restier.AspNetCore.Batch
         /// <summary>
         /// Pre-resolves $ContentId references in dependent request URLs by computing expected entity URLs
         /// for referenced requests and updating dependent request URLs accordingly.
+        /// Dependencies are processed in topological order so that chained references (A→B→C) resolve correctly.
         /// </summary>
         /// <param name="contexts">The HTTP contexts for all requests in the changeset.</param>
         /// <param name="dependencies">The dependency map from <see cref="DetectDependencies"/>.</param>
@@ -146,19 +147,21 @@ namespace Microsoft.Restier.AspNetCore.Batch
                 }
             }
 
-            // Collect all referenced ContentIds
-            var referencedIds = new HashSet<string>();
-            foreach (var kvp in dependencies)
-            {
-                foreach (var dep in kvp.Value)
-                {
-                    referencedIds.Add(dep);
-                }
-            }
+            // Process in topological order: compute entity URL for a request only after
+            // its own dependencies have been resolved. This handles chained references (A→B→C).
+            var resolved = new HashSet<string>();
+            var allDependentIds = new HashSet<string>(dependencies.Keys);
 
-            // Compute expected entity URLs for all referenced ContentIds
+            // First pass: compute entity URLs for requests that are NOT themselves dependent
+            // (i.e., they are referenced but don't reference others).
+            var referencedIds = dependencies.Values.SelectMany(d => d).Distinct();
             foreach (var referencedId in referencedIds)
             {
+                if (allDependentIds.Contains(referencedId))
+                {
+                    continue; // This request is itself dependent; handle in topological order below
+                }
+
                 if (!contentIdToContext.TryGetValue(referencedId, out var referencedContext))
                 {
                     return false;
@@ -171,29 +174,105 @@ namespace Microsoft.Restier.AspNetCore.Batch
                 }
 
                 contentIdToLocationMapping[referencedId] = entityUrl;
+                resolved.Add(referencedId);
             }
 
-            // Resolve $ContentId references in dependent request URLs
-            foreach (var kvp in dependencies)
+            // Iteratively resolve dependent requests whose dependencies are all resolved.
+            // This handles chains: once A is resolved, B (which depends on A) can be resolved,
+            // then C (which depends on B) can be resolved.
+            var remaining = new HashSet<string>(allDependentIds);
+            while (remaining.Count > 0)
             {
-                var dependentId = kvp.Key;
-                if (!contentIdToContext.TryGetValue(dependentId, out var dependentContext))
+                var resolvedThisRound = new List<string>();
+
+                foreach (var dependentId in remaining)
                 {
-                    return false;
+                    var deps = dependencies[dependentId];
+                    if (!deps.All(d => resolved.Contains(d)))
+                    {
+                        continue; // Not all dependencies resolved yet
+                    }
+
+                    if (!contentIdToContext.TryGetValue(dependentId, out var dependentContext))
+                    {
+                        return false;
+                    }
+
+                    // Resolve $ContentId references in this request's URL
+                    ResolveRequestUrl(dependentContext, contentIdToLocationMapping);
+
+                    // If this request is itself referenced by others, compute its entity URL now
+                    if (referencedIds.Contains(dependentId))
+                    {
+                        var entityUrl = ComputeExpectedEntityUrl(dependentContext, model);
+                        if (entityUrl is null)
+                        {
+                            return false;
+                        }
+
+                        contentIdToLocationMapping[dependentId] = entityUrl;
+                    }
+
+                    resolvedThisRound.Add(dependentId);
                 }
 
-                var originalUrl = dependentContext.Request.GetEncodedUrl();
-                var resolvedUrl = ResolveContentIdInUrl(originalUrl, contentIdToLocationMapping);
+                if (resolvedThisRound.Count == 0)
+                {
+                    return false; // Circular dependency or unresolvable
+                }
 
-                // Update the request with the resolved URL
-                var uri = new Uri(resolvedUrl);
-                dependentContext.Request.Scheme = uri.Scheme;
-                dependentContext.Request.Host = new HostString(uri.Authority);
-                dependentContext.Request.Path = uri.AbsolutePath;
-                dependentContext.Request.QueryString = new QueryString(uri.Query);
+                foreach (var id in resolvedThisRound)
+                {
+                    resolved.Add(id);
+                    remaining.Remove(id);
+                }
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Resolves $ContentId references in a request's URL path and updates the request.
+        /// Works with the path portion to avoid producing doubled scheme://host URLs.
+        /// </summary>
+        private static void ResolveRequestUrl(
+            HttpContext context,
+            IDictionary<string, string> contentIdToLocationMapping)
+        {
+            var path = context.Request.Path.Value ?? string.Empty;
+            var query = context.Request.QueryString.Value ?? string.Empty;
+
+            // The path is like "/$1" or "/$1/Details". Strip leading "/" then resolve.
+            var trimmedPath = path.TrimStart('/');
+            var match = ContentIdPattern.Match(trimmedPath);
+
+            if (!match.Success || match.Index != 0)
+            {
+                return;
+            }
+
+            var referencedId = match.Groups[1].Value;
+            if (ODataSystemQueryOptions.Contains(referencedId))
+            {
+                return;
+            }
+
+            if (!contentIdToLocationMapping.TryGetValue(referencedId, out var entityUrl))
+            {
+                return;
+            }
+
+            // Build the resolved URL: entity URL + any suffix after the $ContentId + query string
+            var suffix = trimmedPath.Substring(match.Length);
+            var resolvedUrl = entityUrl + suffix + query;
+
+            if (Uri.TryCreate(resolvedUrl, UriKind.Absolute, out var resolvedUri))
+            {
+                context.Request.Scheme = resolvedUri.Scheme;
+                context.Request.Host = new HostString(resolvedUri.Authority);
+                context.Request.Path = resolvedUri.AbsolutePath;
+                context.Request.QueryString = new QueryString(resolvedUri.Query);
+            }
         }
 
         /// <summary>

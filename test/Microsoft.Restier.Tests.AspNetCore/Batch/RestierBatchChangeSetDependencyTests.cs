@@ -124,9 +124,118 @@ public class RestierBatchChangeSetDependencyTests
         // Act
         var result = await requestItem.SendRequestAsync(handler);
 
-        // Assert
+        // Assert — URL must be a well-formed absolute URL without doubled scheme://host.
         capturedUrlForRequest2.Should().NotBeNull();
-        capturedUrlForRequest2.Should().Contain("Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)");
+        capturedUrlForRequest2.Should().Be("http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)");
+        result.Should().BeOfType<ChangeSetResponseItem>();
+    }
+
+    [Fact]
+    public async Task SendRequestAsync_WithDependencies_ResolvesDollarContentIdWithSuffix()
+    {
+        // Arrange — request 2 URL is "$1/Details" (with path suffix).
+        var model = CreateEdmModel();
+        var api = CreateMockApi(model);
+
+        var context1 = CreateMockHttpContext(
+            "1",
+            "POST",
+            "http://localhost/api/tests/Books",
+            "{\"Id\":\"79874b37-ce46-4f4c-aa74-8e02ce4d8b67\",\"Title\":\"Test\"}");
+
+        var context2 = CreateMockHttpContext(
+            "2",
+            "POST",
+            "http://localhost/$1/Details");
+
+        var contexts = new List<HttpContext> { context1, context2 };
+        var requestItem = new RestierBatchChangeSetRequestItem(api, contexts);
+
+        string capturedUrlForRequest2 = null;
+
+        RequestDelegate handler = async ctx =>
+        {
+            var contentId = ctx.Features.Get<IODataBatchFeature>()?.ContentId;
+
+            if (contentId == "2")
+            {
+                capturedUrlForRequest2 = ctx.Request.GetEncodedUrl();
+            }
+
+            ctx.Response.StatusCode = StatusCodes.Status200OK;
+
+            var changeSet = ctx.GetChangeSet();
+            if (changeSet is not null)
+            {
+                await changeSet.OnChangeSetCompleted().ConfigureAwait(false);
+            }
+        };
+
+        // Act
+        var result = await requestItem.SendRequestAsync(handler);
+
+        // Assert — suffix "/Details" must be appended after the entity URL.
+        capturedUrlForRequest2.Should().NotBeNull();
+        capturedUrlForRequest2.Should().Be("http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)/Details");
+        result.Should().BeOfType<ChangeSetResponseItem>();
+    }
+
+    #endregion
+
+    #region Test 2b: Chained Dependencies (A→B→C)
+
+    [Fact]
+    public async Task SendRequestAsync_ChainedDependencies_ResolvesInOrder()
+    {
+        // Arrange — three requests where C references B which references A.
+        var model = CreateEdmModelWithTwoEntitySets();
+        var api = CreateMockApi(model);
+
+        // A: POST to Books (no dependencies)
+        var contextA = CreateMockHttpContext(
+            "1",
+            "POST",
+            "http://localhost/api/tests/Books",
+            "{\"Id\":\"aaaa1111-0000-0000-0000-000000000000\",\"Title\":\"Book A\"}");
+
+        // B: PATCH to $1 (depends on A) — this is also referenced by C
+        var contextB = CreateMockHttpContext(
+            "2",
+            "PATCH",
+            "http://localhost/$1");
+
+        // C: DELETE to $2 (depends on B, which depends on A)
+        var contextC = CreateMockHttpContext(
+            "3",
+            "DELETE",
+            "http://localhost/$2");
+
+        var contexts = new List<HttpContext> { contextA, contextB, contextC };
+        var requestItem = new RestierBatchChangeSetRequestItem(api, contexts);
+
+        var capturedUrls = new ConcurrentDictionary<string, string>();
+
+        RequestDelegate handler = async ctx =>
+        {
+            var contentId = ctx.Features.Get<IODataBatchFeature>()?.ContentId;
+            capturedUrls[contentId] = ctx.Request.GetEncodedUrl();
+
+            ctx.Response.StatusCode = StatusCodes.Status200OK;
+
+            var changeSet = ctx.GetChangeSet();
+            if (changeSet is not null)
+            {
+                await changeSet.OnChangeSetCompleted().ConfigureAwait(false);
+            }
+        };
+
+        // Act
+        var result = await requestItem.SendRequestAsync(handler);
+
+        // Assert — B should resolve $1 → Books(guid), C should resolve $2 → Books(guid)
+        // (B is a PATCH so its entity URL is its own resolved URL)
+        capturedUrls["2"].Should().Be("http://localhost/api/tests/Books(aaaa1111-0000-0000-0000-000000000000)");
+        capturedUrls["3"].Should().Be("http://localhost/api/tests/Books(aaaa1111-0000-0000-0000-000000000000)");
         result.Should().BeOfType<ChangeSetResponseItem>();
     }
 
@@ -307,6 +416,28 @@ public class RestierBatchChangeSetDependencyTests
 
         var container = new EdmEntityContainer("Test", "Default");
         container.AddEntitySet("Books", entityType);
+        model.AddElement(container);
+
+        return model;
+    }
+
+    private static IEdmModel CreateEdmModelWithTwoEntitySets()
+    {
+        var model = new EdmModel();
+
+        var bookType = new EdmEntityType("Test", "Book");
+        bookType.AddKeys(bookType.AddStructuralProperty("Id", EdmPrimitiveTypeKind.Guid));
+        bookType.AddStructuralProperty("Title", EdmPrimitiveTypeKind.String);
+        model.AddElement(bookType);
+
+        var detailType = new EdmEntityType("Test", "Detail");
+        detailType.AddKeys(detailType.AddStructuralProperty("Id", EdmPrimitiveTypeKind.Int32));
+        detailType.AddStructuralProperty("BookId", EdmPrimitiveTypeKind.Guid);
+        model.AddElement(detailType);
+
+        var container = new EdmEntityContainer("Test", "Default");
+        container.AddEntitySet("Books", bookType);
+        container.AddEntitySet("Details", detailType);
         model.AddElement(container);
 
         return model;

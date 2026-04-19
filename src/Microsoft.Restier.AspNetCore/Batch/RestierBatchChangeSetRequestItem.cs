@@ -147,8 +147,21 @@ namespace Microsoft.Restier.AspNetCore.Batch
 
         /// <summary>
         /// Sends all changeset requests sequentially within a <see cref="TransactionScope"/>.
-        /// Used as a fallback when $ContentId pre-resolution fails.
+        /// Used as a fallback when $ContentId pre-resolution fails (server-generated keys).
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Each request is submitted independently (no shared <see cref="RestierChangeSetProperty"/>),
+        /// so convention-based interceptors (e.g., <c>OnInsertingEntity</c>) see individual changesets
+        /// rather than the combined changeset. The <see cref="TransactionScope"/> provides atomicity
+        /// at the database level — if any request fails, all preceding writes are rolled back.
+        /// </para>
+        /// <para>
+        /// EF Core enlists in ambient transactions by default (since EF Core 5.0). However, distributed
+        /// transactions (MSDTC) are not available on Linux/macOS. This works correctly as long as all
+        /// requests use the same database connection, which is the typical RESTier scenario.
+        /// </para>
+        /// </remarks>
         private async Task<ODataBatchResponseItem> SendRequestsSequentiallyAsync(
             RequestDelegate handler,
             IDictionary<string, string> contentIdToLocationMapping)

@@ -83,21 +83,23 @@ namespace Microsoft.Restier.Breakdance
         /// <param name="timeZoneInfo">A <see cref="TimeZoneInfo"/> instenace specifying what time zone should be used to translate time payloads into. Defaults to <see cref="TimeZoneInfo.Utc"/>.</param>
         /// <param name="payload">When the <paramref name="httpMethod"/> is <see cref="HttpMethod.Post"/> or <see cref="HttpMethod.Put"/>, this object is serialized to JSON and inserted into the <see cref="HttpRequestMessage.Content"/>.</param>
         /// <param name="jsonSerializerSettings">A JsonSerializerSettings or JsonSerializerOptions instance defining how the payload should be serialized into the request body. Defaults to using Zulu time and will include all properties in the payload, even null ones.</param>
+        /// <param name="namingConvention">The <see cref="RestierNamingConvention"/> to use when building the OData model. Defaults to <see cref="RestierNamingConvention.PascalCase"/>.</param>
         /// <returns>An <see cref="HttpResponseMessage"/> that contains the managed response for the request for inspection.</returns>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1801:Review unused parameters", Justification = "<Pending>")]
         public static async Task<HttpResponseMessage> ExecuteTestRequest<TApi>(HttpMethod httpMethod, string host = WebApiConstants.Localhost, string routeName = WebApiConstants.RouteName,
             string routePrefix = WebApiConstants.RoutePrefix, string resource = null, Action<IServiceCollection> serviceCollection = default, string acceptHeader = ODataConstants.MinimalAcceptHeader,
             DefaultQuerySettings defaultQuerySettings = null, TimeZoneInfo timeZoneInfo = null, object payload = null,
 #if NET6_0_OR_GREATER
-            JsonSerializerOptions jsonSerializerSettings = null)
+            JsonSerializerOptions jsonSerializerSettings = null,
 #else
-            JsonSerializerSettings jsonSerializerSettings = null)
+            JsonSerializerSettings jsonSerializerSettings = null,
 #endif
+            RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
             where TApi : ApiBase
         {
 
 #if NET6_0_OR_GREATER
-            var server = GetTestableRestierServer<TApi>(routeName, routePrefix, serviceCollection);
+            var server = GetTestableRestierServer<TApi>(routeName, routePrefix, serviceCollection, namingConvention);
             var client = server.CreateClient();
             using var message = HttpClientHelpers.GetTestableHttpRequestMessage(httpMethod, host, routePrefix, resource, acceptHeader, payload, jsonSerializerSettings);
             return await client.SendAsync(message).ConfigureAwait(false);
@@ -375,11 +377,12 @@ namespace Microsoft.Restier.Breakdance
         /// <param name="routeName">The name that will be assigned to the route in the route configuration dictionary.</param>
         /// <param name="routePrefix">The string that will be appended in between the Host and the Resource when constructing a URL.</param>
         /// <param name="apiServiceCollection"></param>
+        /// <param name="namingConvention">The <see cref="RestierNamingConvention"/> to use when building the OData model. Defaults to <see cref="RestierNamingConvention.PascalCase"/>.</param>
         /// <returns>A new <see cref="TestServer" /> instance.</returns>
         public static TestServer GetTestableRestierServer<TApi>(string routeName = WebApiConstants.RouteName, string routePrefix = WebApiConstants.RoutePrefix,
-            Action<IServiceCollection> apiServiceCollection = default)
+            Action<IServiceCollection> apiServiceCollection = default, RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
             where TApi : ApiBase
-            => GetTestBaseInstance<TApi>(routeName, routePrefix, apiServiceCollection).TestServer;
+            => GetTestBaseInstance<TApi>(routeName, routePrefix, apiServiceCollection, namingConvention).TestServer;
 
         /// <summary>
         /// Gets a new <see cref="TestServer" />, configured for Restier and using the provided <see cref="Action{IServiceCollection}"/> to add additional services.
@@ -388,9 +391,11 @@ namespace Microsoft.Restier.Breakdance
         /// <param name="routeName">The name that will be assigned to the route in the route configuration dictionary.</param>
         /// <param name="routePrefix">The string that will be appended in between the Host and the Resource when constructing a URL.</param>
         /// <param name="apiServiceCollection"></param>
+        /// <param name="namingConvention">The <see cref="RestierNamingConvention"/> to use when building the OData model. Defaults to <see cref="RestierNamingConvention.PascalCase"/>.</param>
         /// <returns>A new <see cref="TestServer" /> instance.</returns>
-        public static RestierBreakdanceTestBase<TApi> GetTestBaseInstance<TApi>(string routeName = WebApiConstants.RouteName, 
-            string routePrefix = WebApiConstants.RoutePrefix, Action<IServiceCollection> apiServiceCollection = default)
+        public static RestierBreakdanceTestBase<TApi> GetTestBaseInstance<TApi>(string routeName = WebApiConstants.RouteName,
+            string routePrefix = WebApiConstants.RoutePrefix, Action<IServiceCollection> apiServiceCollection = default,
+            RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
             where TApi : ApiBase
         {
             using var restierTests = new RestierBreakdanceTestBase<TApi>();
@@ -407,7 +412,7 @@ namespace Microsoft.Restier.Breakdance
                             MaxExpansionDepth = 3,
                         });
                     apiServiceCollection?.Invoke(restierServices);
-                });
+                }, namingConvention: namingConvention);
             };
 
             // make sure the TestServer has been started

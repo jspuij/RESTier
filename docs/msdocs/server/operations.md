@@ -337,3 +337,56 @@ builder.Services.AddControllers().AddRestier(options =>
 ```
 
 When batching is enabled, clients send batch requests to the `$batch` endpoint (e.g., `POST /api/$batch`).
+
+### Changeset Dependencies and `$ContentId` References
+
+OData batch requests can contain **changesets** (also called **atomicity groups**) where one request references
+the result of another using `$ContentId`. For example, a POST that creates an entity can be referenced by a
+subsequent PATCH within the same changeset:
+
+```json
+{
+  "requests": [
+    {
+      "id": "1",
+      "method": "POST",
+      "url": "http://localhost/api/Books",
+      "body": { "Id": "...", "Title": "New Book" }
+    },
+    {
+      "id": "2",
+      "dependsOn": ["1"],
+      "method": "PATCH",
+      "url": "$1",
+      "body": { "Title": "Updated Title" }
+    }
+  ]
+}
+```
+
+RESTier handles these dependencies using three strategies:
+
+1. **No dependencies** — requests execute concurrently for maximum throughput.
+2. **Dependencies with client-supplied keys** — `$ContentId` references are pre-resolved from the request body
+   before execution, allowing all requests to still execute concurrently while maintaining changeset atomicity.
+3. **Dependencies with server-generated keys** — when key values are not present in the POST body
+   (e.g., auto-increment IDs), RESTier falls back to sequential execution within a `TransactionScope`.
+
+#### TransactionScope and Database Enlistment
+
+The sequential fallback (strategy 3) wraps all requests in a
+[`TransactionScope`](https://learn.microsoft.com/en-us/dotnet/api/system.transactions.transactionscope) to
+preserve changeset atomicity. Be aware of the following:
+
+- **EF Core** enlists in ambient transactions by default (since EF Core 5.0). No additional configuration is
+  needed for the common single-`DbContext` scenario.
+- **Distributed transactions** (MSDTC) are **not available** on Linux and macOS. The sequential fallback works
+  correctly as long as all requests use the same database connection, which is the typical RESTier setup.
+  If your application uses multiple `DbContext` instances or database connections within a single changeset,
+  the `TransactionScope` may attempt to promote to a distributed transaction and fail on non-Windows platforms.
+- **Npgsql** (PostgreSQL provider) supports `TransactionScope` enlistment since version 6.0. Ensure you are
+  using a compatible provider version.
+- In sequential mode, each request is submitted independently. Convention-based interceptors
+  (e.g., `OnInsertingBooks`) will see individual single-item changesets rather than the combined changeset.
+  If your interceptors depend on seeing all changeset items together, prefer client-supplied keys so that the
+  concurrent path (strategy 2) is used instead.

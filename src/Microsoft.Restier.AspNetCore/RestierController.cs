@@ -284,7 +284,7 @@ namespace Microsoft.Restier.AspNetCore
                 path.GetEdmType().GetClrType(model),
                 null,
                 RestierEntitySetOperation.Delete,
-                RestierQueryBuilder.GetPathKeyValues(path),
+                RestierQueryBuilder.GetPathKeyValues(path, model),
                 propertiesInEtag,
                 null);
 
@@ -430,7 +430,7 @@ namespace Microsoft.Restier.AspNetCore
                 expectedEntityType.GetClrType(model),
                 actualEntityType.GetClrType(model),
                 RestierEntitySetOperation.Update,
-                RestierQueryBuilder.GetPathKeyValues(path),
+                RestierQueryBuilder.GetPathKeyValues(path, model),
                 propertiesInEtag,
                 edmEntityObject.CreatePropertyDictionary(actualEntityType, api, false))
             {

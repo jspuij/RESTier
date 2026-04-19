@@ -94,21 +94,21 @@ namespace Microsoft.Restier.AspNetCore.Query
             return queryable;
         }
 
-        internal static IReadOnlyDictionary<string, object> GetPathKeyValues(ODataPath path)
+        internal static IReadOnlyDictionary<string, object> GetPathKeyValues(ODataPath path, IEdmModel model)
         {
             var segments = path.ToList();
 
             if (segments.Count == 2 && segments[0] is EntitySetSegment && segments[1] is KeySegment keySegment)
             {
-                return GetPathKeyValues(keySegment);
+                return GetPathKeyValues(keySegment, model);
             }
             else if (segments.Count == 3 && segments[0] is EntitySetSegment && segments[1] is KeySegment keySegment2 && segments[2] is TypeSegment)
             {
-                return GetPathKeyValues(keySegment2);
+                return GetPathKeyValues(keySegment2, model);
             }
             else if (segments.Count == 3 && segments[0] is EntitySetSegment && segments[1] is TypeSegment && segments[2] is KeySegment keySegment3)
             {
-                return GetPathKeyValues(keySegment3);
+                return GetPathKeyValues(keySegment3, model);
             }
             else
             {
@@ -120,9 +120,10 @@ namespace Microsoft.Restier.AspNetCore.Query
         }
 
         private static IReadOnlyDictionary<string, object> GetPathKeyValues(
-            KeySegment keySegment)
+            KeySegment keySegment, IEdmModel model)
         {
             var result = new Dictionary<string, object>();
+            var entityType = keySegment.EdmType as IEdmEntityType;
 
             // TODO GitHubIssue#42 : Improve key parsing logic
             // this parsing implementation does not allow key values to contain commas
@@ -132,7 +133,11 @@ namespace Microsoft.Restier.AspNetCore.Query
 
             foreach (var keyValuePair in keyValuePairs)
             {
-                result.Add(keyValuePair.Key, keyValuePair.Value);
+                var edmProperty = entityType?.FindProperty(keyValuePair.Key);
+                var clrName = edmProperty is not null
+                    ? EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model)
+                    : keyValuePair.Key;
+                result.Add(clrName, keyValuePair.Value);
             }
 
             return result;
@@ -189,7 +194,7 @@ namespace Microsoft.Restier.AspNetCore.Query
             var keySegment = (KeySegment)segment;
 
             var parameterExpression = Expression.Parameter(currentType, DefaultNameOfParameterExpression);
-            var keyValues = GetPathKeyValues(keySegment);
+            var keyValues = GetPathKeyValues(keySegment, edmModel);
 
             BinaryExpression keyFilter = null;
             foreach (var keyValuePair in keyValues)
@@ -207,8 +212,9 @@ namespace Microsoft.Restier.AspNetCore.Query
         {
             var navigationSegment = (NavigationPropertySegment)segment;
             var entityParameterExpression = Expression.Parameter(currentType);
+            var navigationClrName = EdmClrPropertyMapper.GetClrPropertyName(navigationSegment.NavigationProperty, edmModel);
             var navigationPropertyExpression =
-                Expression.Property(entityParameterExpression, navigationSegment.NavigationProperty.Name);
+                Expression.Property(entityParameterExpression, navigationClrName);
 
             if (navigationSegment.NavigationProperty.TargetMultiplicity() == EdmMultiplicity.Many)
             {
@@ -243,8 +249,9 @@ namespace Microsoft.Restier.AspNetCore.Query
         {
             var propertySegment = (PropertySegment)segment;
             var entityParameterExpression = Expression.Parameter(currentType);
+            var propertyClrName = EdmClrPropertyMapper.GetClrPropertyName(propertySegment.Property, edmModel);
             var structuralPropertyExpression =
-                Expression.Property(entityParameterExpression, propertySegment.Property.Name);
+                Expression.Property(entityParameterExpression, propertyClrName);
 
             // Check whether property is null or not before further selection
             if (propertySegment.Property.Type.IsNullable && !propertySegment.Property.Type.IsPrimitive())

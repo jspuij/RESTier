@@ -39,12 +39,14 @@ public static class RestierODataOptionsExtensions
     /// <param name="oDataOptions">The <see cref="ODataOptions"/> to add a route to.</param>
     /// <param name="configureRouteServices">Action to configure the Restier Route services.</param>
     /// <param name="useRestierBatching">Use the default Restier Batching Handler</param>
+    /// <param name="namingConvention">The naming convention to use for OData JSON property names.</param>
     /// <returns>The <see cref="ODataOptions"/>.</returns>
     public static ODataOptions AddRestierRoute<TApi>
     (this ODataOptions oDataOptions,
-            Action<IServiceCollection> configureRouteServices, bool useRestierBatching = true)
+            Action<IServiceCollection> configureRouteServices, bool useRestierBatching = true,
+            RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
     where TApi : ApiBase
-        => oDataOptions.AddRestierRoute<TApi>(string.Empty, configureRouteServices, useRestierBatching);
+        => oDataOptions.AddRestierRoute<TApi>(string.Empty, configureRouteServices, useRestierBatching, namingConvention);
 
     /// <summary>
     /// Adds a Restier route for the specified API type to the OData options.
@@ -54,14 +56,16 @@ public static class RestierODataOptionsExtensions
     /// <param name="routePrefix">The route prefix to use.</param>
     /// <param name="configureRouteServices">Action to configure the Restier Route services.</param>
     /// <param name="useRestierBatching">Use the default Restier Batching Handler</param>
+    /// <param name="namingConvention">The naming convention to use for OData JSON property names.</param>
     /// <returns>The <see cref="ODataOptions"/>.</returns>
     public static ODataOptions AddRestierRoute<TApi>(
         this ODataOptions oDataOptions,
         string routePrefix,
         Action<IServiceCollection> configureRouteServices,
-        bool useRestierBatching = true)
+        bool useRestierBatching = true,
+        RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
     where TApi : ApiBase
-    => AddRestierRoute(oDataOptions, typeof(TApi), routePrefix , configureRouteServices, useRestierBatching);
+    => AddRestierRoute(oDataOptions, typeof(TApi), routePrefix , configureRouteServices, useRestierBatching, namingConvention);
 
 
     /// <summary>
@@ -87,7 +91,8 @@ public static class RestierODataOptionsExtensions
         ODataOptions oDataOptions,
         Type type, string routePrefix,
         Action<IServiceCollection> configureRouteServices,
-        bool useRestierBatching)
+        bool useRestierBatching,
+        RestierNamingConvention namingConvention)
     {
         Ensure.NotNull(oDataOptions, nameof(oDataOptions));
         Ensure.NotNull(type, nameof(type));
@@ -105,6 +110,7 @@ public static class RestierODataOptionsExtensions
         modelBuildingServices.TryAddSingleton<IChainOfResponsibilityFactory<IModelBuilder>, DefaultChainOfResponsibilityFactory<IModelBuilder>>();
         modelBuildingServices.TryAddSingleton<ModelMerger>();
         configureRouteServices.Invoke(modelBuildingServices);
+        modelBuildingServices.AddSingleton(typeof(RestierNamingConvention), (object)namingConvention);
         modelBuildingServices.AddSingleton< IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
             .AddSingleton(new RestierWebApiModelExtender(type))
             .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type, sp.GetRequiredService<RestierWebApiModelExtender>()));
@@ -147,6 +153,7 @@ public static class RestierODataOptionsExtensions
                 .AddScoped(type, type)
                 .AddScoped(sp => (ApiBase)sp.GetService(type));
 
+            services.AddSingleton(typeof(RestierNamingConvention), (object)namingConvention);
             services.RemoveAll<ODataQuerySettings>()
                 .AddRestierCoreServices()
                 .AddRestierConventionBasedServices(type);

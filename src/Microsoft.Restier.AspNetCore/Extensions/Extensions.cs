@@ -97,7 +97,12 @@ namespace Microsoft.Restier.AspNetCore
             var propertyValues = new Dictionary<string, object>();
             foreach (var propertyName in entity.GetChangedPropertyNames())
             {
-                if (propertiesAttributes is not null && propertiesAttributes.TryGetValue(propertyName, out var attributes))
+                var edmProperty = edmType.FindProperty(propertyName);
+                var clrPropertyName = edmProperty is not null
+                    ? EdmClrPropertyMapper.GetClrPropertyName(edmProperty, api.Model)
+                    : propertyName;
+
+                if (propertiesAttributes is not null && propertiesAttributes.TryGetValue(clrPropertyName, out var attributes))
                 {
                     if ((isCreation && (attributes & PropertyAttributes.IgnoreForCreation) != PropertyAttributes.None)
                       || (!isCreation && (attributes & PropertyAttributes.IgnoreForUpdate) != PropertyAttributes.None))
@@ -121,7 +126,7 @@ namespace Microsoft.Restier.AspNetCore
                         continue;
                     }
 
-                    propertyValues.Add(propertyName, value);
+                    propertyValues.Add(clrPropertyName, value);
                 }
             }
 
@@ -184,7 +189,8 @@ namespace Microsoft.Restier.AspNetCore
                         TypePropertiesAttributes[edmType] = propertiesAttributes;
                     }
 
-                    propertiesAttributes.Add(property.Name, attributes);
+                    var clrName = EdmClrPropertyMapper.GetClrPropertyName(property, model);
+                    propertiesAttributes.Add(clrName, attributes);
                 }
             }
 

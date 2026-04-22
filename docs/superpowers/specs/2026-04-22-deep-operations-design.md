@@ -1,8 +1,8 @@
-# Deep Operations Design: Deep Insert, Deep Update, and @odata.bind
+# Deep Operations Design: Deep Insert, Deep Update, and Entity References
 
 **Date**: 2026-04-22
 **Issue**: [OData/RESTier#646](https://github.com/OData/RESTier/issues/646)
-**Status**: Draft
+**Status**: Draft (rev 2)
 
 ## Overview
 
@@ -10,49 +10,62 @@ RESTier currently silently ignores navigation properties in POST/PUT/PATCH paylo
 
 - **Deep insert** (OData 4.0 section 11.4.2.2): Creating related entities inline during POST
 - **Deep update** (OData 4.01 section 11.4.3.1): Updating related entities inline during PATCH/PUT
-- **`@odata.bind`** (OData 4.0 section 11.4.2.1): Linking to existing entities by reference
+- **Entity references** (OData 4.0 `@odata.bind`, OData 4.01 `@id`/`@odata.id`): Linking to existing entities
 
 ## Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Convention pipeline | Full pipeline for all nested entities | Preserves RESTier's core interception contract |
-| `@odata.bind` resolution | Hybrid: FK assignment + existence validation | Simple and performant, with good error messages |
+| Convention pipeline | Full pipeline for nested **entity** operations only | Preserves RESTier's interception contract; bind/link operations are relationship-only and don't fire entity CUD events |
+| Entity references | Modeled as relationship changes on the parent, not as entity CUD items | Bind/link operations link, replace, or add relationships — they don't create or update the referenced entity |
+| Relationship wiring | Navigation property object assignment, not FK scalar injection | Works with server-generated keys; EF change tracker infers FKs from nav prop assignments |
+| Bind validation | During initialization, before entity materialization | Fails atomically before any entity changes are tracked |
 | Nesting depth | Configurable, default 5 | Recursive implementation with safety guard |
-| PATCH collection semantics | Merge (upsert) | OData 4.01 recommended, non-destructive |
-| PUT collection semantics | Replace | Standard HTTP PUT full-replacement semantics |
-| Architecture | Flatten nested entities into ChangeSet | Each nested entity is a first-class DataModificationItem |
+| Non-delta collection on PATCH/PUT | Represents the complete relationship set | Per OData 4.01; nested delta payloads are out of scope for initial implementation |
+| PUT omitted children | Unlink (non-contained) or delete (contained) | OData 4.01 says omitted entities are unlinked; only containment nav props imply deletion |
+| OData version compatibility | Support both `@odata.bind` (4.0) and entity-reference objects (4.01) | Check OData-Version header to select parsing strategy |
 
 ## Architecture
 
-### Approach: Flatten into ChangeSet
+### Approach: Flatten Nested Entities + Parent-Local Binds
 
-Nested entities in the OData payload are recursively extracted into individual `DataModificationItem` entries. Each entry flows through the full RESTier submit pipeline (authorization, validation, pre/post events). Items are enqueued in dependency order (parent before children) so FKs can be wired after parent materialization.
+The design distinguishes two kinds of nested navigation property values:
+
+1. **Deep entities** (inline entity payloads) — extracted into separate `DataModificationItem` entries that flow through the full submit pipeline (authorization, validation, convention events). Relationships are wired via EF navigation property assignment after materialization.
+
+2. **Entity references** (`@odata.bind` in 4.0, entity-reference objects in 4.01) — stored as `NavigationBindings` metadata on the parent `DataModificationItem`. Resolved during initialization as relationship changes on the parent entity. No CUD pipeline events fire for the referenced entity (it is not being created or updated).
 
 ```
 HTTP POST /Publishers
 {
   "Id": "PUB01",
   "Books": [
-    { "Title": "Book A", "Isbn": "1234567890123" },
-    { "Title": "Book B", "Isbn": "9876543210123" }
-  ]
+    { "Title": "New Book", "Isbn": "1234567890123" }
+  ],
+  "Books@odata.bind": [ "Books(00000000-0000-0000-0000-000000000001)" ]
 }
 
-  Extraction                          ChangeSet Queue
-  ──────────                          ────────────────
-  EdmEntityObject (Publisher)    →    1. Insert Publisher (PUB01)
-    ├─ EdmEntityObject (Book A)  →    2. Insert Book A (ParentItem → #1)
-    └─ EdmEntityObject (Book B)  →    3. Insert Book B (ParentItem → #1)
+  Extraction
+  ──────────
+  Root: Insert Publisher (PUB01)
+    ├─ NestedItem: Insert Book ("New Book")     → DataModificationItem in ChangeSet
+    └─ NavigationBinding: Books → bind to existing Book(guid)  → parent-local, no CUD item
 
-  After #1 is materialized:
-    #2.LocalValues["PublisherId"] = "PUB01"  (FK wired)
-    #3.LocalValues["PublisherId"] = "PUB01"  (FK wired)
+  ChangeSet Queue                     Bind Resolution (during init)
+  ────────────────                    ──────────────────────────────
+  1. Insert Publisher (PUB01)         After #1 materialized:
+  2. Insert Book (ParentItem → #1)     - Load existing Book(guid)
+                                       - Set existingBook.Publisher = publisherEntity
+  After #1 and #2 materialized:        (FK inferred by EF change tracker)
+    bookEntity.Publisher = publisherEntity
+    (FK inferred by EF change tracker)
 ```
 
-### Why not delegate to EF's change tracker?
+### Why navigation property assignment instead of FK injection?
 
-Delegating the full object graph to EF would be simpler, but nested entities would bypass RESTier's convention pipeline — `OnInsertingBook()`, `OnValidatingBook()`, etc. would not fire for nested entities. This violates RESTier's core contract.
+For deep insert, the parent entity may have a server-generated key (identity column, database sequence). During `InitializeAsync`, the parent is tracked by EF but `SaveChangesAsync` hasn't run yet — the generated key value is not available. By assigning the navigation property object reference (`child.Publisher = parentEntity`), EF's change tracker handles FK propagation internally, including temporary key resolution. This works reliably regardless of key generation strategy.
+
+For entity references (`@odata.bind`), the referenced entity already exists and has a known key. FK assignment would work, but navigation property assignment is used for consistency and because it also updates EF's relationship tracking.
 
 ## Component Changes
 
@@ -64,18 +77,33 @@ Delegating the full object graph to EF would be simpler, but nested entities wou
 /// The parent DataModificationItem (null for root/direct operations).
 public DataModificationItem ParentItem { get; set; }
 
-/// The CLR navigation property name on the parent entity.
+/// The CLR navigation property name on the parent entity that this item was nested under.
 public string ParentNavigationPropertyName { get; set; }
 
-/// Child items created by deep insert/update extraction.
+/// Child DataModificationItems for deep insert/update (full entity operations).
+/// Each child flows through the full submit pipeline.
 public IList<DataModificationItem> NestedItems { get; }
 
-/// True when this item represents an @odata.bind reference
-/// (link to existing entity, not create/update).
-public bool IsBindOperation { get; set; }
+/// Entity reference bindings: maps CLR navigation property name to bind reference(s).
+/// These are relationship-only operations — no CUD pipeline events fire for the target.
+public IDictionary<string, IList<BindReference>> NavigationBindings { get; }
 ```
 
-`NestedItems` is used during extraction to build the tree. `ParentItem` is used during initialization to wire FKs. Both are null/empty for non-nested operations, so fully backward compatible.
+Note: `IsBindOperation` is removed. Entity references are not modeled as `DataModificationItem` entries.
+
+#### `BindReference` — new class
+
+```csharp
+/// Represents a reference to an existing entity for @odata.bind or entity-reference linking.
+public class BindReference
+{
+    /// The target entity set name.
+    public string ResourceSetName { get; set; }
+
+    /// The key of the referenced entity.
+    public IReadOnlyDictionary<string, object> ResourceKey { get; set; }
+}
+```
 
 #### `DeepOperationSettings` — new configuration class
 
@@ -87,21 +115,13 @@ public class DeepOperationSettings
 }
 ```
 
-#### `BindReferenceValidator` — new validator
-
-Implements `IChainedService<IChangeSetItemValidator>`. During the validation phase, for each `DataModificationItem` where `IsBindOperation == true`:
-1. Query the target entity set using `ResourceKey`
-2. If not found, add `ChangeSetItemValidationResult` with `Severity = Error`
-3. Produces HTTP 400 with descriptive validation error
-
-Chains with existing `ConventionBasedChangeSetItemValidator` via `IChainOfResponsibilityFactory<IChangeSetItemValidator>`.
-
 #### `DefaultChangeSetInitializer` — new protected helpers
 
-Add protected helper methods for FK resolution that both EF6 and EFCore initializers can call:
+Add protected helper methods for relationship wiring that both EF6 and EFCore initializers can call:
 
-- `GetForeignKeyPropertyName(IEdmModel, IEdmNavigationProperty)` — resolves the FK property name from the EDM navigation relationship
-- `GetKeyValues(DataModificationItem)` — reads the materialized entity's key values via reflection
+- `GetNavigationPropertyInfo(Type entityType, string navigationPropertyName)` — resolves the CLR `PropertyInfo` for a navigation property
+- `GetKeyValues(object entity, IEdmEntityType edmType, IEdmModel model)` — reads key property values from a materialized entity via reflection
+- `GetContainsTarget(IEdmModel model, IEdmEntityType entityType, string navigationPropertyName)` — checks whether a navigation property has containment semantics
 
 These are provider-agnostic (EDM model and reflection only).
 
@@ -109,22 +129,23 @@ These are provider-agnostic (EDM model and reflection only).
 
 #### New class: `DeepOperationExtractor`
 
-Responsible for walking an `EdmEntityObject` and building a tree of `DataModificationItem` entries.
+Responsible for walking an `EdmEntityObject` and building a tree of `DataModificationItem` entries plus `NavigationBindings`.
 
-**Input**: Root `EdmEntityObject`, `IEdmStructuredType`, `IEdmModel`, `ApiBase`, `DeepOperationSettings`, operation type (insert/update), and for updates: `isFullReplaceUpdate` flag.
+**Input**: Root `EdmEntityObject`, `IEdmStructuredType`, `IEdmModel`, `ApiBase`, `DeepOperationSettings`, operation type (insert/update), `isFullReplaceUpdate` flag, and `ODataVersion` (from request header).
 
 **Process**:
 1. Call `CreatePropertyDictionary` for scalar/complex properties (existing behavior)
 2. Walk changed properties, identify navigation properties via EDM type
 3. For each navigation property value:
-   - **`EdmEntityObject` (single nav, deep insert/update)**: Recursively extract, create child `DataModificationItem` with `ParentItem` set
-   - **Collection of `EdmEntityObject` (collection nav)**: Process each item in the collection
-   - **`@odata.bind` reference**: Parse entity set and key from the bind URI, create `DataModificationItem` with `IsBindOperation = true` and `ResourceKey` set to the parsed key
+   - **Entity reference** (`@odata.bind` in 4.0 or entity-reference object with `@id`/`@odata.id` in 4.01): Parse entity set and key, add to parent's `NavigationBindings`. No child `DataModificationItem` is created.
+   - **Full nested entity** (deep insert/update): Recursively extract, create child `DataModificationItem` with `ParentItem` set, add to parent's `NestedItems`
+   - **Collection**: Process each item individually (may be a mix of entity references and full entities)
 4. Track current depth, throw `ODataException` (HTTP 400) if `MaxDepth` is exceeded
 
-**Output**: Root `DataModificationItem` with `NestedItems` tree populated.
-
-**Detecting `@odata.bind` vs deep insert**: AspNetCore.OData's `ODataResourceDeserializer` handles `@odata.bind` by creating synthetic resources with key values from the reference URI. The exact detection mechanism (e.g., `ODataIdAnnotation` on instance annotations, or checking if only key properties are present) needs to be verified against AspNetCore.OData 9.x's deserialization output during implementation. The extractor must reliably distinguish bind references from full nested entities.
+**Detecting entity references vs deep entities**:
+- **OData 4.0** (`OData-Version: 4.0`): Entity references use `@odata.bind` annotation. AspNetCore.OData's deserializer handles these distinctly from inline resources — the extractor checks whether the nested info wrapper contains `ODataEntityReferenceLink` items vs. full `ODataResource` items.
+- **OData 4.01** (`OData-Version: 4.01`): Entity references are inline objects with only `@id` or `@odata.id`. The extractor detects these by checking for the `ODataIdAnnotation` on the `EdmEntityObject` instance annotations.
+- **Fallback**: If detection is ambiguous, treat an `EdmEntityObject` that contains only key properties (and no non-key properties) as a potential entity reference, and verify by checking if the entity exists.
 
 #### `Extensions.cs` — `CreatePropertyDictionary` changes
 
@@ -135,13 +156,13 @@ The existing method continues to build `LocalValues` for scalar and complex prop
 #### `RestierController.Post()`
 
 After creating the root `DataModificationItem`:
-1. Call `DeepOperationExtractor.Extract()` to build the nested item tree
-2. Flatten the tree (depth-first pre-order, guaranteeing parent before children) into an ordered list
-3. Enqueue all items into the `ChangeSet`
+1. Call `DeepOperationExtractor.Extract()` to build the nested item tree and populate `NavigationBindings`
+2. Flatten nested entity items (depth-first pre-order, guaranteeing parent before children) into an ordered list
+3. Enqueue all entity items into the `ChangeSet` — bindings travel as metadata on the parent item
 
 ```csharp
 var postItem = new DataModificationItem(...);
-var extractor = new DeepOperationExtractor(model, api, deepOperationSettings);
+var extractor = new DeepOperationExtractor(model, api, deepOperationSettings, odataVersion);
 extractor.ExtractNestedItems(edmEntityObject, actualEntityType, postItem, isCreation: true);
 
 var changeSet = new ChangeSet();
@@ -156,43 +177,71 @@ Batch support: when `HttpContext.GetChangeSet()` is non-null, items are enqueued
 
 #### `RestierController.Update()`
 
-Same extraction, plus deep update logic:
+Same extraction, plus deep update logic for determining entity operations:
 
-**For collection navigation properties**:
-- Query existing children via `api.QueryAsync()`
-- Match payload items to existing children by key
-- Create `Insert` items for new entities, `Update` items for matched entities
-- For PUT (`isFullReplaceUpdate`): create `Delete` items for existing children not in payload
+**Non-delta collection navigation properties** (both PATCH and PUT):
 
-**For single navigation properties**:
-- Nested entity with matching key → `Update`
-- Nested entity with new/no key → `Insert` (unlink previous if needed)
-- `@odata.bind` → set FK to referenced key
-- `null` → set FK to null (unlink)
-- Absent from payload → no action (PATCH)
+Per OData 4.01, a non-delta nested collection represents the **complete relationship set** for that navigation property. The controller:
+1. Queries existing children via `api.QueryAsync()`
+2. Matches payload items to existing children by key
+3. Creates `Insert` items for new entities, `Update` items for matched entities
+4. For entities in the existing set but **not** in the payload:
+   - **Non-contained nav prop** (`ContainsTarget = false`): Unlink by setting the FK to null on the existing child entity (creating an `Update` item that nulls the FK). If the FK is required (non-nullable), this is a constraint error — the server returns 400.
+   - **Contained nav prop** (`ContainsTarget = true`): Delete the omitted child entity (creating a `Delete` item).
+
+**Nested delta payloads**: Out of scope for initial implementation. If a nested delta is detected, the server returns 501 Not Implemented.
+
+**Single navigation properties on update**:
+
+| Payload | Action |
+|---------|--------|
+| Full nested entity with matching key | `Update` the related entity (child DataModificationItem) |
+| Full nested entity with new/no key | `Insert` new entity (child DataModificationItem); unlink previous if FK is nullable |
+| Entity reference (`@odata.bind` / `@id`) | Add to parent's `NavigationBindings`; resolved during initialization |
+| `null` | Set FK to null (unlink). Fails if FK is required. |
+| Absent from payload | No action (PATCH leaves it alone); PUT treats as null |
 
 **Ordering in ChangeSet for deep update**:
 1. Root update item
-2. Child inserts (parent FK already known from URL key)
+2. Child inserts
 3. Child updates
-4. Child deletes (last, to avoid FK constraint violations)
+4. Child unlink-updates (FK nulling for non-contained omitted children)
+5. Child deletes (for contained omitted children — last, to avoid FK issues)
 
 ### 4. ChangeSet Initialization (`EntityFramework` / `EntityFrameworkCore`)
 
-Both `EFChangeSetInitializer` implementations process items sequentially from the ChangeSet queue (existing behavior). The additions:
+Both `EFChangeSetInitializer` implementations process items sequentially from the ChangeSet queue (existing behavior). The additions are a two-phase extension to initialization:
 
-**After materializing each item** — if `entry.ParentItem != null`:
-1. Call base class helper to resolve the FK property name from the EDM navigation relationship
-2. Read the parent's key value from `entry.ParentItem.Resource` (already materialized, since parent was enqueued first)
-3. Create a new `LocalValues` dictionary that includes the FK (since `LocalValues` is `IReadOnlyDictionary`, the initializer builds a new dictionary from the original plus the FK entry, and replaces `LocalValues` on the item — this requires adding a setter or an internal `SetLocalValues` method to `DataModificationItem`)
+#### Phase 1: Validate and resolve entity references (before entity materialization)
 
-**For `@odata.bind` items** (`entry.IsBindOperation == true`):
-- **Single nav prop bind** (e.g., `Publisher@odata.bind` on a Book): Set the FK property on the parent entity's tracked entry. The parent is already materialized.
-- **Collection nav prop bind** (e.g., `Books@odata.bind` on a Publisher): Load the referenced entity via `FindResource()`, set its FK to point to the parent.
+For each `DataModificationItem` that has `NavigationBindings`:
+1. For each `BindReference`, query the target entity set by key
+2. If the referenced entity does not exist, throw `StatusCodeException(400)` with a descriptive message (e.g., "Referenced entity 'Publishers' with key 'PUB01' does not exist")
+3. Store the loaded entity on the `BindReference` for use in Phase 2
+
+This runs before any entities are materialized or tracked, ensuring atomic failure on invalid references. No partial entity changes are applied to the DbContext.
+
+#### Phase 2: Materialize entities and wire relationships
+
+Process items sequentially (existing behavior). After materializing each item:
+
+**For nested entity items** (`entry.ParentItem != null`):
+1. The parent entity is already materialized (parent was enqueued first)
+2. Set the navigation property on the child or parent entity to establish the relationship:
+   - If child has a reference nav prop to parent (e.g., `Book.Publisher`): set `childEntity.Publisher = parentEntity.Resource`
+   - If parent has a collection nav prop (e.g., `Publisher.Books`): add `childEntity` to `parentEntity.Books`
+3. EF's change tracker infers the FK value from the nav prop assignment — works with server-generated keys
+
+**For entity reference bindings** (`entry.NavigationBindings` is non-empty):
+After the current item is materialized, process its bindings:
+- **Single nav prop bind** (e.g., `Publisher@odata.bind` on a Book): Set `bookEntity.Publisher = loadedPublisher` (loaded in Phase 1)
+- **Collection nav prop bind** (e.g., `Books@odata.bind` on a Publisher): Set `loadedBook.Publisher = publisherEntity` (or add to collection nav prop)
 
 **Provider-specific differences** (why these are not in the shared project):
-- EFCore: `dbContext.Entry(resource)` returns `EntityEntry`, FK set via `EntityEntry.Property(fkName).CurrentValue`
-- EF6: `dbContext.Entry(resource)` returns `DbEntityEntry`, FK set via `DbEntityEntry.Property(fkName).CurrentValue`
+- EFCore: `dbContext.Entry(resource)` returns `EntityEntry`; navigation set via `EntityEntry.Reference(navProp).CurrentValue` or direct property assignment
+- EF6: `dbContext.Entry(resource)` returns `DbEntityEntry`; navigation set via `DbEntityEntry.Reference(navProp).CurrentValue` or direct property assignment
+
+Both rely on EF's change tracker for FK inference — the initializer never directly sets FK scalar values for deep operations.
 
 ### 5. DI Registration
 
@@ -208,13 +257,6 @@ Add builder method:
 ```csharp
 public static RestierApiBuilder ConfigureDeepOperations(
     this RestierApiBuilder builder, Action<DeepOperationSettings> configure)
-```
-
-#### `ServiceCollectionExtensions` (EF Shared)
-
-Register `BindReferenceValidator` in the validator chain:
-```csharp
-.AddSingleton<IChainedService<IChangeSetItemValidator>, BindReferenceValidator>()
 ```
 
 ## Test Strategy
@@ -252,11 +294,11 @@ No migrations needed — the test database is recreated via `EnsureDeleted()` + 
 
 | Test Class | Project | Covers |
 |-----------|---------|--------|
-| `DeepOperationExtractorTests` | `Tests.AspNetCore` | Nested entity extraction from EdmEntityObject, @odata.bind parsing, depth limit enforcement, collection vs single nav prop |
-| `DataModificationItemTests` | `Tests.Core` | New properties, tree flattening/ordering, IsBindOperation |
-| `BindReferenceValidatorTests` | `Tests.Core` | Existence validation for bind references, error messages |
+| `DeepOperationExtractorTests` | `Tests.AspNetCore` | Nested entity extraction from EdmEntityObject, entity reference parsing (4.0 and 4.01), depth limit enforcement, collection vs single nav prop, mixed bind+entity collections |
+| `DataModificationItemTests` | `Tests.Core` | New properties (ParentItem, NestedItems, NavigationBindings), tree flattening/ordering |
+| `BindReferenceTests` | `Tests.Core` | BindReference key parsing, entity set resolution |
 | `DeepOperationSettingsTests` | `Tests.Core` | Configuration defaults and validation |
-| `EFChangeSetInitializerTests` | `Tests.EntityFramework` + `Tests.AspNetCore` | FK wiring after parent materialization, bind reference resolution |
+| `EFChangeSetInitializerTests` | `Tests.EntityFramework` + `Tests.AspNetCore` | Nav prop assignment after parent materialization, bind resolution and validation, server-generated key propagation |
 
 ### Feature Tests (HTTP Integration)
 
@@ -269,23 +311,29 @@ New base classes `DeepInsertTests<TApi, TContext>` and `DeepUpdateTests<TApi, TC
 | `DeepInsert_SingleNavProperty` | POST Publisher with inline single Book |
 | `DeepInsert_CollectionNavProperty` | POST Publisher with inline Books array |
 | `DeepInsert_WithBindReference` | POST Book with `Publisher@odata.bind` |
+| `DeepInsert_WithEntityReference_V401` | POST Book with inline Publisher entity-reference (`@id`) |
 | `DeepInsert_CollectionWithBind` | POST Publisher with `Books@odata.bind` array |
 | `DeepInsert_MixedBindAndCreate` | POST Publisher with some inline Books and some `@odata.bind` |
 | `DeepInsert_MultiLevel` | POST Publisher with Books containing Reviews (2-level) |
+| `DeepInsert_ServerGeneratedKeys` | POST with inline entities where parent has server-generated key (Guid) — verifies FK propagation works |
 | `DeepInsert_ExceedsMaxDepth` | Returns 400 when nesting exceeds configured limit |
-| `DeepInsert_BindReferenceNotFound` | Returns 400 when `@odata.bind` references non-existent entity |
+| `DeepInsert_BindReferenceNotFound` | Returns 400 when entity reference points to non-existent entity — verifies no partial changes applied |
 | `DeepInsert_FiresConventionMethods` | Verifies `OnInsertingBook()` fires for nested Book |
+| `DeepInsert_BindDoesNotFireConventionMethods` | Verifies `OnInsertingPublisher()` does NOT fire when Publisher is only bound via `@odata.bind` |
 
 #### Deep Update Tests
 
 | Test | Scenario |
 |------|----------|
-| `DeepUpdate_Patch_MergeSemantics` | PATCH Publisher with partial Books — existing untouched, new added, matched updated |
-| `DeepUpdate_Put_ReplaceSemantics` | PUT Publisher with Books — missing children deleted |
+| `DeepUpdate_NonDeltaCollection_ReplacesRelationships` | PATCH/PUT Publisher with full Books array — represents complete relationship set |
+| `DeepUpdate_Put_OmittedChildrenUnlinked` | PUT Publisher with subset of Books — omitted non-contained children have FK set to null |
+| `DeepUpdate_Put_ContainedChildrenDeleted` | PUT with contained nav prop — omitted children are deleted (requires containment model) |
+| `DeepUpdate_Put_RequiredFK_Returns400` | PUT that would null a required FK on omitted child — returns 400 |
 | `DeepUpdate_SingleNavProperty` | PATCH Book with inline Publisher change |
 | `DeepUpdate_BindOnUpdate` | PATCH Book with `Publisher@odata.bind` |
 | `DeepUpdate_NullUnlinks` | PATCH Book with `Publisher: null` unlinks |
-| `DeepUpdate_FiresConventionMethods` | Verifies `OnUpdatingPublisher()` fires for nested update |
+| `DeepUpdate_FiresConventionMethods` | Verifies `OnUpdatingPublisher()` fires for nested entity update |
+| `DeepUpdate_NestedDelta_Returns501` | Returns 501 when nested delta payload is detected (out of scope) |
 
 All feature tests run on both EF6 and EFCore via the generic base class pattern.
 
@@ -296,8 +344,8 @@ All feature tests run on both EF6 and EFCore via the generic base class pattern.
 | File | Description |
 |------|-------------|
 | `src/Microsoft.Restier.Core/Submit/DeepOperationSettings.cs` | Configuration class |
-| `src/Microsoft.Restier.Core/Submit/BindReferenceValidator.cs` | @odata.bind existence validator |
-| `src/Microsoft.Restier.AspNetCore/Submit/DeepOperationExtractor.cs` | Nested entity extraction |
+| `src/Microsoft.Restier.Core/Submit/BindReference.cs` | Entity reference value object |
+| `src/Microsoft.Restier.AspNetCore/Submit/DeepOperationExtractor.cs` | Nested entity extraction and entity reference parsing |
 | `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Review.cs` | Test entity |
 | `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepInsertTests.cs` | Deep insert feature tests |
 | `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepUpdateTests.cs` | Deep update feature tests |
@@ -307,21 +355,34 @@ All feature tests run on both EF6 and EFCore via the generic base class pattern.
 | `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/EFCore/DeepUpdateTests.cs` | EFCore subclass |
 | `test/Microsoft.Restier.Tests.AspNetCore/DeepOperationExtractorTests.cs` | Unit tests |
 | `test/Microsoft.Restier.Tests.Core/Submit/DataModificationItemTests.cs` | Unit tests |
-| `test/Microsoft.Restier.Tests.Core/Submit/BindReferenceValidatorTests.cs` | Unit tests |
+| `test/Microsoft.Restier.Tests.Core/Submit/BindReferenceTests.cs` | Unit tests |
 
 ### Modified Files
 
 | File | Change |
 |------|--------|
-| `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs` | Add ParentItem, ParentNavigationPropertyName, NestedItems, IsBindOperation to DataModificationItem |
-| `src/Microsoft.Restier.Core/Submit/DefaultChangeSetInitializer.cs` | Add protected FK resolution helpers |
-| `src/Microsoft.Restier.AspNetCore/RestierController.cs` | Post() and Update() use DeepOperationExtractor, flatten tree into ChangeSet |
-| `src/Microsoft.Restier.AspNetCore/Extensions/Extensions.cs` | No functional change — EdmEntityObject skip remains, extraction is handled by DeepOperationExtractor |
+| `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs` | Add ParentItem, ParentNavigationPropertyName, NestedItems, NavigationBindings to DataModificationItem |
+| `src/Microsoft.Restier.Core/Submit/DefaultChangeSetInitializer.cs` | Add protected helpers for nav prop resolution, key extraction, containment detection |
+| `src/Microsoft.Restier.AspNetCore/RestierController.cs` | Post() and Update() use DeepOperationExtractor; flatten nested entity tree into ChangeSet; deep update child matching with unlink/delete distinction |
+| `src/Microsoft.Restier.AspNetCore/Extensions/Extensions.cs` | No functional change — EdmEntityObject skip remains; extraction handled by DeepOperationExtractor |
 | `src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs` | Register DeepOperationSettings, add ConfigureDeepOperations builder method |
-| `src/Microsoft.Restier.EntityFrameworkCore/Submit/EFChangeSetInitializer.cs` | FK wiring after parent materialization, @odata.bind handling |
-| `src/Microsoft.Restier.EntityFramework/Submit/EFChangeSetInitializer.cs` | FK wiring after parent materialization, @odata.bind handling |
-| `src/Microsoft.Restier.EntityFramework.Shared/Extensions/ServiceCollectionExtensions.cs` | Register BindReferenceValidator |
+| `src/Microsoft.Restier.EntityFrameworkCore/Submit/EFChangeSetInitializer.cs` | Phase 1: validate+resolve entity references before materialization; Phase 2: nav prop assignment after materialization for both nested entities and binds |
+| `src/Microsoft.Restier.EntityFramework/Submit/EFChangeSetInitializer.cs` | Same two-phase extension as EFCore |
 | `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Book.cs` | Add PublisherId FK, Reviews collection |
 | `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Publisher.cs` | No change (already has Books collection) |
 | `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryContext.cs` | Add DbSet\<Review\>, configure Review relationship |
 | `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryTestInitializer.cs` | Seed Review data |
+
+### Removed from Original Design
+
+| Item | Reason |
+|------|--------|
+| `IsBindOperation` on DataModificationItem | Entity references are not CUD operations; modeled as `NavigationBindings` on parent instead |
+| `BindReferenceValidator` (separate validator class) | Bind validation moved to Phase 1 of initialization — runs before entity materialization for atomic failure |
+| Registration in `ServiceCollectionExtensions` for validator | No longer needed; validation is part of initializer |
+
+## Out of Scope
+
+- **Nested delta payloads**: OData 4.01 delta representation for collections (add/remove/update semantics). Returns 501 if detected. May be added in a future iteration.
+- **Cross-changeset deep operations**: Deep operations that span multiple changesets in a batch request.
+- **$expand in deep operation responses**: Returning the full expanded graph in the POST/PATCH response. The response returns the root entity only (existing behavior).

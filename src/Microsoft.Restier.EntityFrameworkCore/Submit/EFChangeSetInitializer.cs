@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
 using System.Threading;
@@ -132,11 +133,13 @@ namespace Microsoft.Restier.EntityFrameworkCore
 
             var result = await apiBase.QueryAsync(new QueryRequest(query), cancellationToken).ConfigureAwait(false);
 
-            // Materialize to ensure consistent snapshot for multi-enumeration (ETag validation
-            // may re-enumerate). The executor no longer materializes, so we do it here.
-            var materialized = result.Results.Cast<object>().ToArray();
+            // Materialize preserving the entity element type so that ValidateEtag can build
+            // typed expressions (Expression.Property requires the real entity type, not object).
+            var elementType = query.ElementType;
+            var toArray = ExpressionHelperMethods.EnumerableToArrayGeneric.MakeGenericMethod(elementType);
+            var materialized = (Array)toArray.Invoke(null, new object[] { result.Results });
 
-            var resource = materialized.Length == 1 ? materialized[0] : null;
+            var resource = materialized.Length == 1 ? materialized.GetValue(0) : null;
             if (resource is null)
             {
                 if (materialized.Length > 1)
@@ -153,7 +156,8 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 return resource;
             }
 
-            resource = item.ValidateEtag(materialized.AsQueryable());
+            var asQueryable = ExpressionHelperMethods.QueryableAsQueryableGeneric.MakeGenericMethod(elementType);
+            resource = item.ValidateEtag((IQueryable)asQueryable.Invoke(null, new object[] { materialized }));
             return resource;
         }
 

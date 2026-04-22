@@ -2,6 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
+using Microsoft.Restier.Tests.Shared.Scenarios.Library;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore;
 using Xunit;
 
@@ -22,19 +24,39 @@ public class QueryTests : QueryTests<LibraryApi, LibraryContext>
         => services => services.AddEntityFrameworkServices<LibraryContext>();
 
     [Fact]
-    public async Task NullNavigationPropertyOnExistingEntityDoesNotReturn404()
+    public async Task NullNavigationPropertyOnExistingEntityReturns204()
     {
-        // Book "Sea of Rust" (2D760F15-974D-4556-8CDF-D610128B537E) has no Publisher.
-        // When running in parallel with other TFMs hitting the same database, concurrent
-        // tests may temporarily alter data, causing 200 instead of the expected 204.
-        // The key assertion is that it does NOT return 404 (proving the parent-existence
-        // check correctly distinguishes "parent exists, property null" from "parent missing").
-        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
-            HttpMethod.Get,
-            resource: "/Books(2D760F15-974D-4556-8CDF-D610128B537E)/Publisher",
+        // Create an isolated book with no Publisher so concurrent TFM runs can't interfere.
+        var bookId = Guid.NewGuid();
+        var context = await RestierTestHelpers.GetTestableInjectedService<LibraryApi, LibraryContext>(
             serviceCollection: ConfigureServices);
-        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+        context.Books.Add(new Book
+        {
+            Id = bookId,
+            Isbn = "9999999999999",
+            Title = "Isolated Test Book",
+            IsActive = true,
+        });
+        context.SaveChanges();
 
-        response.StatusCode.Should().NotBe(HttpStatusCode.NotFound);
+        try
+        {
+            var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+                HttpMethod.Get,
+                resource: $"/Books({bookId})/Publisher",
+                serviceCollection: ConfigureServices);
+            _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+        finally
+        {
+            var book = context.Books.FirstOrDefault(b => b.Id == bookId);
+            if (book is not null)
+            {
+                context.Books.Remove(book);
+                context.SaveChanges();
+            }
+        }
     }
 }

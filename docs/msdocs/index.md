@@ -44,7 +44,7 @@ RESTier currently supports the following platforms:
 - .NET 9.0
 - .NET 10.0
 
-Entity Framework 6.x support is available for .NET Framework 4.8 via the `Microsoft.Restier.EntityFramework` package.
+Both Entity Framework Core and Entity Framework 6.x are supported on all listed platforms via the `Microsoft.Restier.EntityFrameworkCore` and `Microsoft.Restier.EntityFramework` packages respectively.
 
 ## RESTier Components
 
@@ -55,7 +55,7 @@ RESTier is made up of the following packages:
 | **Microsoft.Restier.AspNetCore** | ASP.NET Core integration, routing, and OData controller |
 | **Microsoft.Restier.Core** | Core convention-based interception framework and pipeline |
 | **Microsoft.Restier.EntityFrameworkCore** | Entity Framework Core data provider |
-| **Microsoft.Restier.EntityFramework** | Entity Framework 6.x data provider (.NET Framework) |
+| **Microsoft.Restier.EntityFramework** | Entity Framework 6.x data provider |
 | **Microsoft.Restier.AspNetCore.Swagger** | OpenAPI/Swagger document generation |
 | **Microsoft.Restier.Breakdance** | In-memory integration testing framework |
 

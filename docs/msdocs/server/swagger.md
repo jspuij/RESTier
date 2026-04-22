@@ -33,31 +33,36 @@ app.UseRestierSwaggerUI();
 ### Complete Example
 
 ```csharp
+using Microsoft.AspNetCore.OData;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.AspNetCore.Swagger;
+using Microsoft.Restier.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRestierSwagger();
 
 builder.Services
-    .AddRestier((restierBuilder) =>
+    .AddControllers()
+    .AddRestier(options =>
     {
-        restierBuilder.AddRestierApi<MyApi>(services =>
+        options.Select().Expand().Filter().OrderBy().SetMaxTop(100).Count();
+
+        options.AddRestierRoute<MyApi>("api", routeServices =>
         {
-            // configure your API services here
+            routeServices.AddEFCoreProviderServices<MyDbContext>(dbOptions =>
+                dbOptions.UseSqlServer(connectionString));
         });
-    })
-    .AddOData(options =>
-    {
-        options.AddRouteComponents("api", builder => builder.AddRestierModel<MyApi>());
     });
 
 var app = builder.Build();
 
-app.UseRestierSwaggerUI();
+app.UseRouting();
+app.MapControllers();
+app.MapRestier();
 
-app.MapRestier(builder =>
-{
-    builder.MapApiRoute<MyApi>("api");
-});
+app.UseRestierSwaggerUI();
 
 app.Run();
 ```
@@ -108,15 +113,20 @@ For example, if you register two routes:
 
 ```csharp
 builder.Services
-    .AddRestier((restierBuilder) =>
+    .AddControllers()
+    .AddRestier(options =>
     {
-        restierBuilder.AddRestierApi<TripsApi>(services => { /* ... */ });
-        restierBuilder.AddRestierApi<BookingsApi>(services => { /* ... */ });
-    })
-    .AddOData(options =>
-    {
-        options.AddRouteComponents("trips", builder => builder.AddRestierModel<TripsApi>());
-        options.AddRouteComponents("bookings", builder => builder.AddRestierModel<BookingsApi>());
+        options.Select().Expand().Filter().OrderBy().SetMaxTop(100).Count();
+
+        options.AddRestierRoute<TripsApi>("trips", routeServices =>
+        {
+            routeServices.AddEFCoreProviderServices<TripsContext>(dbOptions => /* ... */);
+        });
+
+        options.AddRestierRoute<BookingsApi>("bookings", routeServices =>
+        {
+            routeServices.AddEFCoreProviderServices<BookingsContext>(dbOptions => /* ... */);
+        });
     });
 ```
 

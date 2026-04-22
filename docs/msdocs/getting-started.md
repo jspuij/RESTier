@@ -156,6 +156,30 @@ Key points about the configuration:
 - **`AddEFCoreProviderServices<TDbContext>`** registers Entity Framework Core as the data provider and configures the DbContext.
 - **`MapRestier()`** sets up the dynamic routing that dispatches OData requests to the RESTier controller.
 
+### Configuring OData Validation Settings
+
+You can register an `ODataValidationSettings` instance in the route services to control query validation limits. This is useful when clients send complex `$filter` expressions that exceed default thresholds:
+
+```csharp
+using Microsoft.AspNetCore.OData.Query.Validator;
+
+options.AddRestierRoute<BookstoreApi.BookstoreApi>("api", routeServices =>
+{
+    routeServices.AddEFCoreProviderServices<BookstoreContext>(dbOptions =>
+        dbOptions.UseInMemoryDatabase("Bookstore"));
+
+    routeServices.AddSingleton(new ODataValidationSettings
+    {
+        MaxTop = 100,
+        MaxExpansionDepth = 5,
+        MaxAnyAllExpressionDepth = 3,
+        MaxNodeCount = 200,   // default is 100; increase for complex $filter expressions
+    });
+});
+```
+
+If you do not register a custom `ODataValidationSettings`, RESTier uses the OData library defaults.
+
 ## 7. Run the Application
 
 Start the application:
@@ -179,6 +203,20 @@ The API is now available. Try the following URLs in a browser or with `curl` (as
 | `http://localhost:5000/api/Books/$count` | Return the total count of books |
 
 RESTier also supports full CRUD operations. You can create, update, and delete books by sending `POST`, `PATCH`/`PUT`, and `DELETE` requests to the appropriate URLs.
+
+## HTTP Status Codes for Query Results
+
+RESTier follows the OData specification for HTTP status codes when queries return no results:
+
+| Scenario | Status Code | Explanation |
+|----------|-------------|-------------|
+| Entity by key exists | **200 OK** | Entity is returned in the response body |
+| Entity by key does not exist | **404 Not Found** | No entity with that key |
+| Single-valued property or navigation is null | **204 No Content** | Parent entity exists but the property value is null |
+| Single-valued navigation, parent does not exist | **404 Not Found** | Parent entity with the given key was not found |
+| Collection query (even if empty) | **200 OK** | Returns the collection (which may have zero items) |
+
+For concurrency-related status codes (ETags, `If-Match`, `If-None-Match`), see [Optimistic Concurrency](server/concurrency.md).
 
 ## Next Steps
 

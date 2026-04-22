@@ -85,6 +85,20 @@ Uses `Microsoft.Extensions.DependencyInjection` with per-route service container
 - **Namespace:** must match folder path (e.g., `Microsoft.Restier.Tests.Core.Convention`)
 - **Integration/scenario tests** go in `X.Tests/IntegrationTests` or `X.Tests/ScenarioTests`
 
+## Documentation
+
+Documentation lives in `docs/msdocs/` and is built with **docfx** (not mkdocs, despite the legacy `mkdocs.yml`).
+
+```bash
+# Build docs (installs docfx as .NET global tool if missing)
+docs/msdocs/build.sh
+
+# Serve locally for preview
+docfx serve docs/msdocs/_site
+```
+
+The navigation structure is defined in `docs/mkdocs.yml` (legacy) and `docs/msdocs/toc.yml` / `docs/msdocs/docfx.json`.
+
 ## Key Dependencies
 
 - Microsoft.OData.Core / Microsoft.OData.Edm (8.x)

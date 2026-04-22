@@ -658,9 +658,18 @@ namespace Microsoft.Restier.AspNetCore
         {
             var originalValues = new Dictionary<string, object>();
 
-            if (Request.Headers.TryGetValue("IfMatch", out var ifMatchValues))
+            if (Request.Headers.TryGetValue("If-Match", out var ifMatchValues)
+                || Request.Headers.TryGetValue("IfMatch", out ifMatchValues))
             {
                 var etagHeaderValue = EntityTagHeaderValue.Parse(ifMatchValues.SingleOrDefault());
+
+                // Wildcard ETag (*) means "any version" — satisfy the precondition requirement
+                // but skip concurrency validation downstream.
+                if (etagHeaderValue == EntityTagHeaderValue.Any)
+                {
+                    return originalValues;
+                }
+
                 var etag = Request.GetETag(etagHeaderValue);
                 etag.ApplyTo(originalValues);
 
@@ -668,7 +677,8 @@ namespace Microsoft.Restier.AspNetCore
                 return NormalizePropertyNames(originalValues, entitySet.EntityType, api.Model);
             }
 
-            if (Request.Headers.TryGetValue("IfNoneMatch", out var ifNoneMatchValues))
+            if (Request.Headers.TryGetValue("If-None-Match", out var ifNoneMatchValues)
+                || Request.Headers.TryGetValue("IfNoneMatch", out ifNoneMatchValues))
             {
                 var etagHeaderValue = EntityTagHeaderValue.Parse(ifNoneMatchValues.SingleOrDefault());
                 var etag = Request.GetETag(etagHeaderValue);

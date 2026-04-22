@@ -171,3 +171,6 @@ ETags work correctly with camelCase naming. RESTier automatically normalizes ETa
 the camelCase EDM representation and the PascalCase CLR property names used by Entity Framework.
 
 No additional configuration is required -- just use `If-Match` and `If-None-Match` headers as usual.
+
+For full details on how ETags and optimistic concurrency work in RESTier, see
+[Optimistic Concurrency](concurrency.md).

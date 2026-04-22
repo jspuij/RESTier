@@ -11,6 +11,7 @@ pages:
     - 'Interceptors': 'server/interceptors.md'
     - 'Model Building': 'server/model-building.md'
     - 'Naming Conventions': 'server/naming-conventions.md'
+    - 'Optimistic Concurrency': 'server/concurrency.md'
 - Extending RESTier:
     - 'Temporal Types': 'extending-restier/temporal-types.md'
     - 'In-Memory Provider': 'extending-restier/in-memory-provider.md'

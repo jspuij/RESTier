@@ -99,4 +99,17 @@ public abstract class QueryTests<TApi, TContext> : RestierTestBase<TApi> where T
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task NestedNonExistentEntityReturns404()
+    {
+        // Publisher exists but book ID does not
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Publishers('Publisher1')/Books(00000000-0000-0000-0000-000000000000)",
+            serviceCollection: ConfigureServices);
+        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

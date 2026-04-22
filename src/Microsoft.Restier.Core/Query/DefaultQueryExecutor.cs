@@ -26,7 +26,7 @@ namespace Microsoft.Restier.Core.Query
             CancellationToken cancellationToken)
         {
             Ensure.NotNull(context, nameof(context));
-            var result = new QueryResult(query.ToList());
+            var result = new QueryResult(query);
             return Task.FromResult(result);
         }
 

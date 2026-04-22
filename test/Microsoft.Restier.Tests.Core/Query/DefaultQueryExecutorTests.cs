@@ -79,6 +79,25 @@ namespace Microsoft.Restier.Tests.Core.Query
         }
 
         /// <summary>
+        /// Verifies that ExecuteQueryAsync returns the IQueryable without materializing it.
+        /// </summary>
+        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+        [Fact]
+        public async Task ExecuteQueryAsync_ReturnsDeferredQueryable()
+        {
+            var context = new QueryContext(
+                new TestApi(model, queryHandler, submitHandler),
+                new QueryRequest(new QueryableSource<Test>(Expression.Constant(queryable))));
+
+            var result = await testClass.ExecuteQueryAsync(
+                context,
+                queryable,
+                CancellationToken.None);
+
+            result.Results.Should().BeSameAs(queryable);
+        }
+
+        /// <summary>
         /// Cannot call ExecuteQueryAsync with a null context.
         /// </summary>
         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>

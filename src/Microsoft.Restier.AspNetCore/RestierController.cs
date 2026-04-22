@@ -603,8 +603,7 @@ namespace Microsoft.Restier.AspNetCore
 
             var queryRequest = new QueryRequest(parentQuery);
             var result = await api.QueryAsync(queryRequest, cancellationToken).ConfigureAwait(false);
-            var enumerator = result.Results.GetEnumerator();
-            return enumerator.MoveNext();
+            return result.Results.Cast<object>().Any();
         }
 
         private IQueryable GetQuery(ODataPath path)

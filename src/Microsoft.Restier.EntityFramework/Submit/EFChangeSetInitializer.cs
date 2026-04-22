@@ -156,9 +156,18 @@ namespace Microsoft.Restier.EntityFramework
 
             var result = await apiBase.QueryAsync(new QueryRequest(query), cancellationToken).ConfigureAwait(false);
 
-            var resource = result.Results.SingleOrDefault();
+            // Materialize to ensure consistent snapshot for multi-enumeration (ETag validation
+            // may re-enumerate). The executor no longer materializes, so we do it here.
+            var materialized = result.Results.Cast<object>().ToArray();
+
+            var resource = materialized.Length == 1 ? materialized[0] : null;
             if (resource is null)
             {
+                if (materialized.Length > 1)
+                {
+                    throw new InvalidOperationException(Core.Resources.QueryShouldGetSingleRecord);
+                }
+
                 throw new StatusCodeException(HttpStatusCode.NotFound, Resources.ResourceNotFound);
             }
 
@@ -168,7 +177,7 @@ namespace Microsoft.Restier.EntityFramework
                 return resource;
             }
 
-            resource = item.ValidateEtag(result.Results.AsQueryable());
+            resource = item.ValidateEtag(materialized.AsQueryable());
             return resource;
         }
 

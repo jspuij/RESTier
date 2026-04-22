@@ -81,15 +81,7 @@ namespace Microsoft.Restier.EntityFramework
                 }
 #endif
 
-#if EFCore
                 return new QueryResult(query);
-#else
-                // EF6: materialize here because DefaultQueryHandler.CheckSubExpressionResult
-                // enumerates Results while the query is still live, which would open a second
-                // DataReader on the same connection (EF6 does not support MARS by default).
-                // This guard can be removed once CheckSubExpressionResult is deleted.
-                return new QueryResult(await query.ToArrayAsync(cancellationToken).ConfigureAwait(false));
-#endif
             }
 
             return await Inner.ExecuteQueryAsync(context, query, cancellationToken).ConfigureAwait(false);

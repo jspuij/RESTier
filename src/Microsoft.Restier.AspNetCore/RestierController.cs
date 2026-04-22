@@ -584,14 +584,26 @@ namespace Microsoft.Restier.AspNetCore
 
         private async Task<bool> ParentEntityExistsAsync(ODataPath fullPath, CancellationToken cancellationToken)
         {
+            // Build a path through the last KeySegment (not the first). For nested paths
+            // like /Publishers('P1')/Books(<missing-id>)/Title, the immediate keyed parent
+            // is Books(<missing-id>), not Publishers('P1').
             var parentSegments = new List<ODataPathSegment>();
+            var lastKeyIndex = -1;
+            var index = 0;
             foreach (var segment in fullPath)
             {
                 parentSegments.Add(segment);
                 if (segment is KeySegment)
                 {
-                    break;
+                    lastKeyIndex = index;
                 }
+
+                index++;
+            }
+
+            if (lastKeyIndex >= 0)
+            {
+                parentSegments = parentSegments.GetRange(0, lastKeyIndex + 1);
             }
 
             var parentPath = new ODataPath(parentSegments);

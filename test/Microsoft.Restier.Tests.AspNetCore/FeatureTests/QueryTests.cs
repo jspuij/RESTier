@@ -75,4 +75,28 @@ public abstract class QueryTests<TApi, TContext> : RestierTestBase<TApi> where T
         response.IsSuccessStatusCode.Should().BeTrue();
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task NonExistentEntityByKeyReturns404()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Books(00000000-0000-0000-0000-000000000000)",
+            serviceCollection: ConfigureServices);
+        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task NonExistentParentEntityNavigationPropertyReturns404()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Books(00000000-0000-0000-0000-000000000000)/Publisher",
+            serviceCollection: ConfigureServices);
+        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

@@ -152,7 +152,7 @@ namespace Microsoft.Restier.AspNetCore
                 }
             }
 
-            return CreateQueryResponse(result, path.GetEdmType(), etag);
+            return await CreateQueryResponse(result, path.GetEdmType(), etag, path, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -369,7 +369,7 @@ namespace Microsoft.Restier.AspNetCore
                 return StatusCode((int)HttpStatusCode.NoContent);
             }
 
-            return CreateQueryResponse(result, path.GetEdmType(), null);
+            return await CreateQueryResponse(result, path.GetEdmType(), null, path, cancellationToken).ConfigureAwait(false);
         }
 
         private static IEdmTypeReference GetTypeReference(IEdmType edmType)
@@ -456,7 +456,7 @@ namespace Microsoft.Restier.AspNetCore
             return CreateUpdatedODataResult(updateItem.Resource);
         }
 
-        private IActionResult CreateQueryResponse(IQueryable query, IEdmType edmType, ETag etag)
+        private async Task<IActionResult> CreateQueryResponse(IQueryable query, IEdmType edmType, ETag etag, ODataPath path, CancellationToken cancellationToken)
         {
             var typeReference = GetTypeReference(edmType);
             BaseSingleResult singleResult = null;
@@ -505,6 +505,16 @@ namespace Microsoft.Restier.AspNetCore
             {
                 if (singleResult.Result is null)
                 {
+                    // Check if parent entity doesn't exist (404) vs property is null (204)
+                    if (path.OfType<KeySegment>().Any())
+                    {
+                        var parentExists = await ParentEntityExistsAsync(path, cancellationToken).ConfigureAwait(false);
+                        if (!parentExists)
+                        {
+                            return NotFound(Resources.ResourceNotFound);
+                        }
+                    }
+
                     // Per specification, If the property is single-valued and has the null value,
                     // the service responds with 204 No Content.
                     return NoContent();
@@ -527,6 +537,25 @@ namespace Microsoft.Restier.AspNetCore
             var entityResult = query.SingleOrDefault();
             if (entityResult is null)
             {
+                var lastSegment = path.LastOrDefault();
+                var isKeyRequest = lastSegment is KeySegment
+                    || (lastSegment is TypeSegment && path.Count >= 2 && path[path.Count - 2] is KeySegment);
+
+                if (isKeyRequest)
+                {
+                    return NotFound(Resources.ResourceNotFound);
+                }
+
+                // Parent entity might not exist — check before returning 204
+                if (path.OfType<KeySegment>().Any())
+                {
+                    var parentExists = await ParentEntityExistsAsync(path, cancellationToken).ConfigureAwait(false);
+                    if (!parentExists)
+                    {
+                        return NotFound(Resources.ResourceNotFound);
+                    }
+                }
+
                 return NoContent();
             }
 
@@ -551,6 +580,31 @@ namespace Microsoft.Restier.AspNetCore
             }
 
             return Ok(entityResult);
+        }
+
+        private async Task<bool> ParentEntityExistsAsync(ODataPath fullPath, CancellationToken cancellationToken)
+        {
+            var parentSegments = new List<ODataPathSegment>();
+            foreach (var segment in fullPath)
+            {
+                parentSegments.Add(segment);
+                if (segment is KeySegment)
+                {
+                    break;
+                }
+            }
+
+            var parentPath = new ODataPath(parentSegments);
+            var parentQuery = new RestierQueryBuilder(api, parentPath).BuildQuery();
+            if (parentQuery is null)
+            {
+                return false;
+            }
+
+            var queryRequest = new QueryRequest(parentQuery);
+            var result = await api.QueryAsync(queryRequest, cancellationToken).ConfigureAwait(false);
+            var enumerator = result.Results.GetEnumerator();
+            return enumerator.MoveNext();
         }
 
         private IQueryable GetQuery(ODataPath path)

@@ -1,27 +1,44 @@
 # Temporal Types
 
-When using the Entity Framework providers (`Microsoft.Restier.EntityFrameworkCore` or `Microsoft.Restier.EntityFramework`), temporal types are supported. The table below 
-shows how Temporal Types map to SQL Types:
+When using the Entity Framework providers (`Microsoft.Restier.EntityFrameworkCore` or `Microsoft.Restier.EntityFramework`), temporal types are supported. The tables below show how temporal CLR types map to SQL and OData EDM types.
 
-|        EF Type        |      SQL Type      |      Edm Type      | Need ColumnAttribute? |
-|:---------------------:|:------------------:|:------------------:|:---------------------:|
-| System.DateTime       | DateTime/DateTime2 | Edm.DateTimeOffset | Y                     |
-| System.DateTimeOffset | DateTimeOffset     | Edm.DateTimeOffset | N                     |
-| System.DateTime       | Date               | Edm.Date           | Y                     |
-| System.TimeSpan       | Time               | Edm.TimeOfDay      | Y                     |
-| System.TimeSpan       | Time               | Edm.Duration       | N                     |
+## EF Core type mappings
 
-The next sections illustrate how to use use temporal types in various scenarios.
+When using `Microsoft.Restier.EntityFrameworkCore`, the following mappings are available:
+
+|        CLR Type         |      SQL Type      |      Edm Type      | Need ColumnAttribute? |
+|:-----------------------:|:------------------:|:------------------:|:---------------------:|
+| System.DateTime         | DateTime/DateTime2 | Edm.DateTimeOffset | Y                     |
+| System.DateTimeOffset   | DateTimeOffset     | Edm.DateTimeOffset | N                     |
+| System.DateTime         | Date               | Edm.Date           | Y                     |
+| **System.DateOnly**     | **Date**           | **Edm.Date**       | **N**                 |
+| System.TimeSpan         | Time               | Edm.TimeOfDay      | Y                     |
+| **System.TimeOnly**     | **Time**           | **Edm.TimeOfDay**  | **N**                 |
+| System.TimeSpan         | Time               | Edm.Duration       | N                     |
+
+## EF6 type mappings
+
+When using `Microsoft.Restier.EntityFramework`, `DateOnly` and `TimeOnly` are **not** available. EF6 does not natively support these types. Use the classic mappings instead:
+
+|        CLR Type         |      SQL Type      |      Edm Type      | Need ColumnAttribute? |
+|:-----------------------:|:------------------:|:------------------:|:---------------------:|
+| System.DateTime         | DateTime/DateTime2 | Edm.DateTimeOffset | Y                     |
+| System.DateTimeOffset   | DateTimeOffset     | Edm.DateTimeOffset | N                     |
+| System.DateTime         | Date               | Edm.Date           | Y                     |
+| System.TimeSpan         | Time               | Edm.TimeOfDay      | Y                     |
+| System.TimeSpan         | Time               | Edm.Duration       | N                     |
+
+The next sections illustrate how to use temporal types in various scenarios.
 
 ## Edm.DateTimeOffset
-Suppose you have an entity class `Person`, all the following code define `Edm.DateTimeOffset` properties in the 
-EDM model though the underlying SQL types are different (see the value of the `TypeName` property). You can see 
-Column attribute is optional here.
 
+Suppose you have an entity class `Person`, all the following code define `Edm.DateTimeOffset` properties in the
+EDM model though the underlying SQL types are different (see the value of the `TypeName` property). You can see
+Column attribute is optional here.
 
     using System;
     using System.ComponentModel.DataAnnotations.Schema;
-    
+
     public class Person
     {
         public DateTime BirthDateTime1 { get; set; }
@@ -35,13 +52,26 @@ Column attribute is optional here.
         public DateTimeOffset BirthDateTime4 { get; set; }
     }
 
-
 ## Edm.Date
-The following code define an `Edm.Date` property in the EDM model.
+
+### Using DateOnly (EF Core only)
+
+With EF Core, the preferred way to define an `Edm.Date` property is to use `System.DateOnly`. No `ColumnAttribute` is needed — EF Core natively maps `DateOnly` to the SQL `date` type and Restier maps it to `Edm.Date` automatically.
+
+    using System;
+
+    public class Person
+    {
+        public DateOnly BirthDate { get; set; }
+    }
+
+### Using DateTime (EF Core and EF6)
+
+You can also use `System.DateTime` with a `ColumnAttribute` to define an `Edm.Date` property. This works with both EF Core and EF6.
 
     using System;
     using System.ComponentModel.DataAnnotations.Schema;
-    
+
     public class Person
     {
         [Column(TypeName = "Date")]
@@ -49,10 +79,10 @@ The following code define an `Edm.Date` property in the EDM model.
     }
 
 ## Edm.Duration
-The following code define an `Edm.Duration` property in the EDM model.
+
+The following code defines an `Edm.Duration` property in the EDM model.
 
     using System;
-    using System.ComponentModel.DataAnnotations.Schema;
 
     public class Person
     {
@@ -60,8 +90,21 @@ The following code define an `Edm.Duration` property in the EDM model.
     }
 
 ## Edm.TimeOfDay
-The following code define an `Edm.TimeOfDay` property in the EDM model. Please note that you MUST NOT omit the 
-`ColumnTypeAttribute` on a `TimeSpan` property otherwise it will be recognized as an `Edm.Duration` as described above.
+
+### Using TimeOnly (EF Core only)
+
+With EF Core, the preferred way to define an `Edm.TimeOfDay` property is to use `System.TimeOnly`. No `ColumnAttribute` is needed — EF Core natively maps `TimeOnly` to the SQL `time` type and Restier maps it to `Edm.TimeOfDay` automatically.
+
+    using System;
+
+    public class Person
+    {
+        public TimeOnly BirthTime { get; set; }
+    }
+
+### Using TimeSpan (EF Core and EF6)
+
+You can also use `System.TimeSpan` with a `ColumnAttribute` to define an `Edm.TimeOfDay` property. This works with both EF Core and EF6. Please note that you **must** include the `ColumnAttribute` on a `TimeSpan` property, otherwise it will be recognized as `Edm.Duration` as described above.
 
     using System;
     using System.ComponentModel.DataAnnotations.Schema;
@@ -72,6 +115,9 @@ The following code define an `Edm.TimeOfDay` property in the EDM model. Please n
         public TimeSpan BirthTime { get; set; }
     }
 
-As before, if you have the need to override `ODataPayloadValueConverter`, please now change to override 
-`RestierPayloadValueConverter` instead in order not to break the payload value conversion specialized for these 
-temporal types.
+## Payload value conversion
+
+If you have the need to override `ODataPayloadValueConverter`, please now change to override
+`RestierPayloadValueConverter` instead in order not to break the payload value conversion specialized for these
+temporal types. Restier handles the conversions between CLR and OData types automatically for all
+the mappings listed above, including `DateOnly` and `TimeOnly`.

@@ -81,7 +81,11 @@ namespace Microsoft.Restier.EntityFramework
                 }
 #endif
 
+#if EFCore
+                return new QueryResult(query);
+#else
                 return new QueryResult(await query.ToArrayAsync(cancellationToken).ConfigureAwait(false));
+#endif
             }
 
             return await Inner.ExecuteQueryAsync(context, query, cancellationToken).ConfigureAwait(false);

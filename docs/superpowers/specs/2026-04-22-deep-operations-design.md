@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-22
 **Issue**: [OData/RESTier#646](https://github.com/OData/RESTier/issues/646)
-**Status**: Draft (rev 3)
+**Status**: Draft (rev 4)
 
 ## Overview
 
@@ -187,7 +187,7 @@ Per OData 4.01, a non-delta nested collection represents the **complete relation
 2. Matches payload items to existing children by key
 3. Creates `Insert` items for new entities, `Update` items for matched entities
 4. For entities in the existing set but **not** in the payload:
-   - **Non-contained nav prop** (`ContainsTarget = false`): Remove the relationship by clearing the navigation property reference (e.g., remove child from parent's collection, or set child's reference nav prop to null). EF resolves this to the appropriate underlying action: nulling an FK, removing from a join table, or updating a dependent entity. If the relationship is required (non-nullable FK, no cascade), EF will throw a constraint violation — the initializer catches this and returns 400 with a descriptive error.
+   - **Non-contained nav prop** (`ContainsTarget = false`): Remove the relationship by clearing the navigation property reference (e.g., remove child from parent's collection, or set child's reference nav prop to null). EF resolves this to the appropriate underlying action: nulling an FK, removing from a join table, or updating a dependent entity. If the relationship is required (non-nullable FK, no cascade), EF will throw a constraint violation during `SaveChangesAsync` in the submit executor. The controller's exception mapping (or a new `DbUpdateException` handler) translates this to HTTP 400 with a descriptive error indicating which relationship could not be removed.
    - **Contained nav prop** (`ContainsTarget = true`): Delete the omitted child entity (creating a `Delete` item).
 
 **Nested delta payloads**: Out of scope for initial implementation. If a nested delta is detected, the server returns 501 Not Implemented.
@@ -377,13 +377,15 @@ New base classes `DeepInsertTests<TApi, TContext>` and `DeepUpdateTests<TApi, TC
 | `DeepUpdate_Put_OmittedChildrenUnlinked` | 4.01 | PUT Publisher with subset of Books — omitted non-contained children are unlinked (relationship removed; EF resolves to FK nulling or constraint error) |
 | `DeepUpdate_Put_ContainedChildrenDeleted` | 4.01 | PUT with contained nav prop — omitted children are deleted (requires containment model) |
 | `DeepUpdate_Put_RequiredRelationship_Returns400` | 4.01 | PUT that would remove a required relationship on omitted child — returns 400 |
-| `DeepUpdate_SingleNavProperty` | 4.0 | PATCH Book with inline Publisher change |
+| `DeepUpdate_SingleNavProperty_V401` | 4.01 | PATCH Book with inline Publisher change (inline deep update is 4.01 only) |
+| `DeepUpdate_InlineEntityInV40_Rejected` | 4.0 | PATCH with inline nested entity under OData-Version: 4.0 — returns 400 (4.0 only allows @odata.bind on update) |
 | `DeepUpdate_BindOnUpdate_V40` | 4.0 | PATCH Book with `Publisher@odata.bind` (OData-Version: 4.0) |
 | `DeepUpdate_EntityRefOnUpdate_V401` | 4.01 | PATCH Book with Publisher entity-reference (`@id`) (OData-Version: 4.01) |
-| `DeepUpdate_NullUnlinks` | 4.0 | PATCH Book with `Publisher: null` unlinks |
-| `DeepUpdate_FiresConventionMethods` | 4.0 | Verifies `OnUpdatingPublisher()` fires for nested entity update |
+| `DeepUpdate_NullUnlinks_V40` | 4.0 | PATCH Book with `Publisher@odata.bind: null` to remove relationship (4.0 uses bind annotation, not inline null) |
+| `DeepUpdate_NullUnlinks_V401` | 4.01 | PATCH Book with `Publisher: null` to remove relationship (4.01 inline) |
+| `DeepUpdate_FiresConventionMethods` | 4.01 | Verifies `OnUpdatingPublisher()` fires for nested entity update (inline deep update is 4.01 only) |
 | `DeepUpdate_NestedDelta_Returns501` | 4.01 | Returns 501 when nested delta payload is detected (out of scope) |
-| `DeepUpdate_ResponseIncludesExpandedEntities` | 4.0 | Updated response includes expanded navigation properties matching request depth |
+| `DeepUpdate_ResponseIncludesExpandedEntities` | 4.01 | Updated response includes expanded navigation properties matching request depth |
 
 All feature tests run on both EF6 and EFCore via the generic base class pattern. Tests that specify a particular OData-Version send it via the request header.
 
@@ -416,7 +418,7 @@ All feature tests run on both EF6 and EFCore via the generic base class pattern.
 | `src/Microsoft.Restier.Core/Submit/DefaultChangeSetInitializer.cs` | Add protected helpers for nav prop resolution, key extraction, containment detection |
 | `src/Microsoft.Restier.AspNetCore/RestierController.cs` | Post() and Update() use DeepOperationExtractor; flatten nested entity tree into ChangeSet; deep update child matching with relationship removal/delete distinction; build SelectExpandClause for response expansion |
 | `src/Microsoft.Restier.AspNetCore/Extensions/Extensions.cs` | No functional change — EdmEntityObject skip remains; extraction handled by DeepOperationExtractor |
-| `src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs` | Register DeepOperationSettings, add ConfigureDeepOperations builder method |
+| `src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs` | Register DeepOperationSettings via TryAddSingleton in route service container |
 | `src/Microsoft.Restier.EntityFrameworkCore/Submit/EFChangeSetInitializer.cs` | Phase 1: validate+resolve entity references before materialization; Phase 2: nav prop assignment after materialization for both nested entities and binds |
 | `src/Microsoft.Restier.EntityFramework/Submit/EFChangeSetInitializer.cs` | Same two-phase extension as EFCore |
 | `test/Microsoft.Restier.Tests.Shared/Scenarios/Library/Book.cs` | Add PublisherId FK, Reviews collection |

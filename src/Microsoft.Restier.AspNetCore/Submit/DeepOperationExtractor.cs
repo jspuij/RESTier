@@ -91,7 +91,7 @@ namespace Microsoft.Restier.AspNetCore.Submit
             bool isCreation,
             int currentDepth)
         {
-            if (IsEntityReference(nestedEntity))
+            if (IsEntityReference(nestedEntity, targetEntityType))
             {
                 var bindRef = CreateBindReference(nestedEntity, targetEntityType, targetEntitySetName);
                 if (!parentItem.NavigationBindings.TryGetValue(clrNavPropertyName, out var bindList))
@@ -124,12 +124,34 @@ namespace Microsoft.Restier.AspNetCore.Submit
             ExtractNestedItems(nestedEntity, actualEdmType, childItem, isCreation, currentDepth + 1);
         }
 
-        private static bool IsEntityReference(EdmEntityObject entity)
+        private static bool IsEntityReference(EdmEntityObject entity, IEdmEntityType entityType)
         {
-            // Check for OData ID annotation — entity references from @odata.bind
+            // Check for OData ID annotation — entity references from @odata.id (OData 4.01)
             if (entity.TryGetPropertyValue("@odata.id", out _))
             {
                 return true;
+            }
+
+            // When @odata.bind is used (OData 4.0), the OData framework resolves it to an
+            // EdmEntityObject containing only the key properties extracted from the bind URL.
+            // Detect this case: if the only changed properties are key properties, the entity
+            // was created from a reference URL rather than an inline body.
+            var changedPropertyNames = new HashSet<string>(entity.GetChangedPropertyNames(), StringComparer.OrdinalIgnoreCase);
+            if (changedPropertyNames.Count == 0)
+            {
+                return true;
+            }
+
+            if (entityType is not null)
+            {
+                var keyPropertyNames = new HashSet<string>(
+                    entityType.Key().Select(k => k.Name),
+                    StringComparer.OrdinalIgnoreCase);
+
+                if (changedPropertyNames.IsSubsetOf(keyPropertyNames))
+                {
+                    return true;
+                }
             }
 
             return false;

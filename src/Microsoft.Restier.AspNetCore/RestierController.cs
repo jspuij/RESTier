@@ -24,6 +24,7 @@ using Microsoft.OData.UriParser;
 using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Restier.AspNetCore.Operation;
 using Microsoft.Restier.AspNetCore.Query;
+using Microsoft.Restier.AspNetCore.Submit;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Operation;
 using Microsoft.Restier.Core.Query;
@@ -212,18 +213,32 @@ namespace Microsoft.Restier.AspNetCore
                 null,
                 edmEntityObject.CreatePropertyDictionary(actualEntityType, api, true));
 
+            // Extract nested entities for deep insert
+            var deepSettings = HttpContext.RequestServices.GetService<DeepOperationSettings>() ?? new DeepOperationSettings();
+            if (deepSettings.MaxDepth > 0)
+            {
+                var extractor = new DeepOperationExtractor(model, api, deepSettings);
+                extractor.ExtractNestedItems(edmEntityObject, actualEntityType, postItem, isCreation: true);
+            }
+
             var changeSetProperty = HttpContext.GetChangeSet();
             if (changeSetProperty is null)
             {
                 var changeSet = new ChangeSet();
-                changeSet.Entries.Enqueue(postItem);
+                foreach (var item in postItem.FlattenDepthFirst())
+                {
+                    changeSet.Entries.Enqueue(item);
+                }
 
                 // TODO: RWM: Feels like we should be doing something with this.
                 var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                changeSetProperty.ChangeSet.Entries.Enqueue(postItem);
+                foreach (var item in postItem.FlattenDepthFirst())
+                {
+                    changeSetProperty.ChangeSet.Entries.Enqueue(item);
+                }
 
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }

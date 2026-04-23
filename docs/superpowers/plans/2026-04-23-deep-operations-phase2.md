@@ -300,50 +300,29 @@ public async Task DeepInsert_MaxDepth1_AllowsOneLevel()
 
 - [ ] **Step 2.2: Fix depth check**
 
-Remove the depth check from the top of `ExtractNestedItems`. Add it in `ProcessSingleNestedEntity` BEFORE creating or adding the child:
+Simplify depth model. Define: `currentDepth` = nesting depth of the entity being processed (root = 0, child = 1, grandchild = 2). Reject immediately when `childDepth > MaxDepth`. Always recurse for accepted children so their own nav props are validated normally.
+
+Remove the depth check from the top of `ExtractNestedItems`. Add it in `ProcessSingleNestedEntity` BEFORE creating the child:
 
 ```csharp
-// Compute the depth this child would be at
 var childDepth = currentDepth + 1;
 
-// Check if this child would exceed max depth AND has nested nav values
-// (a child at max depth is allowed if it has no grandchildren;
-// reject the entire request if it would require over-depth processing)
-if (settings.MaxDepth > 0 && childDepth >= settings.MaxDepth
-    && HasNestedNavigationValues(nestedEntity, actualEdmType))
+// Reject if this child would exceed max depth
+if (settings.MaxDepth > 0 && childDepth > settings.MaxDepth)
 {
     throw new ODataException(
         $"Deep operation exceeds maximum nesting depth of {settings.MaxDepth}.");
 }
 
-// Safe to add the child — it either has no grandchildren or is within depth
+// Child is within depth — create and recurse normally
 var childItem = new DataModificationItem(...);
 parentItem.NestedItems.Add(childItem);
 
-// Only recurse if within depth
-if (settings.MaxDepth == 0 || childDepth < settings.MaxDepth)
-{
-    ExtractNestedItems(nestedEntity, actualEdmType, childItem, isCreation, childDepth);
-}
+// Always recurse — the depth check above will reject grandchildren if needed
+ExtractNestedItems(nestedEntity, actualEdmType, childItem, isCreation, childDepth);
 ```
 
-This ensures: the depth check happens BEFORE the child is added, no mutated state on exception, and a child at the max depth boundary is allowed if it has no nested nav content.
-
-Add helper:
-```csharp
-private bool HasNestedNavigationValues(Delta entity, IEdmStructuredType edmType)
-{
-    foreach (var propertyName in entity.GetChangedPropertyNames())
-    {
-        if (!entity.TryGetPropertyValue(propertyName, out var value) || value is null)
-            continue;
-        var edmProperty = edmType.FindProperty(propertyName);
-        if (edmProperty is IEdmNavigationProperty && (value is EdmEntityObject || (value is IEnumerable && value is not string)))
-            return true;
-    }
-    return false;
-}
-```
+With MaxDepth=1: root at depth 0, child at depth 1 (1 > 1 is false — accepted), grandchild at depth 2 (2 > 1 is true — rejected). Simple, no special cases, no `HasNestedNavigationValues` helper needed.
 
 - [ ] **Step 2.3: Verify both MaxDepth tests pass**
 
@@ -422,6 +401,13 @@ public async Task DeepInsert_WithEntityReference_V401()
     // POST Book with inline Publisher entity-reference using @id
     // OData-Version: 4.01 header
 }
+
+[Fact]
+public async Task DeepUpdate_EntityRefOnUpdate_V401()
+{
+    // PATCH Book with Publisher entity-reference using @id (4.01)
+    // Validates that entity reference parsing works for deep update too
+}
 ```
 
 ### Step 3.2: Implement entity reference URI parsing
@@ -470,11 +456,10 @@ Controller passes `Request.Headers["OData-Version"].FirstOrDefault()`.
 
 ### Step 4.2: Normalize OData version with safe default
 
-- [ ] OData 4.0 is the conservative default when the header is missing. Normalize once:
+- [ ] OData 4.0 is the conservative default when the header is missing. `OData-MaxVersion` is a preference/limit, not the request payload version — do not promote to 4.01 based on it alone. Normalize once:
 
 ```csharp
-var rawVersion = Request.Headers["OData-Version"].FirstOrDefault()
-    ?? Request.Headers["OData-MaxVersion"].FirstOrDefault();
+var rawVersion = Request.Headers["OData-Version"].FirstOrDefault();
 var odataVersion = string.IsNullOrEmpty(rawVersion) ? "4.0" : rawVersion;
 ```
 
@@ -504,7 +489,20 @@ public async Task DeepUpdate_InlineEntityInV40_Rejected()
 
 ### Step 4.4: Handle @odata.bind under 4.01
 
-Based on Task 1 findings — implement rejection or document that the formatter handles it.
+Based on Task 1 findings, implement one of:
+- Formatter rejects it: document and write assertion test
+- Passes through: add extractor check when `odataVersion == "4.01"`
+
+**Required permanent assertion** (prevents version enforcement regression):
+
+```csharp
+[Fact]
+public async Task DeepInsert_BindInV401Request_Rejected()
+{
+    // POST with Publisher@odata.bind under OData-Version: 4.01
+    // Must return 400 (from formatter or controller)
+}
+```
 
 ### Step 4.5: Commit
 
@@ -670,8 +668,18 @@ internal class DeepUpdateClassifier
             }
             else
             {
-                // Different entity or no current — keep as Insert
-                // Unlink old if exists
+                // Different key than current related.
+                // Check if entity exists globally — if so, Update+link; if not, Insert.
+                var targetSet = entitySet.FindNavigationTarget(edmNavProp);
+                var existsGlobally = await EntityExistsByKey(
+                    targetSet.Name, payloadItem.ResourceKey, cancellationToken);
+                if (existsGlobally)
+                {
+                    payloadItem.EntitySetOperation = RestierEntitySetOperation.Update;
+                }
+                // else: truly new — keep as Insert
+
+                // Unlink old regardless
                 if (currentRelated is not null)
                 {
                     AddRelationshipRemoval(rootItem, navPropName, currentRelated, edmNavProp, entitySet);
@@ -715,14 +723,52 @@ internal class DeepUpdateClassifier
         IEdmEntitySet entitySet,
         CancellationToken cancellationToken)
     {
-        // Query: rootEntitySet.Where(key) — then inspect nav prop
-        var query = api.GetQueryableSource(rootItem.ResourceSetName);
-        // Apply key filter from rootItem.ResourceKey
-        // ... (same pattern as FindResource in EFChangeSetInitializer)
-        // Load with Include/Expand for the nav prop
-        // Return the related entity or null
-        // Implementation detail: may need to use .Select(e => e.{NavProp}) 
-        // or load root and read nav prop via reflection
+        // Strategy: query the target entity set by FK, similar to collection children.
+        // For Book.Publisher (single nav on dependent side): Publisher is the principal,
+        // so we can't query "Publishers where BookId = X". Instead, we need the FK value
+        // from the root entity itself.
+        //
+        // Two cases:
+        // 1. Root is the dependent (has FK): e.g., Book has PublisherId.
+        //    → Read the FK value from rootItem.LocalValues or ServerValues.
+        //    → If FK is non-null, query Publishers.Where(Id == fkValue).
+        //
+        // 2. Root is the principal: e.g., Publisher.FeaturedBook (hypothetical 1:1).
+        //    → Query target set by inverse FK: FeaturedBooks.Where(PublisherId == rootKey).
+
+        // For case 1 (most common for single nav props):
+        var refConstraint = edmNavProp.ReferentialConstraint;
+        if (refConstraint is not null)
+        {
+            // FK is on the root entity — read it from the existing entity's values
+            // The constraint maps dependent property → principal property
+            foreach (var pair in refConstraint.PropertyPairs)
+            {
+                var fkPropName = EdmClrPropertyMapper.GetClrPropertyName(pair.DependentProperty, model);
+                // Try to get current FK value from the database (not payload)
+                var query = api.GetQueryableSource(rootItem.ResourceSetName);
+                // Apply root key filter
+                query = BuildKeyFilter(query, rootItem.ResourceKey);
+                var result = await api.QueryAsync(new QueryRequest(query), cancellationToken);
+                var rootEntity = result.Results.Cast<object>().FirstOrDefault();
+                if (rootEntity is null) return null;
+
+                var fkValue = rootEntity.GetType().GetProperty(fkPropName)?.GetValue(rootEntity);
+                if (fkValue is null) return null;
+
+                // Query the target entity set by the principal key
+                var principalPropName = EdmClrPropertyMapper.GetClrPropertyName(pair.PrincipalProperty, model);
+                var targetSetName = entitySet.FindNavigationTarget(edmNavProp)?.Name;
+                if (targetSetName is null) return null;
+
+                var targetQuery = api.GetQueryableSource(targetSetName);
+                targetQuery = BuildSingleKeyFilter(targetQuery, principalPropName, fkValue);
+                var targetResult = await api.QueryAsync(new QueryRequest(targetQuery), cancellationToken);
+                return targetResult.Results.Cast<object>().FirstOrDefault();
+            }
+        }
+
+        return null; // Cannot determine FK — no current related entity loadable
     }
 
     private void AddRelationshipRemoval(
@@ -795,9 +841,48 @@ private async Task ClassifyCollectionNavProp(
             {
                 payloadItem.EntitySetOperation = RestierEntitySetOperation.Update;
             }
-            // else: has key but not currently related — keep as Insert
+            else
+            {
+                // Has key but not currently related to this parent.
+                // Query target set by key to check if entity exists globally.
+                var existsGlobally = await EntityExistsByKey(
+                    targetEntitySet.Name, payloadItem.ResourceKey, cancellationToken);
+                if (existsGlobally)
+                {
+                    // Entity exists — reclassify as Update and link it
+                    // (the EF initializer will wire the nav prop to the parent)
+                    payloadItem.EntitySetOperation = RestierEntitySetOperation.Update;
+                }
+                // else: truly new entity — keep as Insert
+            }
         }
         // else: no key — keep as Insert
+    }
+
+    // Helper: check if an entity exists in the target set by key
+    private async Task<bool> EntityExistsByKey(
+        string entitySetName,
+        IReadOnlyDictionary<string, object> key,
+        CancellationToken cancellationToken)
+    {
+        var query = api.GetQueryableSource(entitySetName);
+        // Apply key filter (same pattern as FindResource)
+        var elementType = query.ElementType;
+        var param = Expression.Parameter(elementType);
+        Expression where = null;
+        foreach (var kvp in key)
+        {
+            var property = Expression.Property(param, kvp.Key);
+            var value = kvp.Value;
+            if (value.GetType() != property.Type)
+                value = Convert.ChangeType(value, property.Type, CultureInfo.InvariantCulture);
+            var equal = Expression.Equal(property, Expression.Constant(value, property.Type));
+            where = where is null ? equal : Expression.AndAlso(where, equal);
+        }
+        var whereLambda = Expression.Lambda(where, param);
+        query = ExpressionHelpers.Where(query, whereLambda, elementType);
+        var result = await api.QueryAsync(new QueryRequest(query), cancellationToken);
+        return result.Results.Cast<object>().Any();
     }
 
     // Handle omitted children (PUT replace semantics)
@@ -868,7 +953,7 @@ foreach (var entry in context.ChangeSet.Entries.OfType<DataModificationItem>())
 }
 ```
 
-**Phase 2 addition (after parent materialization):** Process removals using key-based matching (NOT object identity):
+**Phase 2 addition (after parent materialization):** Process removals by clearing the inverse navigation on the **child** side, not the parent collection. This avoids the unloaded-collection problem: the parent's collection may be null/unloaded, but the resolved child entity is a tracked instance where we can clear its reference to the parent.
 
 ```csharp
 // Process relationship removals
@@ -884,15 +969,15 @@ if (entry.RelationshipRemovals.Count > 0 && entry.Resource is not null)
         if (typeof(IEnumerable).IsAssignableFrom(navPropInfo.PropertyType)
             && navPropInfo.PropertyType != typeof(string))
         {
-            // Collection: find by key comparison and remove (not object identity)
-            var collection = navPropInfo.GetValue(entry.Resource);
-            if (collection is IList list)
+            // Collection nav: clear the INVERSE nav on the child entity
+            // e.g., for Publisher.Books removal, set Book.Publisher = null on the child
+            // This is reliable because the child is a tracked instance from Phase 1.
+            // EF's change tracker will infer the FK null from the nav prop change.
+            var inverseNavName = FindInverseNavigationPropertyName(
+                removal.ResolvedEntity.GetType(), entry.Resource.GetType());
+            if (inverseNavName is not null)
             {
-                var toRemove = FindByKeyInList(list, removal.ResourceKey);
-                if (toRemove is not null)
-                {
-                    list.Remove(toRemove);
-                }
+                SetNavigationProperty(removal.ResolvedEntity, inverseNavName, null);
             }
         }
         else
@@ -904,23 +989,20 @@ if (entry.RelationshipRemovals.Count > 0 && entry.Resource is not null)
 }
 ```
 
-Add helper `FindByKeyInList` that iterates the list and compares key properties:
+Add helper `FindInverseNavigationPropertyName` that finds the nav prop on the child type that points back to the parent type:
 ```csharp
-private static object FindByKeyInList(IList list, IReadOnlyDictionary<string, object> key)
+private static string FindInverseNavigationPropertyName(Type childType, Type parentType)
 {
-    foreach (var item in list)
+    // Find a navigation property on childType whose type is parentType
+    foreach (var prop in childType.GetProperties())
     {
-        var allMatch = true;
-        foreach (var kvp in key)
+        if (prop.PropertyType == parentType || prop.PropertyType.IsAssignableFrom(parentType))
         {
-            var prop = item.GetType().GetProperty(kvp.Key);
-            if (prop is null || !Equals(prop.GetValue(item), kvp.Value))
-            {
-                allMatch = false;
-                break;
-            }
+            return prop.Name;
         }
-        if (allMatch) return item;
+    }
+    return null; // No inverse nav found — unlink will rely on EF cascade/constraint
+}
     }
     return null;
 }
@@ -1064,7 +1146,7 @@ Add remaining tests from spec matrix not covered by Tasks 2-7.
 
 ### Deep update gaps:
 - `DeepUpdate_SingleNavProperty_V401` — PATCH Book with inline Publisher
-- `DeepUpdate_EntityRefOnUpdate_V401` — PATCH with @id reference
+- ~~`DeepUpdate_EntityRefOnUpdate_V401`~~ (moved to Task 3)
 - `DeepUpdate_NestedDelta_Returns501`
 - `DeepUpdate_FiresConventionMethods_V401`
 

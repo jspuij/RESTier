@@ -214,7 +214,7 @@ namespace Microsoft.Restier.AspNetCore
                 edmEntityObject.CreatePropertyDictionary(actualEntityType, api, true));
 
             // Extract nested entities for deep insert
-            var deepSettings = HttpContext.RequestServices.GetService<DeepOperationSettings>() ?? new DeepOperationSettings();
+            var deepSettings = HttpContext.Request.GetRouteServices().GetService<DeepOperationSettings>() ?? new DeepOperationSettings();
             if (deepSettings.MaxDepth > 0)
             {
                 var extractor = new DeepOperationExtractor(model, api, deepSettings);

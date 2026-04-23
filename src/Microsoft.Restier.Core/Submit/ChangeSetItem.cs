@@ -211,6 +211,47 @@ namespace Microsoft.Restier.Core.Submit
         public IReadOnlyDictionary<string, object> LocalValues { get; private set; }
 
         /// <summary>
+        /// Gets or sets the parent DataModificationItem for nested operations.
+        /// Null for root/direct operations.
+        /// </summary>
+        public DataModificationItem ParentItem { get; set; }
+
+        /// <summary>
+        /// Gets or sets the CLR navigation property name on the parent entity
+        /// that this item was nested under.
+        /// </summary>
+        public string ParentNavigationPropertyName { get; set; }
+
+        /// <summary>
+        /// Gets the child DataModificationItems for deep insert/update.
+        /// Each child flows through the full submit pipeline.
+        /// </summary>
+        public IList<DataModificationItem> NestedItems { get; } = new List<DataModificationItem>();
+
+        /// <summary>
+        /// Gets the entity reference bindings: maps CLR navigation property name to bind reference(s).
+        /// These are relationship-only operations — no CUD pipeline events fire for the target.
+        /// </summary>
+        public IDictionary<string, IList<BindReference>> NavigationBindings { get; } = new Dictionary<string, IList<BindReference>>();
+
+        /// <summary>
+        /// Flattens the DataModificationItem tree in depth-first pre-order,
+        /// guaranteeing parent items appear before their children.
+        /// </summary>
+        /// <returns>An enumerable of all items in the tree.</returns>
+        public IEnumerable<DataModificationItem> FlattenDepthFirst()
+        {
+            yield return this;
+            foreach (var child in NestedItems)
+            {
+                foreach (var descendant in child.FlattenDepthFirst())
+                {
+                    yield return descendant;
+                }
+            }
+        }
+
+        /// <summary>
         /// Applies the current DataModificationItem's KeyValues and OriginalValues to the
         /// specified query and returns the new query.
         /// </summary>

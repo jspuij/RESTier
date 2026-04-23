@@ -119,9 +119,9 @@ namespace Microsoft.Restier.AspNetCore
                         value = CreatePropertyDictionary(complexObj, complexObj.ActualEdmType, api, isCreation);
                     }
 
-                    // RWM: Navigation properties (e.g. from @odata.bind links) are not supported in
-                    //      the property dictionary until we support Delta payloads. Skip them.
-                    if (value is EdmEntityObject)
+                    // Navigation properties are handled by DeepOperationExtractor, not the property dictionary.
+                    // Skip both single entities and entity collections.
+                    if (value is EdmEntityObject || value is EdmEntityObjectCollection)
                     {
                         continue;
                     }

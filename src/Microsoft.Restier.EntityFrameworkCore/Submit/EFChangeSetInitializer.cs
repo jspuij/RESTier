@@ -49,6 +49,23 @@ namespace Microsoft.Restier.EntityFrameworkCore
 
             var dbContext = frameworkApi.DbContext;
 
+            // Phase 1: Validate and resolve entity references (bind references).
+            // This runs before any entity materialization so invalid references fail atomically.
+            foreach (var entry in context.ChangeSet.Entries.OfType<DataModificationItem>())
+            {
+                if (entry.NavigationBindings.Count > 0)
+                {
+                    foreach (var binding in entry.NavigationBindings)
+                    {
+                        foreach (var bindRef in binding.Value)
+                        {
+                            bindRef.ResolvedEntity = await ResolveBindReference(context, bindRef, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+                }
+            }
+
+            // Phase 2: Materialize entities and wire relationships.
             foreach (var entry in context.ChangeSet.Entries.OfType<DataModificationItem>())
             {
                 var strongTypedDbSet = dbContext.GetType().GetProperty(entry.ResourceSetName).GetValue(dbContext);
@@ -64,6 +81,18 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 var typedMethodCall = HandleMethod.MakeGenericMethod(new Type[] { resourceType });
                 var task = typedMethodCall.Invoke(this, new object[] { context, dbContext, entry, resourceType, cancellationToken }) as Task;
                 await task.ConfigureAwait(false);
+
+                // Wire parent-child relationships after materialization.
+                if (entry.ParentItem?.Resource is not null && entry.Resource is not null)
+                {
+                    WireParentChildRelationship(entry);
+                }
+
+                // Wire bind references after materialization.
+                if (entry.NavigationBindings.Count > 0 && entry.Resource is not null)
+                {
+                    WireBindReferences(entry);
+                }
             }
         }
 
@@ -284,6 +313,100 @@ namespace Microsoft.Restier.EntityFrameworkCore
             }
 
             entry.Resource = resource;
+        }
+
+        private static async Task<object> ResolveBindReference(SubmitContext context, BindReference bindRef, CancellationToken cancellationToken)
+        {
+            var apiBase = context.Api;
+            var query = apiBase.GetQueryableSource(bindRef.ResourceSetName);
+            var elementType = query.ElementType;
+            var param = Expression.Parameter(elementType);
+            Expression where = null;
+
+            foreach (var keyPair in bindRef.ResourceKey)
+            {
+                var property = Expression.Property(param, keyPair.Key);
+                var value = keyPair.Value;
+                if (value.GetType() != property.Type)
+                {
+                    value = Convert.ChangeType(value, property.Type, CultureInfo.InvariantCulture);
+                }
+
+                var equal = Expression.Equal(property, Expression.Constant(value, property.Type));
+                where = where is null ? equal : Expression.AndAlso(where, equal);
+            }
+
+            var whereLambda = Expression.Lambda(where, param);
+            query = ExpressionHelpers.Where(query, whereLambda, elementType);
+
+            var result = await apiBase.QueryAsync(new QueryRequest(query), cancellationToken).ConfigureAwait(false);
+            var toArray = ExpressionHelperMethods.EnumerableToArrayGeneric.MakeGenericMethod(elementType);
+            var materialized = (Array)toArray.Invoke(null, new object[] { result.Results });
+
+            if (materialized.Length == 0)
+            {
+                var keyDescription = string.Join(", ", bindRef.ResourceKey.Select(k => $"{k.Key}={k.Value}"));
+                throw new StatusCodeException(HttpStatusCode.BadRequest,
+                    $"Referenced entity '{bindRef.ResourceSetName}' with key ({keyDescription}) does not exist.");
+            }
+
+            return materialized.GetValue(0);
+        }
+
+        private void WireParentChildRelationship(DataModificationItem childEntry)
+        {
+            var parentResource = childEntry.ParentItem.Resource;
+            var childResource = childEntry.Resource;
+            var navPropName = childEntry.ParentNavigationPropertyName;
+
+            var parentNavPropInfo = parentResource.GetType().GetProperty(navPropName);
+            if (parentNavPropInfo is null)
+            {
+                return;
+            }
+
+            if (typeof(IEnumerable).IsAssignableFrom(parentNavPropInfo.PropertyType)
+                && parentNavPropInfo.PropertyType != typeof(string))
+            {
+                AddToCollectionNavigationProperty(parentResource, navPropName, childResource);
+            }
+            else
+            {
+                SetNavigationProperty(parentResource, navPropName, childResource);
+            }
+        }
+
+        private void WireBindReferences(DataModificationItem entry)
+        {
+            foreach (var binding in entry.NavigationBindings)
+            {
+                var navPropName = binding.Key;
+                var navPropInfo = entry.Resource.GetType().GetProperty(navPropName);
+                if (navPropInfo is null)
+                {
+                    continue;
+                }
+
+                if (typeof(IEnumerable).IsAssignableFrom(navPropInfo.PropertyType)
+                    && navPropInfo.PropertyType != typeof(string))
+                {
+                    foreach (var bindRef in binding.Value)
+                    {
+                        if (bindRef.ResolvedEntity is not null)
+                        {
+                            AddToCollectionNavigationProperty(entry.Resource, navPropName, bindRef.ResolvedEntity);
+                        }
+                    }
+                }
+                else
+                {
+                    var bindRef = binding.Value.FirstOrDefault();
+                    if (bindRef?.ResolvedEntity is not null)
+                    {
+                        SetNavigationProperty(entry.Resource, navPropName, bindRef.ResolvedEntity);
+                    }
+                }
+            }
         }
     }
 }

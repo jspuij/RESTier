@@ -150,6 +150,11 @@ public class RelationshipRemoval
 {
     /// The navigation property name on the parent entity.
     public string NavigationPropertyName { get; set; }
+
+    /// The CLR name of the inverse navigation property on the child entity
+    /// (e.g., "Publisher" on Book for Publisher.Books removal).
+    /// Resolved from IEdmNavigationProperty.Partner during classification.
+    public string InverseNavigationPropertyName { get; set; }
     
     /// The target entity set name (for querying the child entity).
     public string ResourceSetName { get; set; }
@@ -349,9 +354,41 @@ Move nav prop detection before null check (see Design Contract 2 for the restruc
 
 ### Bug 3: Extractor should preserve raw keys, not classify
 
-- [ ] **Step 2.6: Always use `Insert` for nested entities**
+- [ ] **Step 2.6: Always use `Insert` for nested entities, store raw EdmEntityObject reference**
 
 Change `ProcessSingleNestedEntity` to always create `RestierEntitySetOperation.Insert` items with extracted keys preserved in `ResourceKey`. The classifier (Task 5) reclassifies based on existing children.
+
+**LocalValues reclassification problem:** `CreatePropertyDictionary(edmType, api, isCreation: true)` may include properties that should be excluded during update (e.g., `@Core.Computed` properties are excluded for updates but included for creation — see `Extensions.cs:107-112`). When the classifier reclassifies an item to `Update`, the `LocalValues` would be wrong.
+
+**Solution:** Store the raw `EdmEntityObject` and `IEdmStructuredType` on the `DataModificationItem` so the classifier can recompute `LocalValues` with `isCreation: false` when reclassifying. Add to `DataModificationItem`:
+
+```csharp
+/// <summary>
+/// The raw OData entity object for recomputing LocalValues on reclassification.
+/// Only set for nested items that may be reclassified from Insert to Update.
+/// </summary>
+internal object RawEntityObject { get; set; }
+
+/// <summary>
+/// The EDM type for recomputing LocalValues.
+/// </summary>
+internal IEdmStructuredType RawEdmType { get; set; }
+```
+
+In the classifier, when reclassifying to `Update`:
+```csharp
+payloadItem.EntitySetOperation = RestierEntitySetOperation.Update;
+// Recompute LocalValues with isCreation=false
+if (payloadItem.RawEntityObject is Delta rawDelta && payloadItem.RawEdmType is not null)
+{
+    payloadItem.LocalValues = rawDelta.CreatePropertyDictionary(payloadItem.RawEdmType, api, isCreation: false);
+}
+```
+
+Note: `LocalValues` is currently `IReadOnlyDictionary` with a private setter. Add an internal setter to support reclassification:
+```csharp
+public IReadOnlyDictionary<string, object> LocalValues { get; internal set; }
+```
 
 - [ ] **Step 2.7: Run all tests, commit**
 
@@ -456,11 +493,12 @@ Controller passes `Request.Headers["OData-Version"].FirstOrDefault()`.
 
 ### Step 4.2: Normalize OData version with safe default
 
-- [ ] OData 4.0 is the conservative default when the header is missing. `OData-MaxVersion` is a preference/limit, not the request payload version — do not promote to 4.01 based on it alone. Normalize once:
+- [ ] OData 4.0 is the conservative default. Normalize once, trimming whitespace and treating anything other than explicit "4.01" as 4.0:
 
 ```csharp
-var rawVersion = Request.Headers["OData-Version"].FirstOrDefault();
-var odataVersion = string.IsNullOrEmpty(rawVersion) ? "4.0" : rawVersion;
+var rawVersion = Request.Headers["OData-Version"].FirstOrDefault()?.Trim();
+var is401 = string.Equals(rawVersion, "4.01", StringComparison.Ordinal);
+// Use is401 boolean for checks (not raw string equality)
 ```
 
 ### Step 4.3: Reject inline deep update under 4.0
@@ -468,7 +506,7 @@ var odataVersion = string.IsNullOrEmpty(rawVersion) ? "4.0" : rawVersion;
 - [ ] In `RestierController.Update()`, after extraction:
 
 ```csharp
-if (odataVersion == "4.0" && updateItem.NestedItems.Count > 0)
+if (!is401 && updateItem.NestedItems.Count > 0)
 {
     return BadRequest("Inline deep update requires OData-Version: 4.01. Use @odata.bind for 4.0.");
 }
@@ -550,9 +588,23 @@ public async Task DeepUpdate_NullNavProperty_Unlinks_V401()
     // PATCH Book with Publisher: null (4.01 inline null)
     // Assert publisher is unlinked
 }
+
+[Fact]
+public async Task DeepUpdate_MoveExistingChildToNewParent()
+{
+    // Create two publishers (Pub_A, Pub_B) each with one book
+    // PATCH Pub_A with Books containing Pub_B's book (by key, inline with scalar values)
+    // Assert: book is now linked to Pub_A (moved), not duplicated
+    // Assert: Pub_B no longer has that book
+    // This validates keyed payload child existing globally → Update+link, not Insert
+}
 ```
 
-### Step 5.2: Add RelationshipRemoval to DataModificationItem
+### Step 5.2: Change GetKeyValues to internal static
+
+- [ ] In `src/Microsoft.Restier.Core/Submit/DefaultChangeSetInitializer.cs`, change `GetKeyValues` from `protected static` to `internal static` so that `DeepUpdateClassifier` (in the AspNetCore project, which references Core) can call it. The EF initializer subclasses still have access via `internal`.
+
+### Step 5.3: Add RelationshipRemoval to DataModificationItem
 
 - [ ] In `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs`, add the `RelationshipRemoval` class and property. `RelationshipRemoval` stores entity set + key (NOT live entity instances) — resolved by EF initializer Phase 1 in the same tracking context:
 
@@ -768,8 +820,14 @@ internal class DeepUpdateClassifier
             }
         }
 
-        return null; // Cannot determine FK — no current related entity loadable
+        return null; // Root is dependent — FK found, handled above
     }
+
+    // Case 2: Root is the principal (1:1 where FK is on the other side)
+    // Out of scope for Phase 2 — return 501
+    // (Uncommon in practice; most 1:1 relationships have FK on the dependent side)
+    throw new StatusCodeException(HttpStatusCode.NotImplemented,
+        $"Deep update for principal-side single navigation property '{navPropName}' is not supported in this version.");
 
     private void AddRelationshipRemoval(
         DataModificationItem rootItem,
@@ -782,10 +840,17 @@ internal class DeepUpdateClassifier
         var targetEntityType = edmNavProp.ToEntityType();
         var key = DefaultChangeSetInitializer.GetKeyValues(currentRelatedEntity, targetEntityType, model);
 
+        // Use EDM partner to find inverse nav name (not CLR type scanning)
+        var partner = edmNavProp.Partner;
+        var inverseNavName = partner is not null
+            ? EdmClrPropertyMapper.GetClrPropertyName(partner, model)
+            : null;
+
         rootItem.RelationshipRemovals.Add(new RelationshipRemoval
         {
             NavigationPropertyName = navPropName,
-            ResourceSetName = targetEntitySet?.Name ?? edmNavProp.ToEntityType().Name,
+            InverseNavigationPropertyName = inverseNavName,
+            ResourceSetName = targetEntitySet?.Name ?? targetEntityType.Name,
             ResourceKey = key,
         });
     }
@@ -859,7 +924,7 @@ private async Task ClassifyCollectionNavProp(
         // else: no key — keep as Insert
     }
 
-    // Helper: check if an entity exists in the target set by key
+    // Class-level helper (used by both collection and single nav classification):
     private async Task<bool> EntityExistsByKey(
         string entitySetName,
         IReadOnlyDictionary<string, object> key,
@@ -938,16 +1003,18 @@ foreach (var entry in context.ChangeSet.Entries.OfType<DataModificationItem>())
             ResourceSetName = removal.ResourceSetName,
             ResourceKey = removal.ResourceKey,
         };
-        // Reuse ResolveBindReference but don't throw if not found
-        // (entity may have been deleted by a concurrent operation)
+        // Reuse ResolveBindReference — tolerate only NotFound (concurrent deletion).
+        // Other errors (BadRequest from invalid key) should propagate as bugs in
+        // classifier output, not be silently swallowed.
         try
         {
             removal.ResolvedEntity = await ResolveBindReference(context, bindRef, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (StatusCodeException)
+        catch (StatusCodeException ex) when (ex.StatusCode == HttpStatusCode.BadRequest
+            && ex.Message.Contains("does not exist"))
         {
-            // Entity no longer exists — skip this removal
+            // Entity no longer exists (concurrent deletion) — skip this removal
         }
     }
 }
@@ -973,11 +1040,11 @@ if (entry.RelationshipRemovals.Count > 0 && entry.Resource is not null)
             // e.g., for Publisher.Books removal, set Book.Publisher = null on the child
             // This is reliable because the child is a tracked instance from Phase 1.
             // EF's change tracker will infer the FK null from the nav prop change.
-            var inverseNavName = FindInverseNavigationPropertyName(
-                removal.ResolvedEntity.GetType(), entry.Resource.GetType());
-            if (inverseNavName is not null)
+            // InverseNavigationPropertyName was resolved from edmNavProp.Partner during
+            // classification — no CLR type scanning needed.
+            if (removal.InverseNavigationPropertyName is not null)
             {
-                SetNavigationProperty(removal.ResolvedEntity, inverseNavName, null);
+                SetNavigationProperty(removal.ResolvedEntity, removal.InverseNavigationPropertyName, null);
             }
         }
         else
@@ -989,20 +1056,7 @@ if (entry.RelationshipRemovals.Count > 0 && entry.Resource is not null)
 }
 ```
 
-Add helper `FindInverseNavigationPropertyName` that finds the nav prop on the child type that points back to the parent type:
-```csharp
-private static string FindInverseNavigationPropertyName(Type childType, Type parentType)
-{
-    // Find a navigation property on childType whose type is parentType
-    foreach (var prop in childType.GetProperties())
-    {
-        if (prop.PropertyType == parentType || prop.PropertyType.IsAssignableFrom(parentType))
-        {
-            return prop.Name;
-        }
-    }
-    return null; // No inverse nav found — unlink will rely on EF cascade/constraint
-}
+Note: `FindInverseNavigationPropertyName` is no longer needed — the inverse nav name is stored on `RelationshipRemoval.InverseNavigationPropertyName` during classification using `edmNavProp.Partner`, avoiding ambiguous CLR type scanning.
     }
     return null;
 }

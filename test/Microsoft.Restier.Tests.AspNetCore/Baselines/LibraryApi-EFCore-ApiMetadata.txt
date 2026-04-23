@@ -8,9 +8,13 @@
         <Property Name="Id" Type="Edm.Guid" Nullable="false" />
         <Property Name="Isbn" Type="Edm.String" MaxLength="13" />
         <Property Name="Title" Type="Edm.String" />
+        <Property Name="PublisherId" Type="Edm.String" />
         <Property Name="IsActive" Type="Edm.Boolean" Nullable="false" />
         <Property Name="Category" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.BookCategory" />
-        <NavigationProperty Name="Publisher" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Publisher" />
+        <NavigationProperty Name="Publisher" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Publisher">
+          <ReferentialConstraint Property="PublisherId" ReferencedProperty="Id" />
+        </NavigationProperty>
+        <NavigationProperty Name="Reviews" Type="Collection(Microsoft.Restier.Tests.Shared.Scenarios.Library.Review)" />
       </EntityType>
       <EntityType Name="LibraryCard">
         <Key>
@@ -36,6 +40,18 @@
         <Property Name="FullName" Type="Edm.String" />
         <Property Name="Addr" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Address" />
         <Property Name="Universe" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Universe" />
+      </EntityType>
+      <EntityType Name="Review">
+        <Key>
+          <PropertyRef Name="Id" />
+        </Key>
+        <Property Name="Id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="Content" Type="Edm.String" />
+        <Property Name="Rating" Type="Edm.Int32" Nullable="false" />
+        <Property Name="BookId" Type="Edm.Guid" />
+        <NavigationProperty Name="Book" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book">
+          <ReferentialConstraint Property="BookId" ReferencedProperty="Id" />
+        </NavigationProperty>
       </EntityType>
       <ComplexType Name="Address">
         <Property Name="Street" Type="Edm.String" />
@@ -104,6 +120,7 @@
       <EntityContainer Name="Container">
         <EntitySet Name="Books" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book">
           <NavigationPropertyBinding Path="Publisher" Target="Publishers" />
+          <NavigationPropertyBinding Path="Reviews" Target="Reviews" />
         </EntitySet>
         <EntitySet Name="LibraryCards" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.LibraryCard">
           <Annotation Term="Org.OData.Core.V1.OptimisticConcurrency">
@@ -116,11 +133,16 @@
           <NavigationPropertyBinding Path="Books" Target="Books" />
         </EntitySet>
         <EntitySet Name="Readers" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Employee" />
+        <EntitySet Name="Reviews" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Review">
+          <NavigationPropertyBinding Path="Book" Target="Books" />
+        </EntitySet>
         <Singleton Name="MyFavoriteBook" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book">
           <NavigationPropertyBinding Path="Publisher" Target="Publishers" />
+          <NavigationPropertyBinding Path="Reviews" Target="Reviews" />
         </Singleton>
         <EntitySet Name="BooksWithPublisher" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book">
           <NavigationPropertyBinding Path="Publisher" Target="Publishers" />
+          <NavigationPropertyBinding Path="Reviews" Target="Reviews" />
         </EntitySet>
         <ActionImport Name="CheckoutBook" Action="Microsoft.Restier.Tests.Shared.Scenarios.Library.CheckoutBook" EntitySet="Books" />
         <FunctionImport Name="FavoriteBooks" Function="Microsoft.Restier.Tests.Shared.Scenarios.Library.FavoriteBooks" EntitySet="Books" />

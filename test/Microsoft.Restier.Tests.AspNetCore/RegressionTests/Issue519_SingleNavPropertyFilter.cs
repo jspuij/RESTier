@@ -59,8 +59,9 @@ public abstract class Issue519_SingleNavPropertyFilter<TApi, TContext> : Restier
 
         // "Color Purple, The" belongs to Publisher2 — its Publisher should be filtered out (null)
         content.Should().Contain("Color Purple");
-        // Publisher2 should NOT appear in the response because the filter excludes it
-        content.Should().NotContain("Publisher2");
+        // Publisher2's Publisher navigation object should NOT appear in the response because the filter excludes it.
+        // Note: PublisherId may still appear as a scalar FK value; we check the navigation object is absent.
+        content.Should().NotContain("\"Id\":\"Publisher2\"");
     }
 
     /// <summary>

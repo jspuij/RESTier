@@ -2,6 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
@@ -27,10 +28,14 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         /// </summary>
         public string Title { get; set; }
 
+        public string PublisherId { get; set; }
+
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public Publisher Publisher { get; set; }
+
+        public virtual ObservableCollection<Review> Reviews { get; set; }
 
         /// <summary>
         ///

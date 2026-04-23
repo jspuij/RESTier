@@ -38,6 +38,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
 
         public IDbSet<Employee> Readers { get; set; }
 
+        public IDbSet<Review> Reviews { get; set; }
+
         #endregion
 
         #region Constructors
@@ -71,6 +73,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
 
         public DbSet<Employee> Readers { get; set; }
 
+        public DbSet<Review> Reviews { get; set; }
+
         #endregion
 
         #region Constructors
@@ -98,6 +102,16 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 b.Property(u => u.TimeOfDayProperty).HasConversion(timeOfDayConverter);
             });
             modelBuilder.Entity<Publisher>().OwnsOne(c => c.Addr);
+
+            modelBuilder.Entity<Book>()
+                .HasOne(b => b.Publisher)
+                .WithMany(p => p.Books)
+                .HasForeignKey(b => b.PublisherId);
+
+            modelBuilder.Entity<Review>()
+                .HasOne(r => r.Book)
+                .WithMany(b => b.Reviews)
+                .HasForeignKey(r => r.BookId);
         }
 
         #endregion

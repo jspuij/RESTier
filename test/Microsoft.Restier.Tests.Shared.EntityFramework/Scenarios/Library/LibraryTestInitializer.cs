@@ -26,7 +26,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
     /// </summary>
     public class LibraryTestInitializer
 #if EF6
-        : CreateDatabaseIfNotExists<LibraryContext>
+        : DropCreateDatabaseIfModelChanges<LibraryContext>
     {
 
         protected override void Seed(LibraryContext libraryContext)
@@ -178,6 +178,22 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
             {
                 Id = new Guid("A1111111-1111-1111-1111-111111111111"),
                 DateRegistered = new DateTimeOffset(2025, 1, 15, 0, 0, 0, TimeSpan.Zero),
+            });
+
+            libraryContext.Reviews.Add(new Review
+            {
+                Id = Guid.Parse("00000000-0000-0000-0000-000000000101"),
+                Content = "Great book!",
+                Rating = 5,
+                BookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59"),
+            });
+
+            libraryContext.Reviews.Add(new Review
+            {
+                Id = Guid.Parse("00000000-0000-0000-0000-000000000102"),
+                Content = "Decent read.",
+                Rating = 3,
+                BookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59"),
             });
 
             libraryContext.SaveChanges();

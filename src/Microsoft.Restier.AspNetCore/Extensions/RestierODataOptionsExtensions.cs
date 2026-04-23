@@ -22,6 +22,7 @@ using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
 using Microsoft.Restier.Core.Operation;
 using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 using System;
 using System.Collections.Generic;
 
@@ -159,6 +160,8 @@ public static class RestierODataOptionsExtensions
                 .AddRestierConventionBasedServices(type);
 
             configureRouteServices.Invoke(services);
+
+            services.TryAddSingleton(new DeepOperationSettings());
 
             services.AddSingleton<IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
                 .AddSingleton(modelExtender)

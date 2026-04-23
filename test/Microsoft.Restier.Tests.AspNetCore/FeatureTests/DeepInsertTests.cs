@@ -24,12 +24,16 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
 {
     protected abstract Action<IServiceCollection> ConfigureServices { get; }
 
+    private static string UniqueId([System.Runtime.CompilerServices.CallerMemberName] string name = null)
+        => $"{name}_{Guid.NewGuid():N}"[..50];
+
     [Fact]
     public async Task DeepInsert_CollectionNavProperty()
     {
+        var pubId = UniqueId();
         var payload = new
         {
-            Id = "DeepInsertPub1",
+            Id = pubId,
             Addr = new { Zip = "00000" },
             Books = new[]
             {
@@ -52,23 +56,24 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
         // Verify the publisher was created with its books
         var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
-            resource: "/Publishers('DeepInsertPub1')?$expand=Books",
+            resource: $"/Publishers('{pubId}')?$expand=Books",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
             serviceCollection: ConfigureServices);
         getResponse.IsSuccessStatusCode.Should().BeTrue();
 
         var (publisher, _) = await getResponse.DeserializeResponseAsync<Publisher>();
         publisher.Should().NotBeNull();
-        publisher.Id.Should().Be("DeepInsertPub1");
+        publisher.Id.Should().Be(pubId);
         publisher.Books.Should().HaveCount(2);
     }
 
     [Fact]
     public async Task DeepInsert_ServerGeneratedKeys()
     {
+        var pubId = UniqueId();
         var payload = new
         {
-            Id = "DeepInsertPub2",
+            Id = pubId,
             Addr = new { Zip = "00000" },
             Books = new[]
             {
@@ -90,7 +95,7 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
         // Verify the book got a server-generated Guid from OnInsertingBook
         var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
-            resource: "/Publishers('DeepInsertPub2')?$expand=Books",
+            resource: $"/Publishers('{pubId}')?$expand=Books",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
             serviceCollection: ConfigureServices);
         getResponse.IsSuccessStatusCode.Should().BeTrue();
@@ -106,9 +111,10 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     public async Task DeepInsert_FiresConventionMethods()
     {
         // Post with a Book that has Id = Guid.Empty, which OnInsertingBook should replace with a real Guid
+        var pubId = UniqueId();
         var payload = new
         {
-            Id = "DeepInsertPub3",
+            Id = pubId,
             Addr = new { Zip = "00000" },
             Books = new[]
             {
@@ -130,7 +136,7 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
         // Verify the convention method fired and assigned a non-empty Guid
         var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
-            resource: "/Publishers('DeepInsertPub3')?$expand=Books",
+            resource: $"/Publishers('{pubId}')?$expand=Books",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
             serviceCollection: ConfigureServices);
         getResponse.IsSuccessStatusCode.Should().BeTrue();
@@ -146,9 +152,10 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     public async Task DeepInsert_ExceedsMaxDepth_Returns400()
     {
         // A payload with 2 levels of nesting: Publisher -> Books -> Reviews
+        var pubId = UniqueId();
         var payload = new
         {
-            Id = "DeepInsertPub4",
+            Id = pubId,
             Addr = new { Zip = "00000" },
             Books = new[]
             {

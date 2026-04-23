@@ -243,14 +243,11 @@ namespace Microsoft.Restier.AspNetCore
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            // Build SelectExpandClause for response expansion (OData 4.01 requires 201 responses
-            // to be expanded to at least the depth present in the deep insert request)
-            var selectExpandClause = DeepOperationResponseBuilder.BuildSelectExpandClause(
-                postItem, model, entitySet);
-            if (selectExpandClause is not null)
-            {
-                HttpContext.ODataFeature().SelectExpandClause = selectExpandClause;
-            }
+            // TODO: OData 4.01 requires 201 responses to be expanded to at least the depth present
+            // in the deep insert request. Setting SelectExpandClause on ODataFeature causes a
+            // NullReferenceException in SelectedPropertiesNode.Create during CreatedODataResult
+            // serialization. This needs further investigation with the AspNetCore.OData serializer.
+            // For now, the response returns the root entity only — clients can GET with $expand.
 
             return CreateCreatedODataResult(postItem.Resource);
         }
@@ -490,12 +487,7 @@ namespace Microsoft.Restier.AspNetCore
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            var selectExpandClause = DeepOperationResponseBuilder.BuildSelectExpandClause(
-                updateItem, model, entitySet);
-            if (selectExpandClause is not null)
-            {
-                HttpContext.ODataFeature().SelectExpandClause = selectExpandClause;
-            }
+            // TODO: Same response expansion limitation as Post() — see comment there.
 
             return CreateUpdatedODataResult(updateItem.Resource);
         }

@@ -4,7 +4,7 @@
 
 **Goal:** Fix bugs from Phase 1, implement full deep update semantics, add OData 4.01 entity reference support, and complete the spec test matrix.
 
-**Architecture:** Phase 1 established the extraction + flatten + nav-prop-wiring pipeline for deep insert. Phase 2 fixes correctness bugs, adds deep update child matching (query existing children, classify as insert/update/unlink/delete), implements `@id` entity reference parsing, and fills the remaining test coverage gaps.
+**Architecture:** Phase 1 established the extraction + flatten + nav-prop-wiring pipeline for deep insert. Phase 2 fixes correctness bugs, adds deep update child matching (query existing children, classify as insert/update/unlink), implements `@id` entity reference parsing, and fills the remaining test coverage gaps.
 
 **Tech Stack:** .NET 8/9/10, Microsoft.AspNetCore.OData 9.x, Microsoft.OData.Core 8.x, Entity Framework 6 + EF Core, xUnit v3, FluentAssertions
 
@@ -33,72 +33,184 @@ Phase 1 known issues (from code review):
 
 ---
 
+## Design Contract 1: Entity Reference Parsing
+
+### Accepted shapes
+
+| OData-Version | Format | Example |
+|---|---|---|
+| 4.0 | `NavProp@odata.bind` annotation | `"Publisher@odata.bind": "Publishers('PUB01')"` |
+| 4.0 | `NavProp@odata.bind` array | `"Books@odata.bind": ["Books(guid'...')"]` |
+| 4.01 | Inline object with `@id` | `"Publisher": { "@id": "Publishers('PUB01')" }` |
+| 4.01 | Inline object with `@odata.id` | `"Publisher": { "@odata.id": "Publishers('PUB01')" }` |
+
+### Version rejection rules
+
+- OData 4.0 requests MUST NOT contain inline deep update entities (only `@odata.bind` and deep insert on POST)
+- OData 4.01 requests MUST NOT use `@odata.bind` — use inline entity references with `@id` instead
+- If the ASP.NET Core OData formatter rejects `@odata.bind` under 4.01 before the controller sees it, no additional check is needed (Task 1 will determine this)
+
+### Parser choice
+
+Use `Microsoft.OData.UriParser.ODataUriParser` (or `ODataPathParser`) to parse entity reference URIs. This handles:
+- Relative URIs: `Publishers('PUB01')`
+- Absolute URIs: `http://host/odata/Publishers('PUB01')`
+- Key-as-segment: `Publishers/PUB01`
+- Composite keys: `OrderItems(OrderId=1,ItemId=2)`
+
+The parser extracts key segments, which map to `BindReference.ResourceKey`.
+
+### Output
+
+All accepted entity reference shapes produce a `BindReference`:
+```csharp
+new BindReference
+{
+    ResourceSetName = "Publishers",         // from URI path
+    ResourceKey = { { "Id", "PUB01" } },   // from key segment
+}
+```
+
+### Detection in extractor
+
+Phase 1's key-subset heuristic (changed properties are a subset of key properties) works for `@odata.bind` under 4.0 because the deserializer creates a synthetic `EdmEntityObject` with only key values.
+
+For 4.01 `@id`, the detection depends on Task 1 exploration: does the deserializer set an `@id` property on the `EdmEntityObject`, or does it produce a different structure? The parser implementation adapts to the actual deserializer output.
+
+---
+
+## Design Contract 2: Relationship Operation Contract
+
+### Scope constraint for Phase 2
+
+Phase 2 supports relationships where:
+- The dependent entity has an **explicit FK scalar property** (e.g., `Book.PublisherId`)
+- The FK is **nullable** (for unlinking) or **required** (produces 400 on unlink attempt)
+- The relationship is discoverable via `IEdmNavigationProperty` on the EDM model
+
+Phase 2 does NOT support:
+- Many-to-many relationships (skip navigations, join tables)
+- Shadow FK properties (EF Core only, no CLR scalar property)
+- Navigation-only models without any FK property
+
+These constraints are enforced by the classifier: if the inverse FK property cannot be found, the unlink operation is skipped and a warning is logged.
+
+### How to query existing children
+
+For a collection nav prop on a parent entity (e.g., `Publisher.Books`):
+
+1. Get the parent entity's key from the URL path (already available as `RestierQueryBuilder.GetPathKeyValues(path, model)`)
+2. Get the target entity set from `entitySet.FindNavigationTarget(edmNavProp)`
+3. Find the inverse FK property name:
+   - Get the partner navigation property: `edmNavProp.Partner` gives the inverse nav on the target type
+   - Get the referential constraint: `edmNavProp.ReferentialConstraint` or `edmNavProp.Partner.ReferentialConstraint` maps dependent property to principal property
+   - The dependent property name in the constraint is the FK property name on the child entity
+4. Query: `api.GetQueryableSource(targetEntitySetName).Where(fkProp == parentKey)`
+
+```csharp
+// Example: Publisher.Books navigation
+// edmNavProp = Publisher.Books (type: Collection(Book))
+// edmNavProp.Partner = Book.Publisher (type: Publisher)  
+// edmNavProp.Partner.ReferentialConstraint = { Book.PublisherId -> Publisher.Id }
+// FK property on child = "PublisherId"
+// Query: Books.Where(b => b.PublisherId == "PUB01")
+```
+
+If `ReferentialConstraint` is null (no explicit FK in the EDM model), fall back to convention: `{NavPropertyName}Id` (e.g., `Publisher` nav prop → `PublisherId` FK). If that property doesn't exist on the CLR type, skip classification for this nav prop and log a warning.
+
+### How to match payload children to existing children
+
+Compare by key properties from the EDM entity type:
+1. Get key property names from `targetEntityType.Key()`
+2. Map to CLR names via `EdmClrPropertyMapper.GetClrPropertyName`
+3. For each payload child's `ResourceKey`, find an existing child where all key values match
+4. Use `Convert.ChangeType` for type coercion (OData may send `int` for a `long` key)
+
+### Relationship removal representation
+
+**For non-contained collection nav props (unlink):**
+
+Use nav property clearing in the EF initializers rather than FK scalar injection. This avoids the inverse-FK-discovery problem and works with any relationship shape EF supports.
+
+Representation: a new `RelationshipRemovalItem` metadata class stored on the parent `DataModificationItem`:
+
+```csharp
+public class RelationshipRemoval
+{
+    /// The navigation property name on the parent entity.
+    public string NavigationPropertyName { get; set; }
+    
+    /// The child entity to remove from the relationship (loaded from DB).
+    public object ChildEntity { get; set; }
+}
+```
+
+The `DataModificationItem` gets a new property:
+```csharp
+public IList<RelationshipRemoval> RelationshipRemovals { get; } = new List<RelationshipRemoval>();
+```
+
+The EF initializer processes these after the parent entity is materialized: for each removal, clear the nav prop reference or remove from collection. EF's change tracker resolves the FK change.
+
+**For contained nav props (delete):**
+
+Create a `DataModificationItem` with `EntitySetOperation = Delete` and `ResourceKey` = child's key. This uses the existing delete pipeline.
+
+**For single nav prop null (`Publisher: null` or `Publisher@odata.bind: null`):**
+
+Same as collection unlink: add a `RelationshipRemoval` with the current related entity (loaded from DB). The initializer clears the nav prop. EF resolves to FK null or constraint error.
+
+### How to handle single nav props in classification
+
+The classifier MUST handle single nav props:
+- Payload has key matching existing related entity → reclassify as `Update`
+- Payload has key NOT matching existing related entity → `Insert` + unlink old (add `RelationshipRemoval` for old)
+- Payload has no key → `Insert` + unlink old
+- Payload is null → unlink only (no insert)
+- Payload is entity reference → already handled as `NavigationBinding`
+
+---
+
 ## Recommended Task Order
 
-The @id/@odata.bind deserializer shape affects the extractor design, so learning that first reduces churn:
-
-1. **Task 1: Exploratory — Deserializer shape for entity references** (learn what the extractor receives)
+1. **Task 1: Exploratory — Deserializer shape** (learn, don't commit tests)
 2. **Task 2: Extractor bug fixes** (depth, null nav props, key preservation)
-3. **Task 3: OData version plumbing** (pass version to extractor, enforce rules)
-4. **Task 4: Deep update classification** (the big one — query existing, classify, generate operations)
-5. **Task 5: DbUpdateException error mapping**
-6. **Task 6: Response expansion investigation**
-7. **Task 7: Remaining test coverage**
+3. **Task 3: Entity reference parsing** (implement @id/@odata.id + bind tests)
+4. **Task 4: OData version plumbing** (enforce 4.0/4.01 rules)
+5. **Task 5: Deep update classification** (query existing, classify, relationship removal)
+6. **Task 6: DbUpdateException error mapping** (narrow to relationship violations)
+7. **Task 7: Response expansion investigation**
+8. **Task 8: Remaining test coverage**
 
 ---
 
 ## Task 1: Exploratory — Deserializer Shape for Entity References
 
-**Purpose:** Before changing the extractor, learn exactly what AspNetCore.OData 9.x gives us for:
-- `@odata.bind` under OData-Version 4.0
-- `@odata.bind` under OData-Version 4.01 (does the formatter reject it? preserve an annotation? produce the same key-subset object?)
-- `@id` under OData-Version 4.01
-- inline entity reference object under 4.01
+**Purpose:** Before changing the extractor, learn exactly what AspNetCore.OData 9.x gives us. Do NOT commit these tests — document findings and convert meaningful behaviors into permanent tests in Task 3.
 
-**Files:**
-- Create: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/EntityReferenceExploratoryTests.cs` (temporary — may be deleted or converted to permanent tests)
+### Step 1.1: Write local exploratory tests
 
-### Step 1.1: Write exploratory tests
+- [ ] Add temporary logging to `DeepOperationExtractor.ExtractNestedItems` (or use a debugger) to capture for each payload:
+  - `edmEntityObject.GetChangedPropertyNames()` — what property names appear?
+  - Type of each value — `EdmEntityObject`? `string`? `IEnumerable`?
+  - `TryGetPropertyValue("@id", ...)` and `TryGetPropertyValue("@odata.id", ...)` results
+  - Whether the `@odata.bind` annotation shows up as a changed property name
 
-- [ ] Create tests that send payloads and log what the controller receives. Use a custom middleware or add temporary logging to `DeepOperationExtractor` to capture:
-  - `edmEntityObject.GetChangedPropertyNames()` output
-  - Type of each property value (EdmEntityObject? string? other?)
-  - Any instance annotations present
-  - Whether `TryGetPropertyValue("@id", ...)` or `TryGetPropertyValue("@odata.id", ...)` returns anything
-
-Test payloads to try:
-
-```json
-// 4.0 single bind
-POST /Books with OData-Version: 4.0
-{ "Title": "...", "Publisher@odata.bind": "Publishers('Publisher1')" }
-
-// 4.01 entity reference
-POST /Books with OData-Version: 4.01
-{ "Title": "...", "Publisher": { "@id": "Publishers('Publisher1')" } }
-
-// 4.0 collection bind
-POST /Publishers with OData-Version: 4.0
-{ "Id": "...", "Books@odata.bind": ["Books(guid'...')"] }
-
-// 4.01 @odata.bind (should this be rejected by formatter or passed through?)
-POST /Books with OData-Version: 4.01
-{ "Title": "...", "Publisher@odata.bind": "Publishers('Publisher1')" }
-```
+Test payloads:
+1. `POST /Books` with `"Publisher@odata.bind": "Publishers('Publisher1')"` (4.0)
+2. `POST /Publishers` with `"Books@odata.bind": ["Books(guid'...')"]` (4.0)
+3. `POST /Books` with `"Publisher": { "@id": "Publishers('Publisher1')" }` (4.01)
+4. `POST /Books` with `"Publisher@odata.bind": "Publishers('Publisher1')"` (4.01)
 
 ### Step 1.2: Document findings
 
-- [ ] Record what each payload produces at the `EdmEntityObject` level. This determines:
-  - Whether `IsEntityReference` detection needs to change
-  - Whether we need URI parsing or just key extraction
-  - Whether 4.01 enforcement happens at the formatter level or needs extractor checks
-  - What `@odata.bind` looks like under 4.01
+- [ ] Record in a comment or temporary file:
+  - For each payload: what `GetChangedPropertyNames()` returns
+  - How the deserializer represents `@odata.bind` (is it a changed property? an annotation?)
+  - How `@id` appears on the `EdmEntityObject`
+  - Whether the formatter itself rejects `@odata.bind` under 4.01
 
-### Step 1.3: Commit findings
-
-```bash
-git commit -am "test: exploratory tests for entity reference deserializer behavior"
-```
+### Step 1.3: No commit — findings inform Tasks 3 and 4
 
 ---
 
@@ -108,13 +220,10 @@ git commit -am "test: exploratory tests for entity reference deserializer behavi
 - Modify: `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs`
 - Modify: `src/Microsoft.Restier.AspNetCore/Submit/DeepOperationExtractor.cs`
 - Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepInsertTests.cs`
-- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepUpdateTests.cs`
-
-Three fixes, each with a failing test written first.
 
 ### Bug 1: MaxDepth off-by-one
 
-**Model:** `currentDepth` = nesting depth of the entity being processed (root = 0). Check BEFORE adding a child: reject when `currentDepth + 1 > MaxDepth`. This avoids temporarily adding an over-depth child before throwing.
+**Fix:** Check depth BEFORE recursing into children. If adding this child would create a tree deeper than `MaxDepth`, **throw** (not silently return). The child has already been added to `NestedItems` at this point, so if we detect that the child itself has nested content that would exceed depth, we reject the entire request.
 
 - [ ] **Step 2.1: Write failing test**
 
@@ -124,8 +233,6 @@ Add to `DeepInsertTests.cs`:
 [Fact]
 public async Task DeepInsert_MaxDepth1_AllowsOneLevel()
 {
-    // MaxDepth=1 should allow Publisher -> Books (1 level of nesting)
-    // but reject Books -> Reviews (2 levels)
     var pubId = UniqueId();
     var payload = new
     {
@@ -154,166 +261,181 @@ public async Task DeepInsert_MaxDepth1_AllowsOneLevel()
 }
 ```
 
-- [ ] **Step 2.2: Verify it fails with current code**
+- [ ] **Step 2.2: Fix depth check**
 
-Run: `dotnet test ... --filter "DeepInsert_MaxDepth1_AllowsOneLevel"`
-Expected: FAIL (off-by-one rejects even 1 level)
-
-- [ ] **Step 2.3: Fix depth check**
-
-In `DeepOperationExtractor.ExtractNestedItems`, move the depth check to BEFORE recursing into children. In `ProcessSingleNestedEntity`, before the recursive `ExtractNestedItems` call:
+Remove the depth check from the top of `ExtractNestedItems`. Add it in `ProcessSingleNestedEntity` AFTER the child is created but BEFORE recursing:
 
 ```csharp
-// Check depth BEFORE recursing into child's children
-if (settings.MaxDepth > 0 && currentDepth + 1 > settings.MaxDepth)
+parentItem.NestedItems.Add(childItem);
+
+// Check if recursion into this child's children would exceed depth
+if (settings.MaxDepth > 0 && currentDepth + 1 >= settings.MaxDepth)
 {
-    // Don't recurse — this child is at the max depth, no grandchildren allowed
-    // But the child itself is allowed
-    return;
+    // At max depth — child is allowed but its children are not.
+    // Check if the child actually HAS navigation property values that
+    // would need recursion. If so, reject the request.
+    if (HasNestedNavigationValues(nestedEntity, actualEdmType))
+    {
+        throw new ODataException(
+            $"Deep operation exceeds maximum nesting depth of {settings.MaxDepth}.");
+    }
+    return; // No grandchildren to process — OK
 }
+
 ExtractNestedItems(nestedEntity, actualEdmType, childItem, isCreation, currentDepth + 1);
 ```
 
-Remove the depth check from the top of `ExtractNestedItems` — it's now in `ProcessSingleNestedEntity` only.
+Add helper:
+```csharp
+private bool HasNestedNavigationValues(Delta entity, IEdmStructuredType edmType)
+{
+    foreach (var propertyName in entity.GetChangedPropertyNames())
+    {
+        if (!entity.TryGetPropertyValue(propertyName, out var value) || value is null)
+            continue;
+        var edmProperty = edmType.FindProperty(propertyName);
+        if (edmProperty is IEdmNavigationProperty && (value is EdmEntityObject || (value is IEnumerable && value is not string)))
+            return true;
+    }
+    return false;
+}
+```
 
-- [ ] **Step 2.4: Verify fix**
+- [ ] **Step 2.3: Verify both MaxDepth tests pass**
 
-Run the test again. Expected: PASS.
+Run: `dotnet test ... --filter "MaxDepth"`
+Expected: Both `DeepInsert_MaxDepth1_AllowsOneLevel` (PASS) and `DeepInsert_ExceedsMaxDepth_Returns400` (PASS).
 
 ### Bug 2: Null nav prop values skipped
 
-- [ ] **Step 2.5: Add NullNavigationProperties to DataModificationItem**
+- [ ] **Step 2.4: Add NullNavigationProperties to DataModificationItem**
 
-In `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs`, add to `DataModificationItem`:
+In `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs`:
 
 ```csharp
 /// <summary>
-/// Gets the set of navigation property names explicitly set to null in the payload.
+/// Navigation property names explicitly set to null in the payload.
 /// Used for relationship unlinking during deep update.
 /// </summary>
 public ISet<string> NullNavigationProperties { get; } = new HashSet<string>();
 ```
 
-- [ ] **Step 2.6: Update extractor to detect null nav props**
+- [ ] **Step 2.5: Restructure extractor loop**
 
-In `DeepOperationExtractor.ExtractNestedItems`, restructure the loop so nav prop detection happens BEFORE null check:
+Move nav prop detection before null check (see Design Contract 2 for the restructured loop).
 
-```csharp
-foreach (var propertyName in entity.GetChangedPropertyNames())
-{
-    var edmProperty = edmType.FindProperty(propertyName);
-    if (edmProperty is not IEdmNavigationProperty navProperty)
-    {
-        continue; // Not a nav prop — already handled by CreatePropertyDictionary
-    }
+### Bug 3: Extractor should preserve raw keys, not classify
 
-    var clrPropertyName = EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model);
+- [ ] **Step 2.6: Always use `Insert` for nested entities**
 
-    if (!entity.TryGetPropertyValue(propertyName, out var value) || value is null)
-    {
-        // Null nav prop — record for unlink handling by the controller/initializer
-        parentItem.NullNavigationProperties.Add(clrPropertyName);
-        continue;
-    }
+Change `ProcessSingleNestedEntity` to always create `RestierEntitySetOperation.Insert` items with extracted keys preserved in `ResourceKey`. The classifier (Task 5) reclassifies based on existing children.
 
-    var targetEntityType = navProperty.ToEntityType();
-    var targetEntitySet = FindTargetEntitySet(navProperty);
-
-    if (value is EdmEntityObject nestedEntity)
-    {
-        ProcessSingleNestedEntity(...);
-    }
-    else if (value is IEnumerable collection && value is not string)
-    {
-        foreach (var item in collection)
-        {
-            if (item is EdmEntityObject collectionEntity)
-            {
-                ProcessSingleNestedEntity(...);
-            }
-        }
-    }
-}
-```
-
-### Bug 3: Extractor should preserve raw key info, not classify insert/update
-
-The extractor should NOT determine whether a nested item in an update context is an `Insert` or `Update`. That decision requires querying existing children (Task 4). The extractor should only preserve what it has: the nested entity's scalar properties and key values. Classification happens in the controller.
-
-- [ ] **Step 2.7: Change extractor to always use `Insert` for nested entities**
-
-In `ProcessSingleNestedEntity`, always use `RestierEntitySetOperation.Insert` and always extract key values (if present). Store extracted keys in `ResourceKey` regardless. The controller's classification step (Task 4) will re-classify based on existing children.
-
-```csharp
-var extractedKeys = ExtractKeyValues(nestedEntity, targetEntityType);
-
-var childItem = new DataModificationItem(
-    targetEntitySetName,
-    targetEntityType.GetClrType(model),
-    clrType,
-    RestierEntitySetOperation.Insert, // Always Insert — controller reclassifies in Task 4
-    extractedKeys.Count > 0 ? extractedKeys : null,
-    null,
-    nestedEntity.CreatePropertyDictionary(actualEdmType, api, true)) // isCreation=true for LocalValues
-{
-    ParentItem = parentItem,
-    ParentNavigationPropertyName = clrPropertyName,
-};
-```
-
-- [ ] **Step 2.8: Run all tests**
-
-Run: `dotnet test ... --filter "DeepInsertTests|DeepUpdateTests"`
-Expected: All existing + new tests pass.
-
-- [ ] **Step 2.9: Commit**
+- [ ] **Step 2.7: Run all tests, commit**
 
 ```bash
-git commit -am "fix: MaxDepth off-by-one, null nav prop detection, raw key preservation in extractor"
+git commit -am "fix: MaxDepth off-by-one, null nav prop detection, raw key preservation"
 ```
 
 ---
 
-## Task 3: OData Version Plumbing
+## Task 3: Entity Reference Parsing + Bind Tests
+
+**Files:**
+- Modify: `src/Microsoft.Restier.AspNetCore/Submit/DeepOperationExtractor.cs`
+- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepInsertTests.cs`
+
+Based on Task 1 findings, implement proper entity reference detection and URI parsing.
+
+### Step 3.1: Write failing tests first
+
+- [ ] Add to `DeepInsertTests.cs`:
+
+```csharp
+[Fact]
+public async Task DeepInsert_WithBindReference_V40()
+{
+    // POST Book with Publisher@odata.bind (explicit 4.0 test)
+    // Verify publisher is linked, not created
+}
+
+[Fact]
+public async Task DeepInsert_CollectionWithBind_V40()
+{
+    // POST Publisher with Books@odata.bind array
+    // Verify existing books are linked to the new publisher
+}
+
+[Fact]
+public async Task DeepInsert_BindReferenceNotFound_Returns400()
+{
+    // POST with @odata.bind pointing to non-existent entity
+    // Verify 400 and no partial changes (atomicity)
+}
+
+[Fact]
+public async Task DeepInsert_WithEntityReference_V401()
+{
+    // POST Book with inline Publisher entity-reference using @id
+    // OData-Version: 4.01 header
+}
+```
+
+### Step 3.2: Implement entity reference URI parsing
+
+- [ ] Add to `DeepOperationExtractor`:
+
+```csharp
+private BindReference ParseEntityReferenceUri(string referenceUri, IEdmNavigationProperty navProperty)
+{
+    // Use ODataUriParser to parse the URI
+    // Extract entity set name from the path
+    // Extract key values from key segment
+    // Return BindReference with ResourceSetName and ResourceKey
+}
+```
+
+### Step 3.3: Update IsEntityReference and CreateBindReference
+
+- [ ] Adapt based on Task 1 findings. For `@id` under 4.01:
+  - Check `TryGetPropertyValue("@id", out var idValue)` or `TryGetPropertyValue("@odata.id", out var idValue)`
+  - If found, parse the URI string via `ParseEntityReferenceUri`
+  - Create `BindReference` from parsed result
+
+### Step 3.4: Run tests, commit
+
+```bash
+git commit -am "feat: implement entity reference detection and URI parsing with bind tests"
+```
+
+---
+
+## Task 4: OData Version Plumbing
 
 **Files:**
 - Modify: `src/Microsoft.Restier.AspNetCore/Submit/DeepOperationExtractor.cs`
 - Modify: `src/Microsoft.Restier.AspNetCore/RestierController.cs`
+- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepUpdateTests.cs`
 
-### Step 3.1: Add OData version to extractor
+### Step 4.1: Add OData version to extractor constructor
 
-- [ ] Add an `ODataVersion` parameter to the `DeepOperationExtractor` constructor (or an options object). The controller reads the version from `Request.Headers["OData-Version"]` and passes it.
-
-```csharp
-internal class DeepOperationExtractor
-{
-    private readonly IEdmModel model;
-    private readonly ApiBase api;
-    private readonly DeepOperationSettings settings;
-    private readonly string odataVersion; // "4.0" or "4.01"
-
-    public DeepOperationExtractor(IEdmModel model, ApiBase api, DeepOperationSettings settings, string odataVersion = null)
-    {
-        // ...
-        this.odataVersion = odataVersion;
-    }
+- [ ] ```csharp
+public DeepOperationExtractor(IEdmModel model, ApiBase api, DeepOperationSettings settings, string odataVersion = null)
 ```
 
-### Step 3.2: Reject inline deep update under OData 4.0
+Controller passes `Request.Headers["OData-Version"].FirstOrDefault()`.
 
-- [ ] In `RestierController.Update()`, after extraction, check version:
+### Step 4.2: Reject inline deep update under 4.0
+
+- [ ] In `RestierController.Update()`, after extraction:
 
 ```csharp
-var odataVersion = Request.Headers["OData-Version"].FirstOrDefault();
 if (odataVersion == "4.0" && updateItem.NestedItems.Count > 0)
 {
-    return BadRequest("Inline deep update is not supported under OData 4.0. Use @odata.bind for relationship operations, or send OData-Version: 4.01.");
+    return BadRequest("Inline deep update requires OData-Version: 4.01. Use @odata.bind for 4.0.");
 }
 ```
 
-Note: the check is `NestedItems.Count > 0` — any inline nested entity is rejected under 4.0, regardless of operation classification.
-
-### Step 3.3: Write failing test first
+### Step 4.3: Write failing test, implement, verify
 
 - [ ] Add to `DeepUpdateTests.cs`:
 
@@ -323,53 +445,34 @@ public async Task DeepUpdate_InlineEntityInV40_Rejected()
 {
     // Send OData-Version: 4.0 header with inline nested entity in PATCH
     // Should return 400
-    // (need to figure out how to set OData-Version header via ExecuteTestRequest)
 }
 ```
 
-Note: `RestierTestHelpers.ExecuteTestRequest` may not expose OData-Version header setting. If not, this test may need a custom `HttpRequestMessage`. Check the Breakdance API.
+### Step 4.4: Handle @odata.bind under 4.01
 
-### Step 3.4: Handle `@odata.bind` under 4.01
+Based on Task 1 findings — implement rejection or document that the formatter handles it.
 
-Based on Task 1 findings:
-- If the formatter rejects `@odata.bind` under 4.01 before the controller sees it: no action needed
-- If it passes through: add a check in the extractor that rejects `@odata.bind`-style references when `odataVersion == "4.01"`
-- Document the behavior based on Task 1 exploration
-
-### Step 3.5: Commit
+### Step 4.5: Commit
 
 ```bash
-git commit -am "feat: add OData version plumbing and enforce 4.0/4.01 rules"
+git commit -am "feat: enforce OData 4.0/4.01 version rules for deep operations"
 ```
 
 ---
 
-## Task 4: Deep Update Child Matching
+## Task 5: Deep Update Classification
 
-This is the most complex task. It requires a concrete design for how to represent relationship operations.
+The most complex task. Uses both Design Contracts above.
 
 **Files:**
 - Create: `src/Microsoft.Restier.AspNetCore/Submit/DeepUpdateClassifier.cs`
+- Modify: `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs` (add `RelationshipRemoval`, `RelationshipRemovals`)
 - Modify: `src/Microsoft.Restier.AspNetCore/RestierController.cs`
 - Modify: `src/Microsoft.Restier.EntityFrameworkCore/Submit/EFChangeSetInitializer.cs`
 - Modify: `src/Microsoft.Restier.EntityFramework/Submit/EFChangeSetInitializer.cs`
-- Add tests to: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepUpdateTests.cs`
+- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepUpdateTests.cs`
 
-### Design: Relationship Removal Representation
-
-When a non-contained child is omitted from a PUT collection, the relationship must be removed. Two approaches:
-
-**Approach A: Update items that null the inverse FK.**
-For each omitted child, create a `DataModificationItem` with `EntitySetOperation = Update`, `ResourceKey` = child's key, and `LocalValues` = `{ "PublisherId": null }`. The existing EF pipeline handles this as a normal update that nulls the FK.
-
-**Approach B: Metadata on the parent item.**
-Add a `RelationshipRemovals` collection to `DataModificationItem` listing nav prop + child keys to unlink. EF initializers process these by clearing nav props.
-
-**Decision: Approach A** — it requires no new item types, uses the existing pipeline, fires `OnUpdating*` conventions for the affected children (correct: the child IS being updated — its FK is changing), and EF's change tracker handles the rest. The initializer already knows how to process Update items.
-
-For contained children, use `EntitySetOperation = Delete` items.
-
-### Step 4.1: Write failing tests first
+### Step 5.1: Write failing tests first
 
 - [ ] Add to `DeepUpdateTests.cs`:
 
@@ -377,127 +480,61 @@ For contained children, use `EntitySetOperation = Delete` items.
 [Fact]
 public async Task DeepUpdate_InlineNewChildWithoutKey_Inserts()
 {
-    // Create a publisher, then PATCH/PUT with a Books array containing
-    // a new book (no Id or Id=Guid.Empty). The new book should be inserted.
-    var pubId = UniqueId();
-    // First create the publisher
-    var createPayload = new { Id = pubId, Addr = new { Zip = "00000" } };
-    var createResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        HttpMethod.Post,
-        resource: "/Publishers",
-        payload: createPayload,
-        acceptHeader: WebApiConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-    createResponse.IsSuccessStatusCode.Should().BeTrue();
-
-    // Now PATCH with an inline book (no key = new entity to insert)
-    var patchPayload = new
-    {
-        Books = new[]
-        {
-            new { Isbn = "7777777777777", Title = "New Inline Book", IsActive = true },
-        },
-    };
-
-    var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        new HttpMethod("PATCH"),
-        resource: $"/Publishers('{pubId}')",
-        payload: patchPayload,
-        acceptHeader: WebApiConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-
-    var content = await patchResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
-    patchResponse.IsSuccessStatusCode.Should().BeTrue(
-        because: $"inline new book should be inserted. Response: {content}");
-
-    // Verify the book was created
-    var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        HttpMethod.Get,
-        resource: $"/Publishers('{pubId}')?$expand=Books",
-        acceptHeader: ODataConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-    var (publisher, _) = await getResponse.DeserializeResponseAsync<Publisher>();
-    publisher.Books.Should().HaveCount(1);
-    publisher.Books[0].Title.Should().Be("New Inline Book");
+    // Create publisher, PATCH with Books containing a new book (no Id)
+    // Assert new book is inserted and linked
 }
 
 [Fact]
 public async Task DeepUpdate_Put_OmittedChildrenUnlinked()
 {
-    // Create publisher with 2 books via deep insert
+    // Create publisher with 2 books
     // PUT with only 1 book
-    // Verify the omitted book has PublisherId = null (unlinked, not deleted)
-    var pubId = UniqueId();
-    var createPayload = new
-    {
-        Id = pubId,
-        Addr = new { Zip = "00000" },
-        Books = new[]
-        {
-            new { Isbn = "8888888888881", Title = "Keep This Book", IsActive = true },
-            new { Isbn = "8888888888882", Title = "Unlink This Book", IsActive = true },
-        },
-    };
+    // Assert omitted book still exists but has PublisherId = null
+}
 
-    var createResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        HttpMethod.Post,
-        resource: "/Publishers",
-        payload: createPayload,
-        acceptHeader: WebApiConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-    createResponse.IsSuccessStatusCode.Should().BeTrue();
-
-    // Get the books to know their IDs
-    var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        HttpMethod.Get,
-        resource: $"/Publishers('{pubId}')?$expand=Books",
-        acceptHeader: ODataConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-    var (publisher, _) = await getResponse.DeserializeResponseAsync<Publisher>();
-    publisher.Books.Should().HaveCount(2);
-    var keepBook = publisher.Books.First(b => b.Title == "Keep This Book");
-    var unlinkBook = publisher.Books.First(b => b.Title == "Unlink This Book");
-
-    // PUT with only the "keep" book — omitting the "unlink" book
-    var putPayload = new
-    {
-        Id = pubId,
-        Addr = new { Zip = "00000" },
-        LastUpdated = publisher.LastUpdated,
-        Books = new[]
-        {
-            new { Id = keepBook.Id, Isbn = keepBook.Isbn, Title = keepBook.Title, IsActive = keepBook.IsActive },
-        },
-    };
-
-    var putResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        HttpMethod.Put,
-        resource: $"/Publishers('{pubId}')",
-        payload: putPayload,
-        acceptHeader: WebApiConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-
-    var putContent = await putResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
-    putResponse.IsSuccessStatusCode.Should().BeTrue(
-        because: $"PUT should succeed. Response: {putContent}");
-
-    // Verify: the unlinked book still exists but has no publisher
-    var unlinkCheckResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-        HttpMethod.Get,
-        resource: $"/Books({unlinkBook.Id})?$expand=Publisher",
-        acceptHeader: ODataConstants.DefaultAcceptHeader,
-        serviceCollection: ConfigureServices);
-    var (updatedUnlinkBook, _) = await unlinkCheckResponse.DeserializeResponseAsync<Book>();
-    updatedUnlinkBook.Should().NotBeNull("the book should still exist (not deleted)");
-    updatedUnlinkBook.Publisher.Should().BeNull("the book should be unlinked from the publisher");
+[Fact]
+public async Task DeepUpdate_NullNavProperty_Unlinks_V401()
+{
+    // PATCH Book with Publisher: null (4.01 inline null)
+    // Assert publisher is unlinked
 }
 ```
 
-### Step 4.2: Implement DeepUpdateClassifier
+### Step 5.2: Add RelationshipRemoval to DataModificationItem
+
+- [ ] In `src/Microsoft.Restier.Core/Submit/ChangeSetItem.cs`:
+
+```csharp
+/// <summary>
+/// Represents a relationship to be removed during deep update.
+/// The EF initializer processes these by clearing navigation properties.
+/// </summary>
+public class RelationshipRemoval
+{
+    /// <summary>
+    /// The navigation property name on the parent entity to clear.
+    /// </summary>
+    public string NavigationPropertyName { get; set; }
+
+    /// <summary>
+    /// The child entity to remove from the relationship (loaded from DB).
+    /// Null for single nav props where we just need to clear the reference.
+    /// </summary>
+    public object ChildEntity { get; set; }
+}
+```
+
+Add to `DataModificationItem`:
+```csharp
+/// <summary>
+/// Relationship removals to process during deep update.
+/// </summary>
+public IList<RelationshipRemoval> RelationshipRemovals { get; } = new List<RelationshipRemoval>();
+```
+
+### Step 5.3: Create DeepUpdateClassifier
 
 - [ ] Create `src/Microsoft.Restier.AspNetCore/Submit/DeepUpdateClassifier.cs`:
-
-This class takes a root `DataModificationItem` (from extraction) and reclassifies nested items by comparing against existing children from the database.
 
 ```csharp
 internal class DeepUpdateClassifier
@@ -511,99 +548,158 @@ internal class DeepUpdateClassifier
         bool isFullReplace,
         CancellationToken cancellationToken)
     {
-        // Group nested items by navigation property
-        var groups = rootItem.NestedItems
+        var edmEntityType = entitySet.EntityType();
+
+        // 1. Handle collection nav props with nested items
+        var collectionGroups = rootItem.NestedItems
             .GroupBy(n => n.ParentNavigationPropertyName)
             .ToList();
 
-        foreach (var group in groups)
+        foreach (var group in collectionGroups)
         {
-            var navPropName = group.Key;
-            var edmNavProp = entitySet.EntityType().FindProperty(navPropName) as IEdmNavigationProperty;
-            if (edmNavProp is null) continue;
-
-            // Skip single nav props — only collections need child matching
-            if (edmNavProp.TargetMultiplicity() != EdmMultiplicity.Many) continue;
-
-            // Query existing children
-            var existingChildren = await QueryExistingChildren(
-                rootItem, navPropName, edmNavProp, entitySet, cancellationToken);
-
-            var payloadItems = group.ToList();
-
-            // Match payload items to existing children by key
-            foreach (var payloadItem in payloadItems)
-            {
-                if (payloadItem.ResourceKey is null || payloadItem.ResourceKey.Count == 0)
-                {
-                    // No key — this is a new entity, keep as Insert
-                    continue;
-                }
-
-                // Check if any existing child matches by key
-                var matched = FindMatchingChild(existingChildren, payloadItem.ResourceKey);
-                if (matched is not null)
-                {
-                    // Existing child matched — reclassify as Update
-                    payloadItem.EntitySetOperation = RestierEntitySetOperation.Update;
-                }
-                // else: has key but not currently related — Insert (link new)
-            }
-
-            // Handle omitted children (existing but not in payload)
-            if (isFullReplace) // PUT semantics
-            {
-                var payloadKeys = payloadItems
-                    .Where(p => p.ResourceKey is not null && p.ResourceKey.Count > 0)
-                    .Select(p => p.ResourceKey)
-                    .ToList();
-
-                foreach (var existing in existingChildren)
-                {
-                    if (!IsInPayload(existing, payloadKeys))
-                    {
-                        // Omitted child
-                        if (edmNavProp.ContainsTarget)
-                        {
-                            // Contained: delete
-                            var deleteItem = CreateDeleteItem(existing, ...);
-                            rootItem.NestedItems.Add(deleteItem);
-                        }
-                        else
-                        {
-                            // Non-contained: unlink by nulling the inverse FK
-                            var unlinkItem = CreateUnlinkItem(existing, edmNavProp, ...);
-                            rootItem.NestedItems.Add(unlinkItem);
-                        }
-                    }
-                }
-            }
+            await ClassifyCollectionNavProp(
+                rootItem, group.Key, group.ToList(),
+                edmEntityType, entitySet, isFullReplace, cancellationToken);
         }
 
-        // Also handle NullNavigationProperties
+        // 2. Handle single nav props with nested items
+        // (items not in a collection group — single nav props have exactly one nested item)
+        // Reclassify: key match = Update, no key = Insert, replace old relationship
+
+        // 3. Handle NullNavigationProperties
         foreach (var nullNavProp in rootItem.NullNavigationProperties)
         {
-            // Generate unlink operation for the current relationship
-            // (clear the nav prop reference on the root entity)
+            await HandleNullNavProp(rootItem, nullNavProp, edmEntityType, entitySet, cancellationToken);
+        }
+
+        // 4. Handle NavigationBindings — already processed by EF initializer Phase 1
+        // No additional work needed here
+    }
+}
+```
+
+### Step 5.4: Implement collection nav prop classification
+
+Following Design Contract 2:
+
+```csharp
+private async Task ClassifyCollectionNavProp(
+    DataModificationItem rootItem,
+    string navPropName,
+    List<DataModificationItem> payloadItems,
+    IEdmEntityType edmEntityType,
+    IEdmEntitySet entitySet,
+    bool isFullReplace,
+    CancellationToken cancellationToken)
+{
+    var edmNavProp = edmEntityType.FindProperty(navPropName) as IEdmNavigationProperty;
+    if (edmNavProp is null) return;
+
+    // Find inverse FK via referential constraint
+    var fkPropertyName = FindInverseFkPropertyName(edmNavProp);
+    if (fkPropertyName is null)
+    {
+        // Cannot determine FK — skip classification, log warning
+        return;
+    }
+
+    // Get parent key
+    var parentKeyValues = rootItem.ResourceKey;
+    if (parentKeyValues is null || parentKeyValues.Count == 0) return;
+
+    // Query existing children: targetEntitySet.Where(FK == parentKey)
+    var targetEntitySet = entitySet.FindNavigationTarget(edmNavProp);
+    var existingChildren = await QueryChildrenByFk(
+        targetEntitySet.Name, fkPropertyName, parentKeyValues, cancellationToken);
+
+    // Classify payload items
+    var targetEntityType = edmNavProp.ToEntityType();
+    foreach (var payloadItem in payloadItems)
+    {
+        if (payloadItem.ResourceKey is not null && payloadItem.ResourceKey.Count > 0)
+        {
+            var matched = FindMatchingChild(existingChildren, payloadItem.ResourceKey, targetEntityType);
+            if (matched is not null)
+            {
+                payloadItem.EntitySetOperation = RestierEntitySetOperation.Update;
+            }
+            // else: has key but not currently related — keep as Insert
+        }
+        // else: no key — keep as Insert
+    }
+
+    // Handle omitted children (PUT replace semantics)
+    if (isFullReplace)
+    {
+        var payloadKeySet = payloadItems
+            .Where(p => p.ResourceKey is not null && p.ResourceKey.Count > 0)
+            .Select(p => p.ResourceKey)
+            .ToList();
+
+        foreach (var existing in existingChildren)
+        {
+            if (!IsInPayload(existing, payloadKeySet, targetEntityType))
+            {
+                if (edmNavProp.ContainsTarget)
+                {
+                    // Contained: delete
+                    var deleteItem = CreateDeleteItem(existing, targetEntitySet.Name, targetEntityType);
+                    rootItem.NestedItems.Add(deleteItem);
+                }
+                else
+                {
+                    // Non-contained: relationship removal (nav prop clearing by EF initializer)
+                    rootItem.RelationshipRemovals.Add(new RelationshipRemoval
+                    {
+                        NavigationPropertyName = navPropName,
+                        ChildEntity = existing,
+                    });
+                }
+            }
         }
     }
 }
 ```
 
-The `CreateUnlinkItem` method creates a `DataModificationItem` with:
-- `EntitySetOperation = Update`
-- `ResourceKey` = the child's key
-- `LocalValues` = `{ inverseFkPropertyName: null }`
-- `ResourceSetName` = the child's entity set name
+### Step 5.5: Update EF initializers to process RelationshipRemovals
 
-This reuses the existing update pipeline — EF's `SetValues` will set the FK to null.
+- [ ] In both `EFChangeSetInitializer.InitializeAsync`, after processing an entry's nav prop wiring, add:
 
-### Step 4.3: Integrate into controller
+```csharp
+// Process relationship removals
+if (entry.RelationshipRemovals.Count > 0 && entry.Resource is not null)
+{
+    foreach (var removal in entry.RelationshipRemovals)
+    {
+        var navPropInfo = entry.Resource.GetType().GetProperty(removal.NavigationPropertyName);
+        if (navPropInfo is null) continue;
+
+        if (typeof(IEnumerable).IsAssignableFrom(navPropInfo.PropertyType)
+            && navPropInfo.PropertyType != typeof(string))
+        {
+            // Collection: remove child from collection
+            var collection = navPropInfo.GetValue(entry.Resource);
+            if (collection is IList list)
+            {
+                list.Remove(removal.ChildEntity);
+            }
+        }
+        else
+        {
+            // Single: set to null
+            navPropInfo.SetValue(entry.Resource, null);
+        }
+    }
+}
+```
+
+### Step 5.6: Integrate classifier into controller
 
 - [ ] In `RestierController.Update()`, after extraction:
 
 ```csharp
-if (updateItem.NestedItems.Count > 0 || updateItem.NullNavigationProperties.Count > 0
+if (updateItem.NestedItems.Count > 0 
+    || updateItem.NullNavigationProperties.Count > 0
     || updateItem.NavigationBindings.Count > 0)
 {
     var classifier = new DeepUpdateClassifier(api, model);
@@ -611,154 +707,102 @@ if (updateItem.NestedItems.Count > 0 || updateItem.NullNavigationProperties.Coun
 }
 ```
 
-### Step 4.4: Run tests
-
-Expected: `DeepUpdate_InlineNewChildWithoutKey_Inserts` and `DeepUpdate_Put_OmittedChildrenUnlinked` should pass.
-
-### Step 4.5: Commit
+### Step 5.7: Run tests, iterate, commit
 
 ```bash
-git commit -am "feat: add deep update child matching with insert/update/unlink classification"
+git commit -am "feat: deep update child matching with classification and relationship removal"
 ```
 
 ---
 
-## Task 5: DbUpdateException Error Mapping
+## Task 6: DbUpdateException Error Mapping
 
 **Files:**
 - Modify: `src/Microsoft.Restier.AspNetCore/RestierController.cs`
 
-### Step 5.1: Write failing test
+### Step 6.1: Add narrow exception mapping
 
-- [ ] Add to `DeepUpdateTests.cs`:
-
-```csharp
-[Fact]
-public async Task DeepUpdate_Put_RequiredRelationship_Returns400()
-{
-    // Create a scenario where unlinking a child would violate a required FK constraint
-    // The response should be 400, not 500
-    // (This requires a model with a required FK — Review.BookId is required)
-}
-```
-
-### Step 5.2: Add try-catch around SubmitAsync
-
-- [ ] In both `Post()` and `Update()`, wrap `api.SubmitAsync()` in try-catch for `DbUpdateException`:
+- [ ] Map only known EF constraint violation exceptions to 400. Preserve 500 for unknown database failures.
 
 ```csharp
 try
 {
     var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
 }
-catch (Exception ex) when (IsConstraintViolation(ex))
+catch (Exception ex) when (IsRelationshipConstraintViolation(ex))
 {
     return BadRequest($"A relationship constraint was violated: {ex.GetBaseException().Message}");
 }
+// Other exceptions propagate as 500
+
+private static bool IsRelationshipConstraintViolation(Exception ex)
+{
+    // Check for EFCore DbUpdateException with FK constraint inner exception
+    if (ex is Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+    {
+        var inner = dbEx.GetBaseException();
+        return inner.Message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase)
+            || inner.Message.Contains("REFERENCE", StringComparison.OrdinalIgnoreCase);
+    }
+    // Check for EF6 DbUpdateException
+    if (ex.GetType().FullName == "System.Data.Entity.Infrastructure.DbUpdateException")
+    {
+        var inner = ex.GetBaseException();
+        return inner.Message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase)
+            || inner.Message.Contains("REFERENCE", StringComparison.OrdinalIgnoreCase);
+    }
+    return false;
+}
 ```
 
-The `IsConstraintViolation` helper checks for `DbUpdateException` (EFCore) or `System.Data.Entity.Infrastructure.DbUpdateException` (EF6) with an inner exception indicating a constraint violation.
-
-### Step 5.3: Commit
+### Step 6.2: Write test, commit
 
 ```bash
-git commit -am "fix: map DbUpdateException to HTTP 400 for constraint violations"
+git commit -am "fix: map relationship constraint DbUpdateException to HTTP 400"
 ```
 
 ---
 
-## Task 6: Response Expansion Investigation
+## Task 7: Response Expansion Investigation
 
 **Files:**
 - Modify: `src/Microsoft.Restier.AspNetCore/Submit/DeepOperationResponseBuilder.cs`
 - Modify: `src/Microsoft.Restier.AspNetCore/RestierController.cs`
 
-### Step 6.1: Investigate the NullRef
+### Step 7.1: Investigate NullRef
 
-- [ ] The NullRef is at `SelectedPropertiesNode.<>c.<Create>b__21_0(ExpandedNavigationSelectItem _)`. Investigate:
-  - Does `ExpandedNavigationSelectItem` need a non-null `SelectAndExpand` property? Try passing `new SelectExpandClause(Enumerable.Empty<SelectItem>(), true)` instead of `null` for leaf nodes.
-  - Does the `NavigationSource` on the `ExpandedNavigationSelectItem` need to be non-null?
-  - Does the `ODataExpandPath` need additional segments?
+- [ ] The NullRef is in `SelectedPropertiesNode.Create` processing `ExpandedNavigationSelectItem`. Try:
+  1. Non-null empty child clause: `new SelectExpandClause(Enumerable.Empty<SelectItem>(), true)` instead of `null`
+  2. Verify `NavigationSource` on `ExpandedNavigationSelectItem` is non-null
+  3. Verify `ODataExpandPath` has the correct segment structure
 
-### Step 6.2: Try fix
+### Step 7.2: If fixed, re-enable and test. If not, document limitation.
 
-- [ ] If the NullRef is caused by null `SelectAndExpand`, change `DeepOperationResponseBuilder` to always provide a non-null (empty) child clause:
-
-```csharp
-var childClause = childClauseFromRecursion ?? new SelectExpandClause(Enumerable.Empty<SelectItem>(), true);
-```
-
-### Step 6.3: If fix works, re-enable in controller
-
-- [ ] Remove the TODO comments and re-enable the `SelectExpandClause` assignment in Post() and Update().
-
-### Step 6.4: Write test
-
-```csharp
-[Fact]
-public async Task DeepInsert_ResponseIncludesExpandedEntities()
-{
-    // POST Publisher with inline Books
-    // Deserialize the 201 response
-    // Verify the response body includes Books (expanded)
-}
-```
-
-### Step 6.5: If fix doesn't work, try alternative approaches
-
-- [ ] **Option A:** Re-query the entity with `$expand` after creation and return that
-- [ ] **Option B:** Use `ObjectResult` with custom serialization context
-- [ ] **Option C:** Document as a known limitation with a workaround (GET with $expand)
-
-### Step 6.6: Commit
+### Step 7.3: Commit
 
 ```bash
-git commit -am "feat: implement response expansion for deep insert/update (or document limitation)"
+git commit -am "feat: response expansion (or document limitation)"
 ```
 
 ---
 
-## Task 7: Remaining Test Coverage
+## Task 8: Remaining Test Coverage
 
-**Files:**
-- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepInsertTests.cs`
-- Modify: `test/Microsoft.Restier.Tests.AspNetCore/FeatureTests/DeepUpdateTests.cs`
+Add remaining tests from spec matrix not covered by Tasks 2-7.
 
-Add remaining tests from the spec matrix not already covered by Tasks 1-6.
+### Deep insert gaps:
+- `DeepInsert_SingleNavProperty` — POST Book with inline Publisher
+- `DeepInsert_MixedBindAndCreate_V40` — some inline + some @odata.bind
+- `DeepInsert_MultiLevel` — Publisher -> Books -> Reviews (2-level)
+- `DeepInsert_BindDoesNotFireConventionMethods`
 
-### Step 7.1: Deep insert gap tests
+### Deep update gaps:
+- `DeepUpdate_SingleNavProperty_V401` — PATCH Book with inline Publisher
+- `DeepUpdate_EntityRefOnUpdate_V401` — PATCH with @id reference
+- `DeepUpdate_NestedDelta_Returns501`
+- `DeepUpdate_FiresConventionMethods_V401`
 
-- [ ] Add:
-
-```csharp
-DeepInsert_SingleNavProperty        // POST Book with inline Publisher (single, not collection)
-DeepInsert_WithBindReference_V40    // POST Book with Publisher@odata.bind (explicit 4.0)
-DeepInsert_CollectionWithBind_V40   // POST Publisher with Books@odata.bind array
-DeepInsert_MixedBindAndCreate_V40   // POST Publisher with some inline + some @odata.bind
-DeepInsert_MultiLevel               // POST Publisher -> Books -> Reviews (2-level)
-DeepInsert_BindReferenceNotFound    // @odata.bind to non-existent entity -> 400, no partial changes
-DeepInsert_BindDoesNotFireConventionMethods  // OnInserting* does NOT fire for bound entity
-```
-
-### Step 7.2: Deep update gap tests
-
-- [ ] Add:
-
-```csharp
-DeepUpdate_SingleNavProperty_V401       // PATCH Book with inline Publisher (4.01)
-DeepUpdate_EntityRefOnUpdate_V401       // PATCH Book with Publisher @id (4.01)
-DeepUpdate_NullUnlinks_V401             // PATCH Book with Publisher: null inline (4.01)
-DeepUpdate_NestedDelta_Returns501       // Nested delta payload -> 501
-DeepUpdate_FiresConventionMethods_V401  // OnUpdating* fires for nested entity (4.01)
-```
-
-### Step 7.3: Run full suite
-
-```bash
-dotnet test RESTier.slnx
-```
-
-### Step 7.4: Commit
+### Commit
 
 ```bash
 git commit -am "test: complete deep operations test coverage per spec matrix"

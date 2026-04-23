@@ -243,6 +243,15 @@ namespace Microsoft.Restier.AspNetCore
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
+            // Build SelectExpandClause for response expansion (OData 4.01 requires 201 responses
+            // to be expanded to at least the depth present in the deep insert request)
+            var selectExpandClause = DeepOperationResponseBuilder.BuildSelectExpandClause(
+                postItem, model, entitySet);
+            if (selectExpandClause is not null)
+            {
+                HttpContext.ODataFeature().SelectExpandClause = selectExpandClause;
+            }
+
             return CreateCreatedODataResult(postItem.Resource);
         }
 
@@ -452,20 +461,40 @@ namespace Microsoft.Restier.AspNetCore
                 IsFullReplaceUpdateRequest = isFullReplaceUpdate,
             };
 
+            // Extract nested entities for deep update
+            var deepSettings = HttpContext.Request.GetRouteServices().GetService<DeepOperationSettings>() ?? new DeepOperationSettings();
+            if (deepSettings.MaxDepth > 0)
+            {
+                var extractor = new DeepOperationExtractor(model, api, deepSettings);
+                extractor.ExtractNestedItems(edmEntityObject, actualEntityType, updateItem, isCreation: false);
+            }
+
             var changeSetProperty = HttpContext.GetChangeSet();
             if (changeSetProperty is null)
             {
                 var changeSet = new ChangeSet();
-                changeSet.Entries.Enqueue(updateItem);
+                foreach (var item in updateItem.FlattenDepthFirst())
+                {
+                    changeSet.Entries.Enqueue(item);
+                }
 
-                // RWM: Seems like we should be using the result here. For something else.
                 var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                changeSetProperty.ChangeSet.Entries.Enqueue(updateItem);
+                foreach (var item in updateItem.FlattenDepthFirst())
+                {
+                    changeSetProperty.ChangeSet.Entries.Enqueue(item);
+                }
 
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
+            }
+
+            var selectExpandClause = DeepOperationResponseBuilder.BuildSelectExpandClause(
+                updateItem, model, entitySet);
+            if (selectExpandClause is not null)
+            {
+                HttpContext.ODataFeature().SelectExpandClause = selectExpandClause;
             }
 
             return CreateUpdatedODataResult(updateItem.Resource);

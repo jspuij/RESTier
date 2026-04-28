@@ -115,6 +115,16 @@ namespace Microsoft.Restier.AspNetCore.Submit
             }
 
             // For PUT: generate removals for omitted children
+            if (isFullReplace && rootItem.ResourceKey is not null)
+            {
+                if (fkPropertyName is null)
+                {
+                    throw new StatusCodeException(HttpStatusCode.NotImplemented,
+                        $"Deep update for navigation property '{navPropName}' is not supported: " +
+                        $"no explicit foreign key property found. Cannot determine omitted children.");
+                }
+            }
+
             if (isFullReplace && fkPropertyName is not null && rootItem.ResourceKey is not null)
             {
                 var payloadKeyStrings = new HashSet<string>();
@@ -218,7 +228,7 @@ namespace Microsoft.Restier.AspNetCore.Submit
             }
         }
 
-        private async Task HandleNullNavProp(
+        private Task HandleNullNavProp(
             DataModificationItem rootItem,
             string nullNavPropName,
             IEdmEntityType edmEntityType,
@@ -228,40 +238,32 @@ namespace Microsoft.Restier.AspNetCore.Submit
             var edmNavProp = FindEdmNavigationProperty(edmEntityType, nullNavPropName);
             if (edmNavProp is null)
             {
-                return;
+                return Task.CompletedTask;
             }
 
-            // For single nav props, we need to load the current related entity and generate a removal
+            // For single nav props where the FK is on the root entity (dependent side),
+            // the simplest unlink is to set the FK to null on the root entity's LocalValues.
+            // For example: Book.Publisher = null → set Book.PublisherId = null.
+            // We do NOT query the target entity set (Publisher) — the FK lives on the root (Book).
             if (edmNavProp.TargetMultiplicity() != EdmMultiplicity.Many)
             {
-                var targetEntityType = edmNavProp.ToEntityType();
-                var targetEntitySetName = FindTargetEntitySetName(edmNavProp);
                 var fkPropertyName = FindFkPropertyName(edmNavProp);
 
-                if (fkPropertyName is not null && rootItem.ResourceKey is not null)
+                if (fkPropertyName is null)
                 {
-                    var existingChildren = await QueryChildrenByFk(
-                        targetEntitySetName, fkPropertyName,
-                        rootItem.ResourceKey,
-                        cancellationToken).ConfigureAwait(false);
-
-                    var inverseNavPropName = GetInverseNavigationPropertyName(edmNavProp);
-
-                    foreach (var child in existingChildren)
-                    {
-                        var childKey = DefaultChangeSetInitializer.GetKeyValues(child, targetEntityType, model);
-
-                        rootItem.RelationshipRemovals.Add(new RelationshipRemoval
-                        {
-                            NavigationPropertyName = nullNavPropName,
-                            InverseNavigationPropertyName = inverseNavPropName,
-                            FkPropertyName = fkPropertyName,
-                            ResourceSetName = targetEntitySetName,
-                            ResourceKey = childKey,
-                        });
-                    }
+                    throw new StatusCodeException(HttpStatusCode.NotImplemented,
+                        $"Cannot unlink navigation property '{nullNavPropName}': no explicit foreign key property found.");
                 }
+
+                // Add FK null to root item's LocalValues
+                var updatedValues = new Dictionary<string, object>(rootItem.LocalValues ?? new Dictionary<string, object>())
+                {
+                    [fkPropertyName] = null,
+                };
+                rootItem.LocalValues = updatedValues;
             }
+
+            return Task.CompletedTask;
         }
 
         private static void ReclassifyAsUpdate(DataModificationItem item)

@@ -152,6 +152,16 @@ namespace Microsoft.Restier.EntityFramework
                             var fkPropInfo = removal.ResolvedEntity.GetType().GetProperty(removal.FkPropertyName);
                             if (fkPropInfo is not null)
                             {
+                                // Check if the FK type is nullable — non-nullable FKs cannot be set to null
+                                var fkType = fkPropInfo.PropertyType;
+                                var isNullable = !fkType.IsValueType || Nullable.GetUnderlyingType(fkType) is not null;
+                                if (!isNullable)
+                                {
+                                    throw new StatusCodeException(HttpStatusCode.BadRequest,
+                                        $"Cannot unlink relationship via '{removal.FkPropertyName}': " +
+                                        $"the foreign key property is required (non-nullable type {fkType.Name}).");
+                                }
+
                                 fkPropInfo.SetValue(removal.ResolvedEntity, null);
                             }
                         }

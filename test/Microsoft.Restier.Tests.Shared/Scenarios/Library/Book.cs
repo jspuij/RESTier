@@ -9,13 +9,13 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
 {
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class Book
     {
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public Guid Id { get; set; }
 
@@ -24,7 +24,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         public string Isbn { get; set; }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public string Title { get; set; }
 
@@ -46,6 +46,11 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         /// The category of the book.
         /// </summary>
         public BookCategory? Category { get; set; }
+
+        public Book()
+        {
+            Reviews = new ObservableCollection<Review>();
+        }
 
     }
 

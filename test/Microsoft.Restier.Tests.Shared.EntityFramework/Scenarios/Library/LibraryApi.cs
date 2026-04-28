@@ -230,6 +230,18 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
         }
 
         /// <summary>
+        /// Ensures that incoming Reviews get assigned an ID.
+        /// </summary>
+        /// <param name="review"></param>
+        internal protected void OnInsertingReview(Review review)
+        {
+            if (review.Id == Guid.Empty)
+            {
+                review.Id = Guid.NewGuid();
+            }
+        }
+
+        /// <summary>
         /// Ensures that publishers that are being updated get the correct Audit flag set.
         /// </summary>
         /// <param name="publisher"></param>

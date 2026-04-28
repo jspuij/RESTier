@@ -310,4 +310,65 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
         omittedBook.PublisherId.Should().BeNull(
             because: "the non-contained omitted book should have its FK set to null (unlinked, not deleted)");
     }
+
+    [Fact]
+    public async Task DeepUpdate_MoveExistingChildToNewParent()
+    {
+        // Create two publishers, each with one book
+        var pubA = UniqueId();
+        var pubB = UniqueId();
+
+        // Create publisher A with a book
+        var createA = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post, resource: "/Publishers",
+            payload: new { Id = pubA, Addr = new { Zip = "00000" },
+                Books = new[] { new { Isbn = "1111100000111", Title = "Book A", IsActive = true } } },
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        createA.IsSuccessStatusCode.Should().BeTrue();
+
+        // Create publisher B with a book
+        var createB = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post, resource: "/Publishers",
+            payload: new { Id = pubB, Addr = new { Zip = "00000" },
+                Books = new[] { new { Isbn = "2222200000222", Title = "Book B", IsActive = true } } },
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        createB.IsSuccessStatusCode.Should().BeTrue();
+
+        // Get Book B's ID
+        var getBResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get, resource: $"/Publishers('{pubB}')?$expand=Books",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var (publisherB, _) = await getBResponse.DeserializeResponseAsync<Publisher>();
+        var bookBId = publisherB.Books[0].Id;
+
+        // PATCH Publisher A with Book B (by key) — should move it
+        var patchPayload = new
+        {
+            Books = new[]
+            {
+                new { Id = bookBId, Isbn = "2222200000222", Title = "Book B Moved", IsActive = true },
+            },
+        };
+
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            new HttpMethod("PATCH"), resource: $"/Publishers('{pubA}')",
+            payload: patchPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        var patchContent = await patchResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: $"moving book to new publisher should succeed. Response: {patchContent}");
+
+        // Verify: book is now linked to Publisher A
+        var verifyResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get, resource: $"/Books({bookBId})?$expand=Publisher",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var (movedBook, _) = await verifyResponse.DeserializeResponseAsync<Book>();
+        movedBook.PublisherId.Should().Be(pubA, because: "book should now be linked to Publisher A");
+    }
 }

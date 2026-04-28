@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.OData.Edm;
@@ -16,7 +17,11 @@ namespace Microsoft.Restier.AspNetCore.Submit
             IEdmModel model,
             IEdmEntitySet entitySet)
         {
-            if (rootItem.NestedItems.Count == 0 && rootItem.NavigationBindings.Count == 0)
+            // Only expand for NestedItems (inline deep insert entities).
+            // NavigationBindings (@odata.bind) are relationship-only operations —
+            // the bound entity wasn't included inline in the request, so the response
+            // doesn't need to expand it per OData 4.01 response expansion rules.
+            if (rootItem.NestedItems.Count == 0)
             {
                 return null;
             }
@@ -32,10 +37,6 @@ namespace Microsoft.Restier.AspNetCore.Submit
                     navPropNames.Add(nested.ParentNavigationPropertyName);
                 }
             }
-            foreach (var binding in rootItem.NavigationBindings)
-            {
-                navPropNames.Add(binding.Key);
-            }
 
             foreach (var navPropName in navPropNames)
             {
@@ -47,7 +48,10 @@ namespace Microsoft.Restier.AspNetCore.Submit
 
                 var navigationSource = entitySet.FindNavigationTarget(edmNavProp);
 
-                SelectExpandClause childClause = null;
+                // Default to an empty (but non-null) child clause.
+                // SelectedPropertiesNode.Create throws a NullReferenceException when
+                // the child SelectExpandClause passed to ExpandedNavigationSelectItem is null.
+                SelectExpandClause childClause = new SelectExpandClause(Array.Empty<SelectItem>(), allSelected: true);
                 var childItems = rootItem.NestedItems
                     .Where(n => n.ParentNavigationPropertyName == navPropName)
                     .ToList();
@@ -56,7 +60,8 @@ namespace Microsoft.Restier.AspNetCore.Submit
                     && navigationSource is IEdmEntitySet childEntitySet)
                 {
                     var representativeChild = childItems.First(c => c.NestedItems.Count > 0 || c.NavigationBindings.Count > 0);
-                    childClause = BuildSelectExpandClause(representativeChild, model, childEntitySet);
+                    childClause = BuildSelectExpandClause(representativeChild, model, childEntitySet)
+                        ?? new SelectExpandClause(Array.Empty<SelectItem>(), allSelected: true);
                 }
 
                 var segment = new NavigationPropertySegment(edmNavProp, navigationSource);

@@ -39,25 +39,23 @@ namespace Microsoft.Restier.AspNetCore.Submit
             bool isCreation,
             int currentDepth = 0)
         {
-            if (settings.MaxDepth > 0 && currentDepth >= settings.MaxDepth)
-            {
-                throw new ODataException($"Deep operation exceeds maximum nesting depth of {settings.MaxDepth}.");
-            }
-
             foreach (var propertyName in entity.GetChangedPropertyNames())
             {
-                if (!entity.TryGetPropertyValue(propertyName, out var value) || value is null)
-                {
-                    continue;
-                }
-
                 var edmProperty = edmType.FindProperty(propertyName);
                 if (edmProperty is not IEdmNavigationProperty navProperty)
                 {
-                    continue;
+                    continue; // Not a nav prop — already handled by CreatePropertyDictionary
                 }
 
                 var clrPropertyName = EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model);
+
+                if (!entity.TryGetPropertyValue(propertyName, out var value) || value is null)
+                {
+                    // Null nav prop — record for unlink handling
+                    parentItem.NullNavigationProperties.Add(clrPropertyName);
+                    continue;
+                }
+
                 var targetEntityType = navProperty.ToEntityType();
                 var targetEntitySet = FindTargetEntitySet(navProperty);
 
@@ -104,38 +102,50 @@ namespace Microsoft.Restier.AspNetCore.Submit
                 return;
             }
 
+            var childDepth = currentDepth + 1;
+
+            // Reject if this child would exceed max depth
+            if (settings.MaxDepth > 0 && childDepth > settings.MaxDepth)
+            {
+                throw new ODataException(
+                    $"Deep operation exceeds maximum nesting depth of {settings.MaxDepth}.");
+            }
+
             var actualEdmType = nestedEntity.ActualEdmType as IEdmStructuredType ?? targetEntityType;
             var clrType = actualEdmType.GetClrType(model);
+
+            var extractedKeys = ExtractKeyValues(nestedEntity, targetEntityType);
+            var creationLocalValues = nestedEntity.CreatePropertyDictionary(actualEdmType, api, isCreation: true);
+            var updateLocalValues = nestedEntity.CreatePropertyDictionary(actualEdmType, api, isCreation: false);
 
             var childItem = new DataModificationItem(
                 targetEntitySetName,
                 targetEntityType.GetClrType(model),
                 clrType,
-                isCreation ? RestierEntitySetOperation.Insert : RestierEntitySetOperation.Update,
-                isCreation ? null : ExtractKeyValues(nestedEntity, targetEntityType),
+                RestierEntitySetOperation.Insert, // Always Insert — classifier reclassifies in Task 5
+                extractedKeys.Count > 0 ? extractedKeys : null,
                 null,
-                nestedEntity.CreatePropertyDictionary(actualEdmType, api, isCreation))
+                creationLocalValues)
             {
                 ParentItem = parentItem,
                 ParentNavigationPropertyName = clrNavPropertyName,
+                UpdateLocalValues = updateLocalValues,
             };
 
             parentItem.NestedItems.Add(childItem);
-            ExtractNestedItems(nestedEntity, actualEdmType, childItem, isCreation, currentDepth + 1);
+
+            // Always recurse — the depth check above will reject grandchildren if needed
+            ExtractNestedItems(nestedEntity, actualEdmType, childItem, isCreation, childDepth);
         }
 
         private static bool IsEntityReference(EdmEntityObject entity, IEdmEntityType entityType)
         {
-            // Check for OData ID annotation — entity references from @odata.id (OData 4.01)
-            if (entity.TryGetPropertyValue("@odata.id", out _))
-            {
-                return true;
-            }
-
             // When @odata.bind is used (OData 4.0), the OData framework resolves it to an
             // EdmEntityObject containing only the key properties extracted from the bind URL.
             // Detect this case: if the only changed properties are key properties, the entity
             // was created from a reference URL rather than an inline body.
+            // Note: @odata.id (OData 4.01) is consumed by the deserializer and never appears
+            // as a property value, so there is no TryGetPropertyValue check for it.
             var changedPropertyNames = new HashSet<string>(entity.GetChangedPropertyNames(), StringComparer.OrdinalIgnoreCase);
             if (changedPropertyNames.Count == 0)
             {

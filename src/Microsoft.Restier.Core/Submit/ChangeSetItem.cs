@@ -208,7 +208,7 @@ namespace Microsoft.Restier.Core.Submit
         /// <remarks>
         /// For entities pending deletion, this property is <c>null</c>.
         /// </remarks>
-        public IReadOnlyDictionary<string, object> LocalValues { get; private set; }
+        public IReadOnlyDictionary<string, object> LocalValues { get; internal set; }
 
         /// <summary>
         /// Gets or sets the parent DataModificationItem for nested operations.
@@ -227,6 +227,18 @@ namespace Microsoft.Restier.Core.Submit
         /// Each child flows through the full submit pipeline.
         /// </summary>
         public IList<DataModificationItem> NestedItems { get; } = new List<DataModificationItem>();
+
+        /// <summary>
+        /// Navigation property names explicitly set to null in the payload.
+        /// Used for relationship unlinking during deep update.
+        /// </summary>
+        public ISet<string> NullNavigationProperties { get; } = new HashSet<string>();
+
+        /// <summary>
+        /// LocalValues computed with isCreation=false. Used when the classifier
+        /// reclassifies an Insert to Update. Null for root/non-reclassifiable items.
+        /// </summary>
+        internal IReadOnlyDictionary<string, object> UpdateLocalValues { get; set; }
 
         /// <summary>
         /// Gets the entity reference bindings: maps CLR navigation property name to bind reference(s).

@@ -149,6 +149,36 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     }
 
     [Fact]
+    public async Task DeepInsert_MaxDepth1_AllowsOneLevel()
+    {
+        var pubId = UniqueId();
+        var payload = new
+        {
+            Id = pubId,
+            Addr = new { Zip = "00000" },
+            Books = new[]
+            {
+                new { Isbn = "6666666666666", Title = "Depth 1 OK Book", IsActive = true },
+            },
+        };
+
+        var postResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: services =>
+            {
+                ConfigureServices(services);
+                services.AddSingleton(new DeepOperationSettings { MaxDepth = 1 });
+            });
+
+        var postContent = await postResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        postResponse.StatusCode.Should().Be(HttpStatusCode.Created,
+            because: $"MaxDepth=1 should allow one level of nesting. Response: {postContent}");
+    }
+
+    [Fact]
     public async Task DeepInsert_ExceedsMaxDepth_Returns400()
     {
         // A payload with 2 levels of nesting: Publisher -> Books -> Reviews

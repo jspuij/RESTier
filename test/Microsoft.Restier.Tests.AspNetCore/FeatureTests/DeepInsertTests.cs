@@ -221,11 +221,12 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     }
 
     [Fact]
-    public async Task DeepInsert_WithBindReference()
+    public async Task DeepInsert_WithKeyOnlyNestedEntity_TreatedAsBind()
     {
-        // When a nested entity contains only key properties, the key-subset heuristic
-        // detects it as a bind reference (@odata.bind / entity reference) rather than a
-        // new entity to insert. This test verifies that a Publisher can be created with
+        // A nested entity with only key properties is detected as a bind reference
+        // by the key-subset heuristic. Real @odata.bind wire format is tested by
+        // BatchTests_MimePayloadTest which uses actual @odata.bind annotation syntax.
+        // This test verifies that a Publisher can be created with
         // an existing Book wired via bind reference (only the Book's key is supplied).
         var pubId = UniqueId();
 
@@ -296,6 +297,84 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
         var responseContent = await postResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
         responseContent.Should().Contain("Response Test Book",
             because: "the deep insert 201 response should expand nested Books in the response body");
+    }
+
+    [Fact]
+    public async Task DeepInsert_ResponseIncludesMultiLevelExpand()
+    {
+        // POST Publisher with Books containing Reviews (2-level nesting)
+        // Verify the 201 response includes both Books AND Reviews in the expanded response
+        var pubId = UniqueId();
+        var payload = new
+        {
+            Id = pubId,
+            Addr = new { Zip = "00000" },
+            Books = new[]
+            {
+                new
+                {
+                    Isbn = "1010101010101",
+                    Title = "Multi-Expand Book",
+                    IsActive = true,
+                    Reviews = new[]
+                    {
+                        new { Content = "Deep review!", Rating = 5 },
+                    },
+                },
+            },
+        };
+
+        var postResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        var postContent = await postResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        postResponse.StatusCode.Should().Be(HttpStatusCode.Created,
+            because: $"multi-level deep insert should succeed. Response: {postContent}");
+
+        // Verify the response includes expanded Books
+        postContent.Should().Contain("Multi-Expand Book",
+            because: "response should include expanded Books");
+
+        // Verify the response includes expanded Reviews within Books
+        postContent.Should().Contain("Deep review!",
+            because: "response should include expanded Reviews within Books (multi-level expansion)");
+    }
+
+    [Fact]
+    public async Task DeepInsert_ResponseHasExpandedNavigationShape()
+    {
+        var pubId = UniqueId();
+        var payload = new
+        {
+            Id = pubId,
+            Addr = new { Zip = "00000" },
+            Books = new[]
+            {
+                new { Isbn = "1212121212121", Title = "Structural Test Book", IsActive = true },
+            },
+        };
+
+        var postResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        postResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        // Deserialize as Publisher and verify the Books property is populated
+        var (publisher, _) = await postResponse.DeserializeResponseAsync<Publisher>();
+        publisher.Should().NotBeNull();
+        publisher.Id.Should().Be(pubId);
+        publisher.Books.Should().NotBeNullOrEmpty(
+            because: "the 201 response should include expanded Books navigation property");
+        publisher.Books.Should().HaveCount(1);
+        publisher.Books[0].Title.Should().Be("Structural Test Book");
     }
 
     [Fact]

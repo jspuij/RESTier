@@ -219,4 +219,82 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
         postResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest,
             because: "nesting depth exceeds MaxDepth=1 (Publisher->Books is OK at depth 0, but Books->Reviews at depth 1 should be rejected)");
     }
+
+    [Fact]
+    public async Task DeepInsert_WithBindReference()
+    {
+        // When a nested entity contains only key properties, the key-subset heuristic
+        // detects it as a bind reference (@odata.bind / entity reference) rather than a
+        // new entity to insert. This test verifies that a Publisher can be created with
+        // an existing Book wired via bind reference (only the Book's key is supplied).
+        var pubId = UniqueId();
+
+        // "A Clockwork Orange" — seeded, active, belongs to Publisher1.
+        // We re-bind it to a new publisher to exercise the bind reference resolution path.
+        var existingBookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59");
+
+        var payload = new
+        {
+            Id = pubId,
+            Addr = new { Zip = "11111" },
+            Books = new object[]
+            {
+                new { Id = existingBookId }, // Only key property — detected as bind reference
+            },
+        };
+
+        var postResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        var postContent = await postResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        postResponse.StatusCode.Should().Be(HttpStatusCode.Created,
+            because: $"POST with a bind reference to an existing Book should succeed. Response: {postContent}");
+
+        // Verify the new publisher was created
+        var getResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Publishers('{pubId}')",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        getResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: "the newly created Publisher should be retrievable");
+
+        var (publisher, _) = await getResponse.DeserializeResponseAsync<Publisher>();
+        publisher.Should().NotBeNull();
+        publisher.Id.Should().Be(pubId);
+    }
+
+    [Fact]
+    public async Task DeepInsert_BindReferenceNotFound_Returns400()
+    {
+        // When a nested entity is detected as a bind reference (only key properties)
+        // but the referenced entity does not exist, Phase 1 bind validation must return 400.
+        var pubId = UniqueId();
+        var nonExistentBookId = Guid.NewGuid();
+
+        var payload = new
+        {
+            Id = pubId,
+            Addr = new { Zip = "00000" },
+            Books = new object[]
+            {
+                new { Id = nonExistentBookId }, // Only key property — detected as bind reference
+            },
+        };
+
+        var postResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        var postContent = await postResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        postResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            because: $"referencing a non-existent Book as a bind reference should return 400. Response: {postContent}");
+    }
 }

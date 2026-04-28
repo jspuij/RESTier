@@ -27,7 +27,10 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
     protected abstract Action<IServiceCollection> ConfigureServices { get; }
 
     private static string UniqueId([System.Runtime.CompilerServices.CallerMemberName] string name = null)
-        => $"{name}_{Guid.NewGuid():N}"[..50];
+    {
+        var id = $"{name}_{Guid.NewGuid():N}";
+        return id.Length > 64 ? id[..64] : id;
+    }
 
     /// <summary>
     /// JsonSerializerOptions that include null values in the output,

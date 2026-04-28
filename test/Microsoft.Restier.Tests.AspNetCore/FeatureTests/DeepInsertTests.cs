@@ -25,7 +25,10 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     protected abstract Action<IServiceCollection> ConfigureServices { get; }
 
     private static string UniqueId([System.Runtime.CompilerServices.CallerMemberName] string name = null)
-        => $"{name}_{Guid.NewGuid():N}"[..50];
+    {
+        var id = $"{name}_{Guid.NewGuid():N}";
+        return id.Length > 64 ? id[..64] : id;
+    }
 
     [Fact]
     public async Task DeepInsert_CollectionNavProperty()

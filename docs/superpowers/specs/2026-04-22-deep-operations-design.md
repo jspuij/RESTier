@@ -434,6 +434,13 @@ All feature tests run on both EF6 and EFCore via the generic base class pattern.
 | `BindReferenceValidator` (separate validator class) | Bind validation moved to Phase 1 of initialization — runs before entity materialization for atomic failure |
 | Registration in `ServiceCollectionExtensions` for validator | No longer needed; validation is part of initializer |
 
+## Known Limitations
+
+- **OData-Version: 4.01 header**: ASP.NET Core OData 9.x's untyped deserialization (`EdmEntityObject`) fails when the `OData-Version: 4.01` header is sent — the request body parameter arrives as null, producing HTTP 400. This is an upstream limitation, not a RESTier issue. As a result:
+  - Version enforcement (rejecting inline deep update under 4.0, rejecting `@odata.bind` under 4.01) is not implemented — the framework rejects 4.01 requests before the controller.
+  - All entity reference formats (`@odata.bind`, `@id`, `@odata.id`) work identically when no version header is sent (default 4.0 behavior). The OData deserializer resolves all formats into key-only `EdmEntityObject` instances.
+  - Deep insert and entity references work correctly under default/4.0 semantics.
+
 ## Out of Scope
 
 - **Nested delta payloads**: OData 4.01 delta representation for collections (add/remove/update semantics). Returns 501 if detected. May be added in a future iteration.

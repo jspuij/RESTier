@@ -230,8 +230,15 @@ namespace Microsoft.Restier.AspNetCore
                     changeSet.Entries.Enqueue(item);
                 }
 
-                // TODO: RWM: Feels like we should be doing something with this.
-                var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    // TODO: RWM: Feels like we should be doing something with this.
+                    var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (IsRelationshipConstraintViolation(ex))
+                {
+                    return BadRequest($"A relationship constraint was violated: {ex.GetBaseException().Message}");
+                }
             }
             else
             {
@@ -485,7 +492,14 @@ namespace Microsoft.Restier.AspNetCore
                     changeSet.Entries.Enqueue(item);
                 }
 
-                var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    var result = await api.SubmitAsync(changeSet, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (IsRelationshipConstraintViolation(ex))
+                {
+                    return BadRequest($"A relationship constraint was violated: {ex.GetBaseException().Message}");
+                }
             }
             else
             {
@@ -841,6 +855,26 @@ namespace Microsoft.Restier.AspNetCore
             var genericResultType = resultType.MakeGenericType(result.GetType());
 
             return (IActionResult)Activator.CreateInstance(genericResultType, result);
+        }
+
+        private static bool IsRelationshipConstraintViolation(Exception ex)
+        {
+            // Walk the exception chain to find constraint violation indicators
+            var current = ex;
+            while (current is not null)
+            {
+                var message = current.Message;
+                if (message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("REFERENCE constraint", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("referential integrity", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                current = current.InnerException;
+            }
+
+            return false;
         }
 
         private void CheckModelState()

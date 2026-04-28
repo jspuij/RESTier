@@ -45,7 +45,7 @@ namespace Microsoft.Restier.Core.Submit
         /// <summary>
         /// Reads key property values from a materialized entity using the EDM model.
         /// </summary>
-        protected static IReadOnlyDictionary<string, object> GetKeyValues(object entity, IEdmEntityType edmType, IEdmModel model)
+        internal static IReadOnlyDictionary<string, object> GetKeyValues(object entity, IEdmEntityType edmType, IEdmModel model)
         {
             Ensure.NotNull(entity, nameof(entity));
             Ensure.NotNull(edmType, nameof(edmType));

@@ -458,10 +458,23 @@ namespace Microsoft.Restier.AspNetCore
                 IsFullReplaceUpdateRequest = isFullReplaceUpdate,
             };
 
-            // TODO: Deep update extraction is disabled until the DeepUpdateClassifier (Phase 2 Task 5)
-            // is implemented. Without the classifier, nested entities in update payloads are blindly
-            // treated as Inserts, which breaks existing updates that include expanded navigation properties.
-            // Re-enable when classifier can reclassify Insert→Update based on existing children.
+            // Extract nested entities for deep update
+            var deepSettings = HttpContext.Request.GetRouteServices().GetService<DeepOperationSettings>() ?? new DeepOperationSettings();
+            if (deepSettings.MaxDepth > 0)
+            {
+                var extractor = new DeepOperationExtractor(model, api, deepSettings);
+                extractor.ExtractNestedItems(edmEntityObject, actualEntityType, updateItem, isCreation: false);
+            }
+
+            // Classify nested items (Insert vs Update, generate relationship removals)
+            if (updateItem.NestedItems.Count > 0
+                || updateItem.NullNavigationProperties.Count > 0
+                || updateItem.NavigationBindings.Count > 0)
+            {
+                var classifier = new DeepUpdateClassifier(api, model);
+                await classifier.ClassifyAsync(updateItem, entitySet, isFullReplaceUpdate, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             var changeSetProperty = HttpContext.GetChangeSet();
             if (changeSetProperty is null)

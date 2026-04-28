@@ -48,7 +48,7 @@ namespace Microsoft.Restier.EntityFramework
             var dbContextType = frameworkApi.ContextType;
             var dbContext = frameworkApi.DbContext;
 
-            // Phase 1: Validate and resolve entity references (bind references).
+            // Phase 1: Validate and resolve entity references (bind references) and relationship removals.
             // This runs before any entity materialization so invalid references fail atomically.
             foreach (var entry in context.ChangeSet.Entries.OfType<DataModificationItem>())
             {
@@ -60,6 +60,24 @@ namespace Microsoft.Restier.EntityFramework
                         {
                             bindRef.ResolvedEntity = await ResolveBindReference(context, bindRef, cancellationToken).ConfigureAwait(false);
                         }
+                    }
+                }
+
+                foreach (var removal in entry.RelationshipRemovals)
+                {
+                    var bindRef = new BindReference
+                    {
+                        ResourceSetName = removal.ResourceSetName,
+                        ResourceKey = removal.ResourceKey,
+                    };
+                    try
+                    {
+                        removal.ResolvedEntity = await ResolveBindReference(context, bindRef, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (StatusCodeException)
+                    {
+                        // Entity no longer exists (concurrent deletion) — skip
                     }
                 }
             }
@@ -116,6 +134,42 @@ namespace Microsoft.Restier.EntityFramework
                 if (entry.NavigationBindings.Count > 0 && entry.Resource is not null)
                 {
                     WireBindReferences(entry);
+                }
+
+                // Process relationship removals after materialization.
+                if (entry.RelationshipRemovals.Count > 0 && entry.Resource is not null)
+                {
+                    foreach (var removal in entry.RelationshipRemovals)
+                    {
+                        if (removal.ResolvedEntity is null)
+                        {
+                            continue;
+                        }
+
+                        if (removal.FkPropertyName is not null)
+                        {
+                            // Set FK to null directly on the child entity — most reliable approach
+                            var fkPropInfo = removal.ResolvedEntity.GetType().GetProperty(removal.FkPropertyName);
+                            if (fkPropInfo is not null)
+                            {
+                                fkPropInfo.SetValue(removal.ResolvedEntity, null);
+                            }
+                        }
+                        else if (removal.InverseNavigationPropertyName is not null)
+                        {
+                            // Clear inverse nav on child — EF infers FK null
+                            SetNavigationProperty(removal.ResolvedEntity, removal.InverseNavigationPropertyName, null);
+                        }
+                        else
+                        {
+                            // Single nav on parent — set to null
+                            var navPropInfo = entry.Resource.GetType().GetProperty(removal.NavigationPropertyName);
+                            if (navPropInfo is not null)
+                            {
+                                navPropInfo.SetValue(entry.Resource, null);
+                            }
+                        }
+                    }
                 }
             }
         }

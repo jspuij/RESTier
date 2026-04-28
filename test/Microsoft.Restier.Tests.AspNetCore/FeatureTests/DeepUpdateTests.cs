@@ -315,6 +315,48 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
     }
 
     [Fact]
+    public async Task DeepUpdate_SingleNavProperty_ReplaceWithExisting()
+    {
+        // Create a Book linked to Publisher1
+        var bookPayload = new { Isbn = "3030303030303", Title = "NavProp Replace Test", IsActive = true };
+        var createResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers('Publisher1')/Books",
+            payload: bookPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        createResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (createdBook, _) = await createResponse.DeserializeResponseAsync<Book>();
+
+        // PATCH with Publisher2 inline (has key + non-key props → classified as Update+link)
+        // NOTE: Must include at least one non-key property; key-only payloads are treated
+        // as entity references (@odata.bind) by IsEntityReference and never reach the classifier.
+        var patchPayload = new
+        {
+            Publisher = new { Id = "Publisher2", Addr = new { Street = "456 Oak Ave", Zip = "54321" } },
+        };
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            new HttpMethod("PATCH"),
+            resource: $"/Books({createdBook.Id})",
+            payload: patchPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        var content = await patchResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: $"replacing Publisher via inline nested entity should succeed. Response: {content}");
+
+        // Verify book is now linked to Publisher2
+        var verifyResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({createdBook.Id})?$expand=Publisher",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var (updatedBook, _) = await verifyResponse.DeserializeResponseAsync<Book>();
+        updatedBook.PublisherId.Should().Be("Publisher2");
+    }
+
+    [Fact]
     public async Task DeepUpdate_MoveExistingChildToNewParent()
     {
         // Create two publishers, each with one book

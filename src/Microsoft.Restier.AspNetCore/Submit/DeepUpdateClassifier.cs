@@ -214,10 +214,11 @@ namespace Microsoft.Restier.AspNetCore.Submit
             CancellationToken cancellationToken)
         {
             var targetEntitySetName = FindTargetEntitySetName(edmNavProp);
+            var fkPropertyName = FindFkPropertyName(edmNavProp);
 
             if (nestedItem.ResourceKey is not null && nestedItem.ResourceKey.Count > 0)
             {
-                // Check if entity exists globally (not just as current related entity)
+                // Has key — check if entity exists globally
                 var exists = await EntityExistsByKey(
                     targetEntitySetName, nestedItem.ResourceKey, cancellationToken).ConfigureAwait(false);
 
@@ -225,6 +226,24 @@ namespace Microsoft.Restier.AspNetCore.Submit
                 {
                     ReclassifyAsUpdate(nestedItem);
                 }
+
+                // If the FK is on the root entity (dependent side), update the FK
+                // to point to the new target entity. This handles both "same entity"
+                // and "replace with different entity" cases, AND insert-with-client-key.
+                if (fkPropertyName is not null)
+                {
+                    var targetKeyValue = nestedItem.ResourceKey.Values.First();
+                    var updatedValues = new Dictionary<string, object>(rootItem.LocalValues ?? new Dictionary<string, object>())
+                    {
+                        [fkPropertyName] = targetKeyValue,
+                    };
+                    rootItem.LocalValues = updatedValues;
+                }
+            }
+            else
+            {
+                // No key — new entity to Insert.
+                // EF will handle the FK update automatically via nav prop assignment.
             }
         }
 

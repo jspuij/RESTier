@@ -250,11 +250,16 @@ namespace Microsoft.Restier.AspNetCore
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            // TODO: OData 4.01 requires 201 responses to be expanded to at least the depth present
-            // in the deep insert request. Setting SelectExpandClause on ODataFeature causes a
-            // NullReferenceException in SelectedPropertiesNode.Create during CreatedODataResult
-            // serialization. This needs further investigation with the AspNetCore.OData serializer.
-            // For now, the response returns the root entity only — clients can GET with $expand.
+            // OData 4.01 requires 201 responses to be expanded to at least the depth present
+            // in the deep insert request. Setting SelectExpandClause on ODataFeature drives
+            // the serializer to expand nested navigation properties in the response body.
+            // Fix: child SelectExpandClause must be non-null (empty clause instead of null)
+            // to avoid NullReferenceException in SelectedPropertiesNode.Create.
+            var selectExpandClause = DeepOperationResponseBuilder.BuildSelectExpandClause(postItem, model, entitySet);
+            if (selectExpandClause is not null)
+            {
+                HttpContext.ODataFeature().SelectExpandClause = selectExpandClause;
+            }
 
             return CreateCreatedODataResult(postItem.Resource);
         }
@@ -511,7 +516,12 @@ namespace Microsoft.Restier.AspNetCore
                 await changeSetProperty.OnChangeSetCompleted().ConfigureAwait(false);
             }
 
-            // TODO: Same response expansion limitation as Post() — see comment there.
+            // Same response expansion as Post() — expand nested nav props in the 200/204 response.
+            var selectExpandClause = DeepOperationResponseBuilder.BuildSelectExpandClause(updateItem, model, entitySet);
+            if (selectExpandClause is not null)
+            {
+                HttpContext.ODataFeature().SelectExpandClause = selectExpandClause;
+            }
 
             return CreateUpdatedODataResult(updateItem.Resource);
         }

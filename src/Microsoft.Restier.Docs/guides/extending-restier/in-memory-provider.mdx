@@ -1,0 +1,156 @@
+---
+title: "In-Memory Data Provider"
+description: "Build OData services with all-in-memory resources, no database required"
+icon: "database"
+sidebarTitle: "In-Memory Provider"
+---
+
+RESTier supports building an OData service with **all-in-memory** resources, without a database or Entity Framework. Because there is no dedicated in-memory provider module, you supply a custom `IModelBuilder` that constructs the EDM types and an `ApiBase` subclass that exposes in-memory collections as entity sets.
+
+This page walks through the steps to create such a service.
+
+## Prerequisites
+
+Create a new ASP.NET Core project and install the RESTier package:
+
+```bash
+dotnet new web -n TrippinInMemory
+cd TrippinInMemory
+dotnet add package Microsoft.Restier.AspNetCore
+```
+
+## Define the data type
+
+Create a simple `Person` class:
+
+```csharp
+namespace TrippinInMemory
+{
+    public class Person
+    {
+        public int PersonId { get; set; }
+
+        public string FirstName { get; set; }
+
+        public string LastName { get; set; }
+    }
+}
+```
+
+## Create the Api class
+
+Subclass `ApiBase` to expose in-memory data as a queryable entity set. The constructor receives its
+dependencies through dependency injection. Mark entity set properties with the `[Resource]` attribute
+so the `RestierModelExtender` adds them to the EDM model.
+
+```csharp
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.AspNetCore.Model;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+
+namespace TrippinInMemory
+{
+    public class TrippinApi : ApiBase
+    {
+        private static readonly List<Person> people = new List<Person>
+        {
+            new Person { PersonId = 1, FirstName = "Scott", LastName = "Ketchum" },
+            new Person { PersonId = 2, FirstName = "Angel", LastName = "Bowie" },
+        };
+
+        public TrippinApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+            : base(model, queryHandler, submitHandler)
+        {
+        }
+
+        [Resource]
+        public IQueryable<Person> People
+        {
+            get { return people.AsQueryable(); }
+        }
+    }
+}
+```
+
+## Create a custom model builder
+
+Since there is no Entity Framework provider to generate EDM types automatically, an initial model
+containing at least the `Person` type must be built by a custom `IModelBuilder`. The
+`ODataConventionModelBuilder` from the `Microsoft.OData.ModelBuilder` package is used here for quick
+model building. Any model building approach supported by
+[OData ModelBuilder](https://learn.microsoft.com/en-us/odata/webapi-8/fundamentals/models)
+can be used.
+
+The builder implements `IModelBuilder`, which is a chained service. Setting the `Inner` property
+allows the chain of responsibility to work correctly when multiple model builders are registered.
+
+```csharp
+using Microsoft.OData.Edm;
+using Microsoft.OData.ModelBuilder;
+using Microsoft.Restier.Core.Model;
+
+namespace TrippinInMemory
+{
+    internal class InMemoryModelBuilder : IModelBuilder
+    {
+        public IModelBuilder Inner { get; set; }
+
+        public IEdmModel GetEdmModel()
+        {
+            var builder = new ODataConventionModelBuilder();
+            builder.EntityType<Person>();
+            return builder.GetEdmModel();
+        }
+    }
+}
+```
+
+## Configure the OData endpoint
+
+Register the RESTier route in `Program.cs`. The custom model builder is added via
+`AddChainedService<IModelBuilder>()` in the route service configuration. No custom controller is
+required -- RESTier handles all OData routing automatically.
+
+```csharp
+using Microsoft.AspNetCore.OData;
+using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.Core.Model;
+using TrippinInMemory;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddControllers()
+    .AddRestier(options =>
+    {
+        options.Select().Expand().Filter().OrderBy().SetMaxTop(100).Count();
+
+        options.AddRestierRoute<TrippinApi>("api/Trippin", routeServices =>
+        {
+            routeServices.AddChainedService<IModelBuilder>((sp, next) =>
+                new InMemoryModelBuilder());
+        });
+    });
+
+var app = builder.Build();
+
+app.UseRouting();
+app.MapControllers();
+app.MapRestier();
+
+app.Run();
+```
+
+Once the application is running, you can query the in-memory data at URLs such as:
+
+| URL | Description |
+|-----|-------------|
+| `http://localhost:5000/api/Trippin` | OData service document |
+| `http://localhost:5000/api/Trippin/$metadata` | OData metadata document (CSDL) |
+| `http://localhost:5000/api/Trippin/People` | Query all people |
+| `http://localhost:5000/api/Trippin/People(1)` | Get a single person by key |
+| `http://localhost:5000/api/Trippin/People?$filter=FirstName eq 'Scott'` | Filter people |

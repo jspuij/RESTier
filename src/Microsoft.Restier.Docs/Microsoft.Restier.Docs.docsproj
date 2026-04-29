@@ -73,4 +73,13 @@
       <Folder Include="snippets\" />
     </ItemGroup>
 
+    <ItemGroup>
+        <ProjectReference Include="..\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.EntityFrameworkCore\Microsoft.Restier.EntityFrameworkCore.csproj" />
+    </ItemGroup>
+
 </Project>

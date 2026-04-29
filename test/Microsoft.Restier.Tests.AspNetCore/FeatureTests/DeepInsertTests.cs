@@ -413,8 +413,10 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     [Fact]
     public async Task DeepInsert_BindDoesNotFireConventionMethods()
     {
-        // Use a seeded, active Book: "A Clockwork Orange"
-        var existingBookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59");
+        // Use a seeded, active Book: "Color Purple, The" (Publisher2)
+        // Deliberately using a different book than DeepInsert_WithKeyOnlyNestedEntity_TreatedAsBind
+        // to avoid cross-test contamination from shared database state.
+        var existingBookId = new Guid("0697576b-d616-4057-9d28-ed359775129e");
 
         // GET the existing book to capture its original state
         var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(

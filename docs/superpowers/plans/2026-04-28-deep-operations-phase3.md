@@ -91,10 +91,12 @@ public async Task DeepUpdate_SingleNavProperty_ReplaceWithExisting()
     createResponse.IsSuccessStatusCode.Should().BeTrue();
     var (createdBook, _) = await createResponse.DeserializeResponseAsync<Book>();
 
-    // PATCH with Publisher2 inline (has key → should be classified as Update+link)
+    // PATCH with Publisher2 inline (has key + non-key props → classified as Update+link)
+    // NOTE: Must include at least one non-key property; key-only payloads are treated
+    // as entity references (@odata.bind) by IsEntityReference and never reach the classifier.
     var patchPayload = new
     {
-        Publisher = new { Id = "Publisher2" },
+        Publisher = new { Id = "Publisher2", Addr = new { Street = "456 Oak Ave", Zip = "54321" } },
     };
     var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
         new HttpMethod("PATCH"),
@@ -169,7 +171,11 @@ private async Task ClassifySingleNavProp(
 }
 ```
 
-The key insight: when a single nav prop has an FK on the root entity (e.g., `Book.PublisherId`), setting the FK value in `LocalValues` handles both "same entity" (no change) and "replace" (FK changes) cases. EF's `SetValues` will apply the FK during initialization.
+**Key insight 1:** When a single nav prop has an FK on the root entity (e.g., `Book.PublisherId`), setting the FK value in `LocalValues` handles both "same entity" (no change) and "replace" (FK changes) cases. EF's `SetValues` will apply the FK during initialization.
+
+**Key insight 2:** The FK update must happen for ALL keyed payloads, not just existing entities. When a client supplies a key for a new entity (Insert with client-supplied key), the root's FK still needs updating. Therefore the FK-update block is **outside** the `if (exists)` branch — it runs whenever a key is present, regardless of Insert vs Update classification.
+
+**Key insight 3:** Test payloads for single-nav classification MUST include at least one non-key property. The `IsEntityReference` heuristic in `DeepOperationExtractor.cs:142` treats any nested entity whose only changed properties are key properties as a bind reference (`@odata.bind`). A key-only payload like `{ Id = "Publisher2" }` will be routed to `NavigationBindings`, never reaching `NestedItems` or `ClassifySingleNavProp`.
 
 ### Step 1.3: Run tests, iterate
 
@@ -216,7 +222,23 @@ if (edmEntityObject is null)
 }
 ```
 
-Same in `Update()`.
+Same in `Update()`, but **critically**: the null guard must be placed **before** line 453 of `RestierController.cs`, where `edmEntityObject.ActualEdmType` is first dereferenced. The current code accesses `edmEntityObject.ActualEdmType` and later `CreatePropertyDictionary(...)` with no prior null check. Insert the guard immediately after the etag/precondition check (after the `propertiesInEtag is null` block, around line 443):
+
+```csharp
+if (edmEntityObject is null)
+{
+    var odataVersion = Request.Headers["OData-Version"].FirstOrDefault()?.Trim();
+    if (string.Equals(odataVersion, "4.01", StringComparison.Ordinal))
+    {
+        throw new ODataException(
+            "OData-Version 4.01 is not supported for deep operations. " +
+            "ASP.NET Core OData 9.x does not support untyped (EdmEntityObject) deserialization with 4.01. " +
+            "Remove the OData-Version header or use OData-Version: 4.0.");
+    }
+
+    throw new ODataException("An update requires an object to be present in the request body.");
+}
+```
 
 ### Step 2.2: Write test
 
@@ -250,30 +272,41 @@ git commit -am "feat: better error message for OData-Version 4.01 unsupported de
 
 ### What to implement
 
-When a PATCH includes an inline single nav prop with a NEW entity (no key or unknown key), the old relationship should be unlinked if the FK is nullable.
+There are TWO distinct cases here that must be handled separately:
 
-Example: PATCH Book with `Publisher: { Id: "NewPub", Addr: { Zip: "00000" } }` where "NewPub" doesn't exist:
-1. Create the new Publisher (Insert)
-2. Set Book.PublisherId = "NewPub" (link to new)
+**Case A: No key (server-generated key)**
+When a PATCH includes an inline single nav prop with no key at all, a new entity is Inserted. EF wires the FK via nav prop assignment (`book.Publisher = newPublisher`), so the FK update should happen automatically via the change tracker.
 
-The current code handles this via EF nav prop wiring (the initializer sets `book.Publisher = newPublisher`). But the FK also needs to be updated on the root entity. This may already work if EF's change tracker handles it — verify with a test.
+**Case B: Client-supplied key for a new entity (unknown key)**
+When a PATCH includes an inline single nav prop with a key that doesn't exist in the database (e.g., `Publisher: { Id: "NewPub", Addr: { ... } }`), `EntityExistsByKey` returns false and the item stays as Insert. But if the FK is on the root entity (e.g., `Book.PublisherId`), the FK won't be updated automatically because the key is client-supplied, not server-generated. This case is already handled by Task 1's `ClassifySingleNavProp` refactor — the FK-update block runs for ALL keyed payloads regardless of whether the entity exists.
 
-### Step 3.1: Write test
+### Step 3.1: Write tests for BOTH cases
 
 ```csharp
 [Fact]
-public async Task DeepUpdate_SingleNavProperty_InsertNewRelated()
+public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_NoKey()
 {
     // Create a Book linked to Publisher1
-    // PATCH with a NEW inline Publisher (no existing entity)
+    // PATCH with a NEW inline Publisher (no key — server-generated)
     // Assert: new Publisher created, Book linked to it
+    // This case relies on EF nav prop wiring (change tracker)
+}
+
+[Fact]
+public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_ClientSuppliedKey()
+{
+    // Create a Book linked to Publisher1
+    // PATCH with a NEW inline Publisher with a client-supplied key
+    // that doesn't exist in the database (e.g., Id = "NewPub123")
+    // Must include non-key properties to avoid IsEntityReference heuristic
+    // Assert: new Publisher created with the client-supplied key, Book linked to it
 }
 ```
 
 ### Step 3.2: Verify or fix
 
-If the test passes (EF handles it via nav prop wiring), no code change needed.
-If it fails, add FK update logic to the no-key branch of `ClassifySingleNavProp`.
+**Case A (no key):** If the test passes (EF handles it via nav prop wiring), no code change needed.
+**Case B (client-supplied key):** This should already work after Task 1's `ClassifySingleNavProp` refactor, which moves FK-update logic outside the `if (exists)` block. If it fails, ensure the FK update runs in the `else` (not-exists) branch too.
 
 ### Step 3.3: Commit
 
@@ -292,7 +325,7 @@ git commit -am "test: single-nav deep update with inline new entity"
 ### Tests still needed from spec matrix
 
 **Deep insert:**
-- `DeepInsert_BindDoesNotFireConventionMethods` — Verify `OnInsertingPublisher()` does NOT fire when Publisher is only bound (key-only nested entity, not a full inline insert). This verifies that bind references skip the convention pipeline.
+- `DeepInsert_BindDoesNotFireConventionMethods` — Verify bind references skip the CUD convention pipeline. This test project does not define `OnInsertingPublisher()`, so validate against an entity that does have an insert convention (`Book`). For example: create a Publisher with a key-only nested existing `Book` and assert the bound Book keeps its existing Id and no new Book is inserted, proving `OnInsertingBook()` did not run for a bind-only relationship change.
 
 **Deep update:**
 - `DeepUpdate_FiresConventionMethods` — Verify `OnUpdatingPublisher()` fires for a nested entity update. POST a Book with inline Publisher, then PATCH the Book with an inline Publisher update. Check that `Publisher.LastUpdated` changed (set by `OnUpdatingPublisher`).

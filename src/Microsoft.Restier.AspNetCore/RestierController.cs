@@ -187,6 +187,15 @@ namespace Microsoft.Restier.AspNetCore
 
             if (edmEntityObject is null)
             {
+                var odataVersion = Request.Headers["OData-Version"].FirstOrDefault()?.Trim();
+                if (string.Equals(odataVersion, "4.01", StringComparison.Ordinal))
+                {
+                    throw new ODataException(
+                        "OData-Version 4.01 is not supported for deep operations. " +
+                        "ASP.NET Core OData 9.x does not support untyped (EdmEntityObject) deserialization with 4.01. " +
+                        "Remove the OData-Version header or use OData-Version: 4.0.");
+                }
+
                 throw new ODataException("A POST requires an object to be present in the request body.");
             }
 
@@ -440,6 +449,20 @@ namespace Microsoft.Restier.AspNetCore
             if (propertiesInEtag is null)
             {
                 throw new StatusCodeException((HttpStatusCode)428, Resources.PreconditionRequired);
+            }
+
+            if (edmEntityObject is null)
+            {
+                var odataVersion = Request.Headers["OData-Version"].FirstOrDefault()?.Trim();
+                if (string.Equals(odataVersion, "4.01", StringComparison.Ordinal))
+                {
+                    throw new ODataException(
+                        "OData-Version 4.01 is not supported for deep operations. " +
+                        "ASP.NET Core OData 9.x does not support untyped (EdmEntityObject) deserialization with 4.01. " +
+                        "Remove the OData-Version header or use OData-Version: 4.0.");
+                }
+
+                throw new ODataException("An update requires an object to be present in the request body.");
             }
 
             // In case of type inheritance, the actual type will be different from entity type

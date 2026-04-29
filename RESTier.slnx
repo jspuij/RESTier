@@ -23,6 +23,9 @@
     <Project Path="src/Microsoft.Restier.AspNetCore.Swagger/Microsoft.Restier.AspNetCore.Swagger.csproj" />
     <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
   </Folder>
+  <Folder Name="/docs/">
+    <Project Path="src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj" Type="9A19103F-16F7-4668-BE54-9A1E7A4F7556" />
+  </Folder>
   <Folder Name="/test/" Id="67e76b39-b345-4061-b1a8-31b95b6f83a8">
     <Project Path="test/Microsoft.Restier.Tests.Core/Microsoft.Restier.Tests.Core.csproj" />
     <Project Path="test/Microsoft.Restier.Tests.Shared/Microsoft.Restier.Tests.Shared.csproj" />

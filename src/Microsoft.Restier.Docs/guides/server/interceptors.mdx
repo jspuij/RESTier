@@ -1,0 +1,274 @@
+---
+title: "Interceptors"
+description: "Process validation and business logic before and after database operations"
+icon: "filter"
+sidebarTitle: "Interceptors"
+---
+
+Interceptors allow you to run custom logic before *and after* entities are processed by the submit pipeline. For
+example, you may need to validate business rules before an entity is saved, or after it is saved you may need to
+publish a message to a queue for further out-of-band processing.
+
+RESTier provides two approaches for interception: convention-based and centralized. Both approaches use methods
+that return `void` (synchronous) or `Task` (asynchronous). To reject an operation from an interceptor, throw an
+appropriate exception (for example, `ODataException`). Interceptors do **not** return a boolean --
+that pattern is used by [Method Authorization](/guides/server/method-authorization), which is a separate feature.
+
+## Convention-Based Interception
+
+You can hook into the submit pipeline by adding `protected internal` methods to your `Api` class. The method name
+must follow the convention `On{Operation}{TargetName}`.
+
+<table style="width: 100%;">
+    <tr>
+        <td>The possible values for <code>{Operation}</code> (before processing) are:</td>
+        <td>The possible values for <code>{Operation}</code> (after processing) are:</td>
+        <td>The possible values for <code>{TargetName}</code> are:</td>
+    </tr>
+    <tr>
+        <td>
+            <ul style="margin-bottom: 0;">
+                <li>Inserting</li>
+                <li>Updating</li>
+                <li>Deleting</li>
+                <li>Executing</li>
+            </ul>
+        </td>
+        <td>
+            <ul style="margin-bottom: 0;">
+                <li>Inserted</li>
+                <li>Updated</li>
+                <li>Deleted</li>
+                <li>Executed</li>
+            </ul>
+        </td>
+        <td style="vertical-align: text-top;">
+            <ul style="margin-bottom: 0;">
+                <li><i>EntitySetName</i></li>
+                <li><i>ActionName</i></li>
+            </ul>
+        </td>
+    </tr>
+</table>
+
+Both synchronous (`void`) and asynchronous (`Task`) return types are supported. Asynchronous methods use the
+`Async` suffix (e.g. `OnInsertingTripAsync`). The method receives a single parameter: the entity being processed.
+
+### Example
+
+The example below demonstrates convention-based interceptors on an entity set.
+
+- The first method validates business rules **before** a `Trip` is inserted and throws an `ODataException` to reject invalid data.
+- The second method runs **after** a `Trip` is inserted and could be used for notifications or other post-processing.
+
+```csharp TrippinApi.cs
+using Microsoft.OData;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.EntityFrameworkCore;
+using System.Diagnostics;
+
+namespace Trippin.Api
+{
+    /// <summary>
+    /// RESTier API definition for the TripPin service.
+    /// </summary>
+    public class TrippinApi : EntityFrameworkApi<TrippinContext>
+    {
+        public TrippinApi(TrippinContext dbContext, IEdmModel model,
+            IQueryHandler queryHandler, ISubmitHandler submitHandler)
+            : base(dbContext, model, queryHandler, submitHandler)
+        {
+        }
+
+        /// <summary>
+        /// Runs before a Trip is inserted. Validates that the description is not blank.
+        /// </summary>
+        protected internal void OnInsertingTrip(Trip trip)
+        {
+            Trace.WriteLine($"{DateTime.Now}: Trip {trip.TripId} is being inserted.");
+
+            if (string.IsNullOrWhiteSpace(trip.Description))
+            {
+                throw new ODataException("The Trip Description cannot be blank.");
+            }
+        }
+
+        /// <summary>
+        /// Runs after a Trip has been inserted. Can be used for post-processing.
+        /// </summary>
+        protected internal void OnInsertedTrip(Trip trip)
+        {
+            Trace.WriteLine($"{DateTime.Now}: Trip {trip.TripId} has been inserted.");
+
+            // Example: send a welcome email, publish to a queue, etc.
+            // EmailManager.SendTripWelcome(trip);
+        }
+    }
+}
+```
+
+## Centralized Interception
+
+In addition to the convention-based approach, you can centralize interception logic into a single class by
+implementing `IChangeSetItemFilter`. This is useful when you want to apply cross-cutting concerns (such as
+audit logging) to all entity operations in one place.
+
+The `IChangeSetItemFilter` interface defines two methods:
+
+- `OnChangeSetItemProcessingAsync` -- called **before** each change set item is processed.
+- `OnChangeSetItemProcessedAsync` -- called **after** each change set item is processed.
+
+There are two steps to add centralized interception:
+
+1. Create a class that implements `IChangeSetItemFilter`.
+2. Register that class with RESTier via `AddChainedService<IChangeSetItemFilter>()` in your route configuration.
+
+### Example
+
+```csharp AuditLogFilter.cs
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.Core.DependencyInjection;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Trippin.Api
+{
+    /// <summary>
+    /// Logs all change set operations for audit purposes.
+    /// </summary>
+    public class AuditLogFilter : IChangeSetItemFilter
+    {
+        /// <summary>
+        /// Gets or sets the next filter in the chain of responsibility.
+        /// </summary>
+        public IChangeSetItemFilter Inner { get; set; }
+
+        /// <summary>
+        /// Called before a change set item is processed.
+        /// </summary>
+        public async Task OnChangeSetItemProcessingAsync(
+            SubmitContext context, ChangeSetItem item, CancellationToken cancellationToken)
+        {
+            if (Inner != null)
+            {
+                await Inner.OnChangeSetItemProcessingAsync(context, item, cancellationToken);
+            }
+
+            if (item is DataModificationItem dataModification)
+            {
+                Trace.WriteLine(
+                    $"Audit: {dataModification.DataModificationItemAction} on " +
+                    $"{dataModification.ResourceSetName} is about to be processed.");
+            }
+        }
+
+        /// <summary>
+        /// Called after a change set item has been processed.
+        /// </summary>
+        public async Task OnChangeSetItemProcessedAsync(
+            SubmitContext context, ChangeSetItem item, CancellationToken cancellationToken)
+        {
+            if (Inner != null)
+            {
+                await Inner.OnChangeSetItemProcessedAsync(context, item, cancellationToken);
+            }
+
+            if (item is DataModificationItem dataModification)
+            {
+                Trace.WriteLine(
+                    $"Audit: {dataModification.DataModificationItemAction} on " +
+                    $"{dataModification.ResourceSetName} has been processed.");
+            }
+        }
+    }
+}
+```
+
+### Registering the Filter
+
+Register your custom filter in `Program.cs` (or wherever you configure Restier routes) using
+`AddChainedService<IChangeSetItemFilter>()`:
+
+```csharp Program.cs
+builder.Services.AddControllers().AddRestier(options =>
+{
+    options.AddRestierRoute<TrippinApi>("api/trippin", routeServices =>
+    {
+        routeServices
+            .AddEntityFrameworkServices<TrippinContext>()
+            .AddChainedService<IChangeSetItemFilter>((sp, next) =>
+                new AuditLogFilter());
+    });
+});
+```
+
+<Note>
+You do not need to set the `Inner` property yourself. RESTier's chain of responsibility factory automatically wires `Inner` on each service in the chain at resolution time. Your implementation just needs to call `Inner` when it wants to delegate to the next service in the chain, and calling it in your methods, you ensure that other filters (including the built-in convention-based filter) continue to execute.
+</Note>
+
+## Unit Testing Considerations
+
+Because convention-based interceptor methods are `protected internal`, they are accessible from your test
+project. `InternalsVisibleTo` is auto-configured from each source project to its matching test project,
+so no manual `AssemblyInfo.cs` changes are needed.
+
+### Example
+
+Given the convention-based example above, you can test the interceptor logic directly without spinning
+up the full Restier pipeline:
+
+```csharp TrippinApiInterceptorTests.cs
+using FluentAssertions;
+using Microsoft.OData;
+using NSubstitute;
+using Xunit;
+
+namespace Trippin.Tests.Api
+{
+    public class TrippinApiInterceptorTests
+    {
+        [Fact]
+        public void OnInsertingTrip_WithBlankDescription_ThrowsODataException()
+        {
+            // Arrange
+            var api = CreateTrippinApi();
+            var trip = new Trip { TripId = 1, Description = "" };
+
+            // Act
+            var act = () => api.OnInsertingTrip(trip);
+
+            // Assert
+            act.Should().Throw<ODataException>()
+                .WithMessage("*Description*blank*");
+        }
+
+        [Fact]
+        public void OnInsertingTrip_WithValidDescription_DoesNotThrow()
+        {
+            // Arrange
+            var api = CreateTrippinApi();
+            var trip = new Trip { TripId = 1, Description = "A valid trip" };
+
+            // Act
+            var act = () => api.OnInsertingTrip(trip);
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        private static TrippinApi CreateTrippinApi()
+        {
+            var dbContext = Substitute.For<TrippinContext>();
+            var model = Substitute.For<IEdmModel>();
+            var queryHandler = Substitute.For<IQueryHandler>();
+            var submitHandler = Substitute.For<ISubmitHandler>();
+
+            return new TrippinApi(dbContext, model, queryHandler, submitHandler);
+        }
+    }
+}
+```

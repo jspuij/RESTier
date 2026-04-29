@@ -86,6 +86,14 @@
         ]
       },
       {
+        "group": "Server",
+        "pages": [
+          "guides/server/operations",
+          "guides/server/swagger",
+          "guides/server/testing"
+        ]
+      },
+      {
         "group": "API Reference",
         "icon": "code",
         "pages": [

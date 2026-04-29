@@ -418,6 +418,59 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
         movedBook.PublisherId.Should().Be(pubA, because: "book should now be linked to Publisher A");
     }
 
+    /// <summary>
+    /// Case A: Single-nav deep update with a new entity having a server-generated key.
+    /// NOT TESTABLE with the current model. The only single nav prop is Book.Publisher,
+    /// and Publisher has a user-supplied string key (no OnInsertingPublisher convention).
+    /// Book.Id is a Guid with server-side generation via OnInsertingBook, but Publisher.Books
+    /// is a collection nav prop, not single. A model change would be required to test this case.
+    /// </summary>
+
+    [Fact]
+    public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_ClientSuppliedKey()
+    {
+        // Create a Book linked to Publisher1
+        var bookPayload = new { Isbn = "4040404040404", Title = "NavProp Insert Test", IsActive = true };
+        var createResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers('Publisher1')/Books",
+            payload: bookPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        createResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (createdBook, _) = await createResponse.DeserializeResponseAsync<Book>();
+
+        // PATCH with a NEW Publisher (client-supplied key, doesn't exist in DB).
+        // Must include non-key properties to avoid IsEntityReference heuristic.
+        var newPubId = $"NewPub_{Guid.NewGuid():N}"[..32];
+        var patchPayload = new
+        {
+            Publisher = new { Id = newPubId, Addr = new { Street = "789 New St", Zip = "99999" } },
+        };
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            new HttpMethod("PATCH"),
+            resource: $"/Books({createdBook.Id})",
+            payload: patchPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+
+        var content = await patchResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: $"inserting new Publisher via inline nested entity should succeed. Response: {content}");
+
+        // Verify: new publisher exists and book is linked to it
+        var verifyResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({createdBook.Id})?$expand=Publisher",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var (updatedBook, _) = await verifyResponse.DeserializeResponseAsync<Book>();
+        updatedBook.PublisherId.Should().Be(newPubId);
+        updatedBook.Publisher.Should().NotBeNull();
+        updatedBook.Publisher.Addr.Should().NotBeNull();
+        updatedBook.Publisher.Addr.Street.Should().Be("789 New St");
+    }
+
     [Fact]
     public async Task Post_ODataVersion401_ReturnsClearErrorMessage()
     {

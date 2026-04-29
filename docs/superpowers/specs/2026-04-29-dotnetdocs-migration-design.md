@@ -152,8 +152,30 @@ Server-page ordering: foundational concepts first (model, auth, filters, interce
 
 1. Check out `src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj`, `docs.json`, `style.css`, `assembly-list.txt`, `index.mdx`, `quickstart.mdx`, `contribution-guidelines.mdx`, `license.md`, `guides/index.mdx`, and `guides/clients/*.mdx` from `main@a040d26d` into the working tree at the same paths.
 2. Do **not** check out `api-reference/`, `providers/`, `learnings/`, or any other directories.
-3. Edit `assembly-list.txt`: replace hardcoded `D:\GitHub\RESTier\src\…` paths with cross-platform relative paths (e.g., `src/Microsoft.Restier.AspNetCore/bin/Debug/net8.0/Microsoft.Restier.AspNetCore.dll`). Verify the SDK accepts this format; if it requires MSBuild items, switch to `<DocumentationAssembly Include="…">` in the `.docsproj`.
-4. Do not edit nav yet — that's Phase 4.
+3. **Replace `assembly-list.txt` contents to match the feature/vnext source set.** Main's list is doubly stale: it includes `Microsoft.Restier.AspNet` (no longer a project on this branch) and references `net48`/`net8.0`/`net9.0` outputs that were authored against an older TFM mix. Feature/vnext source projects all target `net8.0;net9.0;net10.0`.
+   - Documented assembly set (the public surface, omitting Samples and the `EntityFramework.Shared` shproj):
+     - `Microsoft.Restier.Core`
+     - `Microsoft.Restier.AspNetCore`
+     - `Microsoft.Restier.AspNetCore.Swagger`
+     - `Microsoft.Restier.Breakdance`
+     - `Microsoft.Restier.EntityFramework`
+     - `Microsoft.Restier.EntityFrameworkCore`
+   - **TFM policy:** generate API reference from a single TFM per assembly. Default to `net9.0` (newest stable common to all six projects, matching what `EntityFrameworkCore` already uses on main). Multi-TFM doc generation is out of scope; one set of API pages, one TFM.
+   - **Path form:** prefer relative-from-`.docsproj` paths (e.g., `../Microsoft.Restier.Core/bin/$(Configuration)/net9.0/Microsoft.Restier.Core.dll`) so the file works on macOS/Linux/Windows. Verify the DotNetDocs SDK resolves `$(Configuration)` inside `assembly-list.txt`; if it doesn't, hard-code `Debug` and document the limitation.
+   - **Preferred alternative if supported:** if the SDK supports `<DocumentationAssembly Include="…" />` MSBuild items or auto-discovery from `<ProjectReference>` outputs, use that instead of `assembly-list.txt` and delete the file. Phase 2 verifies which mechanism the SDK actually uses; if project-reference-driven generation is supported, take it (it eliminates the cross-platform path problem and keeps the assembly set in lockstep with the slnx).
+4. **Wire build dependencies from the docsproj to the source projects.** Without this, a clean `dotnet build RESTier.slnx` can hit the docsproj before its referenced DLLs exist. Add `<ProjectReference>` items in `Microsoft.Restier.Docs.docsproj` to all six projects in step 3:
+   ```xml
+   <ItemGroup>
+     <ProjectReference Include="..\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
+     <ProjectReference Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+     <ProjectReference Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
+     <ProjectReference Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
+     <ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
+     <ProjectReference Include="..\Microsoft.Restier.EntityFrameworkCore\Microsoft.Restier.EntityFrameworkCore.csproj" />
+   </ItemGroup>
+   ```
+   Verify the SDK doesn't treat `<ProjectReference>` as a transitive runtime dependency that breaks doc generation. If it does, fall back to bare `<MSBuild Targets="Build" Projects="…" />` calls inside a `BeforeTargets="DocumentationGeneration"` (or whichever target the SDK exposes) — same effect, no NuGet-style transitive surprises.
+5. Do not edit nav yet — that's Phase 4.
 
 ### Phase 2 — SDK restore gate (blocking)
 
@@ -211,6 +233,9 @@ Source: existing first-line `# Heading` becomes `title` and `sidebarTitle`. `des
 | Parallel sections like `### ASP.NET` and `### ASP.NET Core` | `<Tabs>` with `<Tab title="…">…</Tab>` |
 | Lists of next steps / related topics at page end | `<CardGroup cols={2}>` with `<Card title="…" icon="…" href="…">` |
 | `[…](other-page.md)` | `[…](other-page)` (no extension; Mintlify resolves slugs) |
+| `[…](/server/foo/)` (absolute-root link to the old layout) | `[…](/guides/server/foo)` — drop trailing slash, prepend `/guides/` for content that moved under `guides/` |
+| `[…](/extending-restier/foo/)` | `[…](/guides/extending-restier/foo)` |
+| `[…](/clients/foo/)` | `[…](/guides/clients/foo)` |
 | Image references | Copy under `images/` and update paths |
 
 When ambiguous about a blockquote's intent, default to `<Info>`.
@@ -224,7 +249,8 @@ After each file, verify:
 3. No raw blockquotes that should be callouts.
 4. All internal links resolve to a real page.
 5. No leftover `.md`/`.mdx` extensions in links.
-6. `dotnet build` of the docsproj still succeeds.
+6. **No absolute-root links pointing at the old layout** — `grep -nE '\]\(/(server|extending-restier|clients)/'` over the converted file should return zero hits.
+7. `dotnet build` of the docsproj still succeeds.
 
 #### Release notes
 
@@ -246,7 +272,8 @@ Create `why-restier.mdx` with frontmatter and a `<Warning>Coming Soon!</Warning>
 ### Phase 5 — Solution and project integration
 
 1. Add `src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj` to `RESTier.slnx` under a new `/docs/` solution folder.
-2. Verify `dotnet build RESTier.slnx` still succeeds end-to-end (source projects + docsproj).
+2. Verify build ordering from a clean state: `dotnet clean RESTier.slnx`, delete `bin/` and `obj/` under each src project (or `git clean -fdx -- 'src/**/bin' 'src/**/obj'`), then `dotnet build RESTier.slnx`. The `<ProjectReference>` items added in Phase 1 step 4 should cause the source projects to build before doc generation runs. If the docsproj fails because referenced DLLs are missing, the dependency wiring is wrong — fix Phase 1 step 4 and re-verify.
+3. Spot-check parallel-build behavior: `dotnet build RESTier.slnx -m` (default parallelism). MSBuild should still respect the project graph; if doc generation races ahead of `Microsoft.Restier.Core` build completion, the dependency wiring is incomplete.
 
 ### Phase 6 — Cleanup
 
@@ -258,10 +285,10 @@ Create `why-restier.mdx` with frontmatter and a `<Warning>Coming Soon!</Warning>
 
 ### Phase 7 — Final verification
 
-1. `dotnet build RESTier.slnx` succeeds.
-2. `src/Microsoft.Restier.Docs/api-reference/` is regenerated and matches feature/vnext's current public API surface.
+1. From a fully clean state (Phase 5 step 2 procedure), `dotnet build RESTier.slnx` succeeds in a single invocation — no priming build of source projects needed.
+2. `src/Microsoft.Restier.Docs/api-reference/` is regenerated and matches feature/vnext's current public API surface (six assemblies, no stale `Microsoft.Restier.AspNet`, TFM `net9.0`).
 3. Spot-check rendered pages (Mintlify dev preview if the SDK exposes one, otherwise inspect generated mdx in a Mintlify-compatible viewer).
-4. No broken internal links.
+4. No broken internal links — `grep -rnE '\]\(/(server|extending-restier|clients)/' src/Microsoft.Restier.Docs/` returns zero hits across the whole project.
 5. `docs/msdocs/` is gone; `docs/superpowers/` is intact.
 
 ## Risks and mitigations
@@ -269,7 +296,10 @@ Create `why-restier.mdx` with frontmatter and a `<Warning>Coming Soon!</Warning>
 | Risk | Mitigation |
 |---|---|
 | `DotNetDocs.Sdk/1.2.0` not publicly restorable | Phase 2 gate — try public, then known feeds, then stop and ask. Don't waste content-conversion effort if the project can't load. |
-| `assembly-list.txt` format incompatible with cross-platform paths | Phase 1 step 3 — verify SDK accepts relative paths; fall back to MSBuild `<DocumentationAssembly>` items. |
+| Doc generation runs before referenced DLLs exist (clean / parallel build) | Phase 1 step 4 wires `<ProjectReference>` from docsproj to all six source projects. Phase 5 step 2 verifies from a fully clean state. Phase 5 step 3 verifies under parallel MSBuild. |
+| `assembly-list.txt` carries main's stale set (includes removed `Microsoft.Restier.AspNet`, mixed TFMs) | Phase 1 step 3 explicitly replaces the list with feature/vnext's six projects at `net9.0`. Prefer `<ProjectReference>`-driven generation if the SDK supports it (eliminates the file). |
+| `assembly-list.txt` format incompatible with cross-platform paths | Phase 1 step 3 — relative paths from the docsproj; verify `$(Configuration)` resolves. Fallback: MSBuild items in the docsproj. |
+| Old absolute-root links (`/server/foo/`) survive into the migrated mdx | Body-transforms table covers them; per-file check item 6 runs the grep; Phase 7 final pass re-runs it across the whole project. |
 | `docs.json` is hand-maintained, not regenerated, and silently drifts from `.docsproj` | Phase 2 step 5 — explicitly determine which file is the source of truth; document in CLAUDE.md. |
 | Mintlify component substitutions misjudge tone (`<Info>` vs `<Tip>` vs `<Warning>`) | Default to `<Info>` when ambiguous; flag judgment calls in PR description for reviewer. |
 | Internal links break across the rename | Per-file output check item 4; Phase 7 final pass. |

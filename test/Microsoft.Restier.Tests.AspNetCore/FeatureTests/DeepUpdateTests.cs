@@ -473,9 +473,16 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
             because: "OnUpdatingPublisher should have set LastUpdated to DateTimeOffset.Now during the deep update");
     }
 
-    // Case A (single-nav insert with server-generated key) is not testable with the current model.
-    // Publisher uses a user-supplied string key and has no OnInsertingPublisher convention.
-    // Book.Id has server-side generation, but Publisher.Books is a collection nav prop, not single.
+    // Case A: Single-nav insert with server-generated key (no key in payload).
+    // Testable via Review.Book (Book.Id is server-generated via OnInsertingBook).
+    // However, this currently fails because FindTargetEntitySet falls back to the type name
+    // "Book" instead of the entity set name "Books" when the Reviews entity set doesn't have
+    // an explicit navigation binding for Review.Book in the OData model. The EF initializer
+    // then NREs on dbContext.GetType().GetProperty("Book") since the property is "Books".
+    // The ExtractKeyValues fix (filtering by GetChangedPropertyNames) is in place, so the
+    // classifier correctly treats keyless payloads as no-key Inserts. The remaining gap is
+    // entity set name resolution in FindTargetEntitySet, which is a pre-existing infrastructure
+    // issue beyond Phase 3 scope.
 
     [Fact]
     public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_ClientSuppliedKey()
@@ -546,30 +553,32 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
     }
 
     [Fact]
-    public async Task Patch_ODataVersion401_DoesNotSucceed()
+    public async Task Patch_ODataVersion401_ReturnsClearErrorMessage()
     {
         // PATCH with OData-Version: 4.01 triggers deserialization failure (edmEntityObject = null).
-        // The Update() null guard would produce our friendly 4.01 message, but it's unreachable
-        // here because GetOriginalValues returns null (no If-Match header) → 428, or with
-        // If-Match: * → the precondition check may still fail depending on the entity.
-        // This test verifies the request doesn't succeed silently; the POST test above
-        // covers the specific error message assertion.
+        // If-Match: * satisfies GetOriginalValues (returns empty dict at line 826-828),
+        // so the request reaches the edmEntityObject null guard in Update().
+        // Use a seeded book so the OData routing resolves the entity set correctly.
+        var existingBookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59");
+
         var server = RestierTestHelpers.GetTestableRestierServer<TApi>(
             apiServiceCollection: ConfigureServices);
         var client = server.CreateClient();
 
-        var bookId = Guid.NewGuid();
         var payload = new { Title = "Test" };
         var json = JsonSerializer.Serialize(payload);
-        using var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"http://localhost/api/tests/Books({bookId})")
+        using var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"http://localhost/api/tests/Books({existingBookId})")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
         request.Headers.Add("OData-Version", "4.01");
+        request.Headers.Add("If-Match", "*");
         request.Headers.Add("Accept", "application/json");
 
         var response = await client.SendAsync(request, TestContext.CancellationToken);
-        response.IsSuccessStatusCode.Should().BeFalse(
-            because: "OData 4.01 should not succeed with untyped deserialization");
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var content = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        content.Should().Contain("4.01 is not supported");
     }
 }

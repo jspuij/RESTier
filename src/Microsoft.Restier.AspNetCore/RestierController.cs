@@ -436,19 +436,11 @@ namespace Microsoft.Restier.AspNetCore
             bool isFullReplaceUpdate,
             CancellationToken cancellationToken)
         {
-            EnsureInitialized();
-            CheckModelState();
             var path = GetPath();
             var entitySet = path.NavigationSource() as IEdmEntitySet;
             if (entitySet is null)
             {
                 throw new NotImplementedException(Resources.UpdateOnlySupportedOnEntitySet);
-            }
-
-            var propertiesInEtag = GetOriginalValues(entitySet);
-            if (propertiesInEtag is null)
-            {
-                throw new StatusCodeException((HttpStatusCode)428, Resources.PreconditionRequired);
             }
 
             if (edmEntityObject is null)
@@ -463,6 +455,15 @@ namespace Microsoft.Restier.AspNetCore
                 }
 
                 throw new ODataException("An update requires an object to be present in the request body.");
+            }
+
+            EnsureInitialized();
+            CheckModelState();
+
+            var propertiesInEtag = GetOriginalValues(entitySet);
+            if (propertiesInEtag is null)
+            {
+                throw new StatusCodeException((HttpStatusCode)428, Resources.PreconditionRequired);
             }
 
             // In case of type inheritance, the actual type will be different from entity type

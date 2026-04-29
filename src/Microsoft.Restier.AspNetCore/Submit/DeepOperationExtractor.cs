@@ -183,10 +183,16 @@ namespace Microsoft.Restier.AspNetCore.Submit
             EdmEntityObject entity,
             IEdmEntityType entityType)
         {
+            // Only extract keys that were explicitly provided in the payload (in the changed properties set).
+            // TryGetPropertyValue returns default values (e.g. Guid.Empty) for unset properties,
+            // which would incorrectly treat a keyless payload as having a key.
+            var changedPropertyNames = new HashSet<string>(
+                entity.GetChangedPropertyNames(), StringComparer.OrdinalIgnoreCase);
             var keys = new Dictionary<string, object>();
             foreach (var keyProperty in entityType.Key())
             {
-                if (entity.TryGetPropertyValue(keyProperty.Name, out var value))
+                if (changedPropertyNames.Contains(keyProperty.Name)
+                    && entity.TryGetPropertyValue(keyProperty.Name, out var value))
                 {
                     var clrName = EdmClrPropertyMapper.GetClrPropertyName(keyProperty, model);
                     keys[clrName] = value;

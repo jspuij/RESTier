@@ -1,6 +1,0 @@
-../Microsoft.Restier.Core/bin/Debug/net9.0/Microsoft.Restier.Core.dll
-../Microsoft.Restier.AspNetCore/bin/Debug/net9.0/Microsoft.Restier.AspNetCore.dll
-../Microsoft.Restier.AspNetCore.Swagger/bin/Debug/net9.0/Microsoft.Restier.AspNetCore.Swagger.dll
-../Microsoft.Restier.Breakdance/bin/Debug/net9.0/Microsoft.Restier.Breakdance.dll
-../Microsoft.Restier.EntityFramework/bin/Debug/net9.0/Microsoft.Restier.EntityFramework.dll
-../Microsoft.Restier.EntityFrameworkCore/bin/Debug/net9.0/Microsoft.Restier.EntityFrameworkCore.dll

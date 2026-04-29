@@ -333,3 +333,5 @@ ASALocalRun/
 
 # DotNetDocs SDK regenerates this on build
 src/Microsoft.Restier.Docs/api-reference/
+# DotNetDocs SDK writes this as a Debug-build debug dump (not config)
+src/Microsoft.Restier.Docs/assembly-list.txt

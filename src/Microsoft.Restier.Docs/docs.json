@@ -29,14 +29,19 @@
               "guides/server/model-building",
               "guides/server/method-authorization",
               "guides/server/filters",
-              "guides/server/interceptors"
+              "guides/server/interceptors",
+              "guides/server/operations",
+              "guides/server/swagger",
+              "guides/server/testing",
+              "guides/server/naming-conventions",
+              "guides/server/concurrency",
+              "guides/server/performance"
             ]
           },
           {
             "group": "Extending Restier",
             "icon": "puzzle",
             "pages": [
-              "guides/extending-restier/additional-operations",
               "guides/extending-restier/in-memory-provider",
               "guides/extending-restier/temporal-types"
             ]
@@ -53,47 +58,15 @@
         ]
       },
       {
-        "group": "Providers",
-        "icon": "books",
+        "group": "Release Notes",
+        "icon": "clipboard-list",
         "pages": [
-          "providers/index",
-          {
-            "group": "EF 6",
-            "icon": "/images/icons/mintlify.svg",
-            "pages": [
-              "providers/mintlify/index",
-              "providers/mintlify/navigation",
-              "providers/mintlify/dotnet-library"
-            ]
-          },
-          {
-            "group": "EF Core",
-            "icon": "/images/icons/mintlify.svg",
-            "pages": [
-              "providers/mintlify/index",
-              "providers/mintlify/navigation",
-              "providers/mintlify/dotnet-library"
-            ]
-          }
-        ]
-      },
-      {
-        "group": "Learnings",
-        "icon": "chalkboard-user",
-        "pages": [
-          "learnings/bridge-assemblies",
-          "learnings/sdk-packaging"
-        ]
-      },
-      {
-        "group": "Server",
-        "pages": [
-          "guides/server/concurrency",
-          "guides/server/naming-conventions",
-          "guides/server/operations",
-          "guides/server/performance",
-          "guides/server/swagger",
-          "guides/server/testing"
+          "release-notes/index",
+          "release-notes/0-5-0-beta",
+          "release-notes/0-4-0-rc2",
+          "release-notes/0-4-0-rc",
+          "release-notes/0-3-0-beta2",
+          "release-notes/0-3-0-beta1"
         ]
       },
       {

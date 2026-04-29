@@ -22,7 +22,7 @@
                 <Pages>
                     <Groups>
                         <Group Name="Getting Started" Icon="stars">
-                            <Pages>index;why-restier;quickstart</Pages>
+                            <Pages>index;why-restier;quickstart;contribution-guidelines</Pages>
                         </Group>
                         <Group Name="Guides" Icon="dog-leashed">
                             <Pages>guides/index</Pages>
@@ -32,11 +32,16 @@
                                     guides/server/method-authorization;
                                     guides/server/filters;
                                     guides/server/interceptors;
+                                    guides/server/operations;
+                                    guides/server/swagger;
+                                    guides/server/testing;
+                                    guides/server/naming-conventions;
+                                    guides/server/concurrency;
+                                    guides/server/performance;
                                 </Pages>
                             </Group>
                             <Group Name="Extending Restier" Icon="puzzle">
                                 <Pages>
-                                    guides/extending-restier/additional-operations;
                                     guides/extending-restier/in-memory-provider;
                                     guides/extending-restier/temporal-types;
                                 </Pages>
@@ -49,19 +54,15 @@
                                 </Pages>
                             </Group>
                         </Group>
-                        <Group Name="Providers" Icon="books">
-                            <Pages>providers/index</Pages>
-                            <Groups>
-                                <Group Name="EF 6" Icon="/images/icons/mintlify.svg">
-                                    <Pages>providers/mintlify/index;providers/mintlify/navigation;providers/mintlify/dotnet-library</Pages>
-                                </Group>
-                                <Group Name="EF Core" Icon="/images/icons/mintlify.svg">
-                                    <Pages>providers/mintlify/index;providers/mintlify/navigation;providers/mintlify/dotnet-library</Pages>
-                                </Group>
-                            </Groups>
-                        </Group>
-                        <Group Name="Learnings" Icon="chalkboard-user">
-                            <Pages>learnings/bridge-assemblies;learnings/sdk-packaging</Pages>
+                        <Group Name="Release Notes" Icon="clipboard-list">
+                            <Pages>
+                                release-notes/index;
+                                release-notes/0-5-0-beta;
+                                release-notes/0-4-0-rc2;
+                                release-notes/0-4-0-rc;
+                                release-notes/0-3-0-beta2;
+                                release-notes/0-3-0-beta1;
+                            </Pages>
                         </Group>
                     </Groups>
                 </Pages>

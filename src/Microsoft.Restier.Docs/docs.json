@@ -94,6 +94,44 @@
             "icon": "folder-tree",
             "pages": [
               {
+                "group": "AspNetCore",
+                "icon": "folder-tree",
+                "pages": [
+                  {
+                    "group": "Builder",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/AspNetCore/Builder/index",
+                      "api-reference/Microsoft/AspNetCore/Builder/IApplicationBuilder"
+                    ]
+                  },
+                  {
+                    "group": "Http",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/AspNetCore/Http/index",
+                      "api-reference/Microsoft/AspNetCore/Http/HttpRequest"
+                    ]
+                  },
+                  {
+                    "group": "OData",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/AspNetCore/OData/index",
+                      "api-reference/Microsoft/AspNetCore/OData/ODataOptions"
+                    ]
+                  },
+                  {
+                    "group": "Routing",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/AspNetCore/Routing/index",
+                      "api-reference/Microsoft/AspNetCore/Routing/IEndpointRouteBuilder"
+                    ]
+                  }
+                ]
+              },
+              {
                 "group": "EntityFrameworkCore",
                 "icon": "folder-tree",
                 "pages": [
@@ -110,7 +148,23 @@
                     "icon": "folder-tree",
                     "pages": [
                       "api-reference/Microsoft/Extensions/DependencyInjection/index",
+                      "api-reference/Microsoft/Extensions/DependencyInjection/IMvcBuilder",
                       "api-reference/Microsoft/Extensions/DependencyInjection/IServiceCollection"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "OData",
+                "icon": "folder-tree",
+                "pages": [
+                  {
+                    "group": "Edm",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/OData/Edm/index",
+                      "api-reference/Microsoft/OData/Edm/IEdmModel",
+                      "api-reference/Microsoft/OData/Edm/IEdmType"
                     ]
                   }
                 ]
@@ -119,6 +173,95 @@
                 "group": "Restier",
                 "icon": "folder-tree",
                 "pages": [
+                  {
+                    "group": "AspNetCore",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/Restier/AspNetCore/index",
+                      "api-reference/Microsoft/Restier/AspNetCore/RestierController",
+                      "api-reference/Microsoft/Restier/AspNetCore/RestierPayloadValueConverter",
+                      {
+                        "group": "Batch",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Batch/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Batch/RestierBatchChangeSetRequestItem",
+                          "api-reference/Microsoft/Restier/AspNetCore/Batch/RestierBatchHandler"
+                        ]
+                      },
+                      {
+                        "group": "Formatter",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/DefaultRestierDeserializerProvider",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/DefaultRestierSerializerProvider",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/RestierCollectionSerializer",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/RestierEnumSerializer",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/RestierPrimitiveSerializer",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/RestierRawSerializer",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/RestierResourceSerializer",
+                          "api-reference/Microsoft/Restier/AspNetCore/Formatter/RestierResourceSetSerializer"
+                        ]
+                      },
+                      {
+                        "group": "Middleware",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Middleware/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Middleware/ODataBatchHttpContextFixerMiddleware",
+                          "api-reference/Microsoft/Restier/AspNetCore/Middleware/RestierClaimsPrincipalMiddleware"
+                        ]
+                      },
+                      {
+                        "group": "Model",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/BoundOperationAttribute",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/OperationAttribute",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/OperationType",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/ResourceAttribute",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/RestierModelMapper",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/RestierWebApiModelBuilder",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/RestierWebApiModelExtender",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/RestierWebApiModelMapper",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/RestierWebApiOperationModelBuilder",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/UnboundOperationAttribute"
+                        ]
+                      },
+                      {
+                        "group": "Operation",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Operation/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Operation/RestierOperationContext",
+                          "api-reference/Microsoft/Restier/AspNetCore/Operation/RestierOperationExecutor"
+                        ]
+                      },
+                      {
+                        "group": "Query",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Query/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionExpander",
+                          "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionSourcer"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "group": "Breakdance",
+                    "icon": "folder-tree",
+                    "pages": [
+                      "api-reference/Microsoft/Restier/Breakdance/index",
+                      "api-reference/Microsoft/Restier/Breakdance/RestierBreakdanceTestBase",
+                      "api-reference/Microsoft/Restier/Breakdance/RestierConventionDefinition",
+                      "api-reference/Microsoft/Restier/Breakdance/RestierConventionEntitySetDefinition",
+                      "api-reference/Microsoft/Restier/Breakdance/RestierConventionMethodDefinition",
+                      "api-reference/Microsoft/Restier/Breakdance/RestierTestHelpers"
+                    ]
+                  },
                   {
                     "group": "Core",
                     "icon": "folder-tree",
@@ -137,12 +280,10 @@
                       "api-reference/Microsoft/Restier/Core/DataSourceStub",
                       "api-reference/Microsoft/Restier/Core/EdmModelValidationException",
                       "api-reference/Microsoft/Restier/Core/InvocationContext",
-                      "api-reference/Microsoft/Restier/Core/RestierApiBuilder",
-                      "api-reference/Microsoft/Restier/Core/RestierContainerBuilder",
                       "api-reference/Microsoft/Restier/Core/RestierEntitySetOperation",
+                      "api-reference/Microsoft/Restier/Core/RestierNamingConvention",
                       "api-reference/Microsoft/Restier/Core/RestierOperationMethod",
                       "api-reference/Microsoft/Restier/Core/RestierPipelineState",
-                      "api-reference/Microsoft/Restier/Core/RestierRouteBuilder",
                       "api-reference/Microsoft/Restier/Core/StatusCodeException",
                       {
                         "group": "Authorization",
@@ -154,13 +295,22 @@
                         ]
                       },
                       {
+                        "group": "DependencyInjection",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/Core/DependencyInjection/index",
+                          "api-reference/Microsoft/Restier/Core/DependencyInjection/IChainedService",
+                          "api-reference/Microsoft/Restier/Core/DependencyInjection/IChainOfResponsibilityFactory"
+                        ]
+                      },
+                      {
                         "group": "Model",
                         "icon": "folder-tree",
                         "pages": [
                           "api-reference/Microsoft/Restier/Core/Model/index",
                           "api-reference/Microsoft/Restier/Core/Model/IModelBuilder",
                           "api-reference/Microsoft/Restier/Core/Model/IModelMapper",
-                          "api-reference/Microsoft/Restier/Core/Model/ModelContext"
+                          "api-reference/Microsoft/Restier/Core/Model/ModelMerger"
                         ]
                       },
                       {
@@ -180,11 +330,13 @@
                         "pages": [
                           "api-reference/Microsoft/Restier/Core/Query/index",
                           "api-reference/Microsoft/Restier/Core/Query/DataSourceStubModelReference",
+                          "api-reference/Microsoft/Restier/Core/Query/DefaultQueryExecutor",
                           "api-reference/Microsoft/Restier/Core/Query/IQueryExecutor",
                           "api-reference/Microsoft/Restier/Core/Query/IQueryExpressionAuthorizer",
                           "api-reference/Microsoft/Restier/Core/Query/IQueryExpressionExpander",
                           "api-reference/Microsoft/Restier/Core/Query/IQueryExpressionProcessor",
                           "api-reference/Microsoft/Restier/Core/Query/IQueryExpressionSourcer",
+                          "api-reference/Microsoft/Restier/Core/Query/IQueryHandler",
                           "api-reference/Microsoft/Restier/Core/Query/ParameterModelReference",
                           "api-reference/Microsoft/Restier/Core/Query/PropertyModelReference",
                           "api-reference/Microsoft/Restier/Core/Query/QueryContext",
@@ -199,11 +351,13 @@
                         "icon": "folder-tree",
                         "pages": [
                           "api-reference/Microsoft/Restier/Core/Submit/index",
+                          "api-reference/Microsoft/Restier/Core/Submit/BindReference",
                           "api-reference/Microsoft/Restier/Core/Submit/ChangeSet",
                           "api-reference/Microsoft/Restier/Core/Submit/ChangeSetItem",
                           "api-reference/Microsoft/Restier/Core/Submit/ChangeSetItemValidationResult",
                           "api-reference/Microsoft/Restier/Core/Submit/DataModificationItem",
                           "api-reference/Microsoft/Restier/Core/Submit/DataModificationItem",
+                          "api-reference/Microsoft/Restier/Core/Submit/DeepOperationSettings",
                           "api-reference/Microsoft/Restier/Core/Submit/DefaultChangeSetInitializer",
                           "api-reference/Microsoft/Restier/Core/Submit/DefaultSubmitExecutor",
                           "api-reference/Microsoft/Restier/Core/Submit/IChangeSetInitializer",
@@ -211,6 +365,8 @@
                           "api-reference/Microsoft/Restier/Core/Submit/IChangeSetItemFilter",
                           "api-reference/Microsoft/Restier/Core/Submit/IChangeSetItemValidator",
                           "api-reference/Microsoft/Restier/Core/Submit/ISubmitExecutor",
+                          "api-reference/Microsoft/Restier/Core/Submit/ISubmitHandler",
+                          "api-reference/Microsoft/Restier/Core/Submit/RelationshipRemoval",
                           "api-reference/Microsoft/Restier/Core/Submit/SubmitContext",
                           "api-reference/Microsoft/Restier/Core/Submit/SubmitResult"
                         ]
@@ -223,6 +379,8 @@
                     "pages": [
                       "api-reference/Microsoft/Restier/EntityFramework/index",
                       "api-reference/Microsoft/Restier/EntityFramework/EFChangeSetInitializer",
+                      "api-reference/Microsoft/Restier/EntityFramework/EFModelBuilder",
+                      "api-reference/Microsoft/Restier/EntityFramework/EFModelMapper",
                       "api-reference/Microsoft/Restier/EntityFramework/EntityFrameworkApi",
                       "api-reference/Microsoft/Restier/EntityFramework/IEntityFrameworkApi"
                     ]
@@ -233,6 +391,8 @@
                     "pages": [
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/index",
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/EFChangeSetInitializer",
+                      "api-reference/Microsoft/Restier/EntityFrameworkCore/EFModelBuilder",
+                      "api-reference/Microsoft/Restier/EntityFrameworkCore/EFModelMapper",
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/EntityFrameworkApi",
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/IEntityFrameworkApi"
                     ]
@@ -254,6 +414,9 @@
             "group": "System",
             "icon": "folder-tree",
             "pages": [
+              "api-reference/System/index",
+              "api-reference/System/IServiceProvider",
+              "api-reference/System/Type",
               {
                 "group": "Data",
                 "icon": "folder-tree",

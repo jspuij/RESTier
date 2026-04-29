@@ -418,13 +418,9 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
         movedBook.PublisherId.Should().Be(pubA, because: "book should now be linked to Publisher A");
     }
 
-    /// <summary>
-    /// Case A: Single-nav deep update with a new entity having a server-generated key.
-    /// NOT TESTABLE with the current model. The only single nav prop is Book.Publisher,
-    /// and Publisher has a user-supplied string key (no OnInsertingPublisher convention).
-    /// Book.Id is a Guid with server-side generation via OnInsertingBook, but Publisher.Books
-    /// is a collection nav prop, not single. A model change would be required to test this case.
-    /// </summary>
+    // Case A (single-nav insert with server-generated key) is not testable with the current model.
+    // Publisher uses a user-supplied string key and has no OnInsertingPublisher convention.
+    // Book.Id has server-side generation, but Publisher.Books is a collection nav prop, not single.
 
     [Fact]
     public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_ClientSuppliedKey()
@@ -442,7 +438,7 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
 
         // PATCH with a NEW Publisher (client-supplied key, doesn't exist in DB).
         // Must include non-key properties to avoid IsEntityReference heuristic.
-        var newPubId = $"NewPub_{Guid.NewGuid():N}"[..32];
+        var newPubId = UniqueId();
         var patchPayload = new
         {
             Publisher = new { Id = newPubId, Addr = new { Street = "789 New St", Zip = "99999" } },

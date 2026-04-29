@@ -88,7 +88,10 @@
       {
         "group": "Server",
         "pages": [
+          "guides/server/concurrency",
+          "guides/server/naming-conventions",
           "guides/server/operations",
+          "guides/server/performance",
           "guides/server/swagger",
           "guides/server/testing"
         ]

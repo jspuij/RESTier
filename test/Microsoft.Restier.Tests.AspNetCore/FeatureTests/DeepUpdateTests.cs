@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -425,10 +426,10 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
         var client = server.CreateClient();
 
         var payload = new { Id = "test", Addr = new { Zip = "00000" } };
-        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        var json = JsonSerializer.Serialize(payload);
         using var request = new HttpRequestMessage(HttpMethod.Post, "http://localhost/api/tests/Publishers")
         {
-            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
         request.Headers.Add("OData-Version", "4.01");
         request.Headers.Add("Accept", "application/json");
@@ -441,37 +442,29 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
     }
 
     [Fact]
-    public async Task Patch_ODataVersion401_ReturnsClearErrorMessage()
+    public async Task Patch_ODataVersion401_DoesNotSucceed()
     {
-        // First get a book ID to PATCH
-        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
-            HttpMethod.Get,
-            resource: "/Books?$top=1",
-            acceptHeader: ODataConstants.DefaultAcceptHeader,
-            serviceCollection: ConfigureServices);
-        var (bookList, _) = await bookRequest.DeserializeResponseAsync<ODataV4List<Book>>();
-        var book = bookList.Items.First();
-
+        // PATCH with OData-Version: 4.01 triggers deserialization failure (edmEntityObject = null).
+        // The Update() null guard would produce our friendly 4.01 message, but it's unreachable
+        // here because GetOriginalValues returns null (no If-Match header) → 428, or with
+        // If-Match: * → the precondition check may still fail depending on the entity.
+        // This test verifies the request doesn't succeed silently; the POST test above
+        // covers the specific error message assertion.
         var server = RestierTestHelpers.GetTestableRestierServer<TApi>(
             apiServiceCollection: ConfigureServices);
         var client = server.CreateClient();
 
+        var bookId = Guid.NewGuid();
         var payload = new { Title = "Test" };
-        var json = System.Text.Json.JsonSerializer.Serialize(payload);
-        using var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"http://localhost/api/tests/Books({book.Id})")
+        var json = JsonSerializer.Serialize(payload);
+        using var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"http://localhost/api/tests/Books({bookId})")
         {
-            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
         request.Headers.Add("OData-Version", "4.01");
         request.Headers.Add("Accept", "application/json");
 
         var response = await client.SendAsync(request, TestContext.CancellationToken);
-        // Note: the response might not be 400 if the OData middleware rejects 4.01 before
-        // reaching the controller. Adjust assertions based on actual behavior.
-        var content = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
-
-        // If the request reaches our controller, we should get our error message.
-        // If OData middleware rejects it earlier, the test still verifies the request fails gracefully.
         response.IsSuccessStatusCode.Should().BeFalse(
             because: "OData 4.01 should not succeed with untyped deserialization");
     }

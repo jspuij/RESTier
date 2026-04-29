@@ -1,0 +1,389 @@
+---
+title: "Method Authorization"
+description: "Fine-grain control over API request execution with security rules"
+icon: "shield-halved"
+sidebarTitle: "Authorization"
+---
+
+Method Authorization allows you to have fine-grain control over how different types of API requests can be executed.
+Since most of RESTier uses built-in convention over repetitive boiler-plate Controllers, you can't just add security attributes
+to the controller methods, like you can with Web API.
+
+However, there are two different methods for defining per-request security. One, like the rest of RESTier, is
+convention-based, and the other executes before every request, allowing you to centralize your authorization logic.
+This allows you to pick the approach that works best for your architecture.
+
+No matter what approach you chose, the concept is simple. Either technique uses a function that returns boolean. 
+Return `true`, and processing continues normally. Return `false`, and RESTier returns a 403 Unauthorized to the client.
+
+## Convention-Based Authorization
+Users can control if one of the four submit operations is allowed on some EntitySet or Action by putting some 
+`protected internal` methods into the `Api` class. The method name must conform to the convention
+`Can{Operation}{TargetName}`.
+
+<table style="width: 100%;">
+    <tr>
+        <td>The possible values for <code>{Operation}</code> are:</td>
+        <td>The possible values for <code>{TargetName}</code> are:</td>
+    </tr>
+    <tr>
+        <td>
+            <ul style="margin-bottom: 0;">
+                <li>Insert</li>
+                <li>Update</li>
+                <li>Delete</li>
+                <li>Execute</li>
+            </ul>
+        </td>
+        <td style="vertical-align: text-top;">
+            <ul style="margin-bottom: 0;">
+                <li><i>EntitySetName</i></li>
+                <li><i>ActionName</i></li>
+            </ul>
+        </td>
+    </tr>
+</table>
+
+### Example
+
+The example below demonstrates how both types of `{TargetName}` can be used. 
+
+- The first method shows a simple way to prevent *any*  user from deleting a particular EntitySet.
+- The second method shows how you can integrate role-based security using multiple techniques.
+- The third method shows how to prevent execution a custom Action.
+
+```csharp TrippinApi.cs
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using Microsoft.Restier.EntityFrameworkCore;
+using System.Security.Claims;
+
+namespace Microsoft.OData.Service.Sample.Trippin.Api
+{
+
+    /// <summary>
+    /// Customizations to the EntityFrameworkApi for the TripPin service.
+    /// </summary>
+    public class TrippinApi : EntityFrameworkApi<TrippinContext>
+    {
+
+        public TrippinApi(TrippinContext dbContext, IEdmModel model,
+            IQueryHandler queryHandler, ISubmitHandler submitHandler)
+            : base(dbContext, model, queryHandler, submitHandler) { }
+
+        /// <summary>
+        /// Specifies whether or not a Trip can be deleted from an EntitySet.
+        /// </summary>
+        protected internal bool CanDeleteTrips()
+        {
+            return false;
+        }
+
+        /// <summary>
+        /// Uses role-based security to specify whether or not an updated Trip
+        /// can be sent to an EntitySet.
+        /// </summary>
+        protected internal bool CanUpdateTrips()
+        {
+            return ClaimsPrincipal.Current.IsInRole("admin");
+        }
+
+        /// <summary>
+        /// Specifies whether or not the ResetDataSource action can be executed
+        /// through the API.
+        /// </summary>
+        protected internal bool CanExecuteResetDataSource()
+        {
+            return false;
+        }
+
+    }
+
+}
+```
+
+## Centralized Authorization
+
+In addition to the more granular convention-based approach, you can also centralize processing into one location. This is
+useful when you need a single place to enforce cross-cutting authorization rules, such as checking a bearer token or
+applying tenant-level restrictions across all entity sets.
+
+Implement the `IChangeSetItemAuthorizer` interface to define custom authorization logic. If `AuthorizeAsync` returns
+`false`, RESTier returns a 403 (Forbidden) response to the client.
+
+There are two steps to plug in centralized authorization logic:
+
+- Create a class that implements `IChangeSetItemAuthorizer`.
+- Register that class with RESTier using `AddChainedService<>()` in the route configuration.
+
+### Example
+
+```csharp CustomAuthorizer.cs
+using Microsoft.Restier.Core.Submit;
+using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Microsoft.OData.Service.Sample.Trippin.Api
+{
+
+    /// <summary>
+    /// Provides global ChangeSet Authorization for a RESTier API.
+    /// </summary>
+    public class CustomAuthorizer : IChangeSetItemAuthorizer
+    {
+
+        /// <summary>
+        /// Gets or sets the next authorizer in the chain of responsibility.
+        /// When set, this allows delegation to convention-based authorizers.
+        /// </summary>
+        public IChangeSetItemAuthorizer Inner { get; set; }
+
+        /// <summary>
+        /// Determines whether the current user is authorized to perform the
+        /// specified change set operation.
+        /// </summary>
+        public Task<bool> AuthorizeAsync(
+            SubmitContext context,
+            ChangeSetItem item,
+            CancellationToken cancellationToken)
+        {
+            // Example: reject all changes from unauthenticated users.
+            var principal = ClaimsPrincipal.Current;
+            if (principal?.Identity?.IsAuthenticated != true)
+            {
+                return Task.FromResult(false);
+            }
+
+            // Example: restrict delete operations to admins only.
+            if (item is DataModificationItem modification
+                && modification.DataModificationItemAction == DataModificationItemAction.Remove
+                && !principal.IsInRole("admin"))
+            {
+                return Task.FromResult(false);
+            }
+
+            return Task.FromResult(true);
+        }
+
+    }
+
+}
+```
+
+Register the custom authorizer in your route configuration (typically in `Program.cs` or `Startup.cs`):
+
+```csharp Program.cs
+services
+    .AddControllers()
+    .AddRestier(options =>
+    {
+        options.AddRestierRoute<TrippinApi>("api", restierServices =>
+        {
+            restierServices
+                .AddEFCoreProviderServices<TrippinContext>((services, dbOptions) =>
+                    dbOptions.UseSqlServer(connectionString));
+
+            // Register the custom authorizer in the chain of responsibility.
+            // Inner is wired automatically by the chain factory — no need to set it here.
+            restierServices.AddChainedService<IChangeSetItemAuthorizer>(
+                (sp, next) => new CustomAuthorizer());
+        });
+    });
+```
+
+## Leveraging Both Techniques
+
+There may be certain situations where you want to have a global interceptor, and then pass requests off to the individual
+convention-based interceptors. For example, if you need to validate a bearer token before checking entity-level
+permissions. The example below shows you exactly how this type of scenario would work.
+
+The key is the `Inner` property: RESTier automatically sets it to the next handler in the chain, which is the
+`ConventionBasedChangeSetItemAuthorizer`. By calling `Inner.AuthorizeAsync()`, your centralized check runs first,
+and if it passes, the convention-based `Can{Operation}{EntitySet}` methods are invoked.
+
+### Example
+
+```csharp CustomAuthorizer.cs
+using Microsoft.Restier.Core.Submit;
+using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Microsoft.OData.Service.Sample.Trippin.Api
+{
+
+    /// <summary>
+    /// Provides global ChangeSet Authorization for a RESTier API,
+    /// then delegates to convention-based authorizers.
+    /// </summary>
+    public class CustomAuthorizer : IChangeSetItemAuthorizer
+    {
+
+        /// <summary>
+        /// Gets or sets the next authorizer in the chain of responsibility.
+        /// RESTier sets this to the convention-based authorizer automatically.
+        /// </summary>
+        public IChangeSetItemAuthorizer Inner { get; set; }
+
+        /// <summary>
+        /// Validates a global precondition (e.g., bearer token) before
+        /// delegating to convention-based Can{Operation}{EntitySet} methods.
+        /// </summary>
+        public async Task<bool> AuthorizeAsync(
+            SubmitContext context,
+            ChangeSetItem item,
+            CancellationToken cancellationToken)
+        {
+            // Global check: reject unauthenticated users immediately.
+            var principal = ClaimsPrincipal.Current;
+            if (principal?.Identity?.IsAuthenticated != true)
+            {
+                return false;
+            }
+
+            // Global check passed. Delegate to convention-based methods
+            // (e.g., CanDeleteTrips, CanUpdateTrips) via the inner handler.
+            if (Inner != null)
+            {
+                return await Inner.AuthorizeAsync(context, item, cancellationToken);
+            }
+
+            // No inner authorizer registered; allow by default.
+            return true;
+        }
+
+    }
+
+}
+```
+
+Register it the same way as before. Because convention-based authorizers are registered automatically by RESTier,
+the `Inner` property will point to the `ConventionBasedChangeSetItemAuthorizer`, which calls the appropriate
+`Can{Operation}{EntitySet}` methods on your API class.
+
+```csharp Program.cs
+restierServices.AddChainedService<IChangeSetItemAuthorizer>(
+    (sp, next) => new CustomAuthorizer());
+```
+
+With the API class from the convention-based example, the authorization flow for a DELETE to the Trips entity set
+would be:
+
+1. `CustomAuthorizer.AuthorizeAsync` checks that the user is authenticated.
+2. `CustomAuthorizer` calls `Inner.AuthorizeAsync`, which invokes `ConventionBasedChangeSetItemAuthorizer`.
+3. `ConventionBasedChangeSetItemAuthorizer` finds and invokes `TrippinApi.CanDeleteTrips()`, which returns `false`.
+4. RESTier returns 403 Forbidden.
+
+## Unit Testing Considerations
+
+Because both of these methods are de-coupled from the code that interacts with the database, the Authorization
+logic is easily testable without having to fire up the entire RESTier pipeline.
+
+### Setting up your Unit Test
+
+If you don't have a unit test project for your API project already, start by creating one. Add the
+[FluentAssertions](https://www.nuget.org/packages/FluentAssertions) (or AwesomeAssertions) package for readable
+assertions.
+
+The `InternalsVisibleTo` attribute is auto-configured by the build system, so you do not need to manually edit
+`AssemblyInfo.cs`. Your test project can access `protected internal` convention methods out of the box, as long
+as the test project follows the naming convention `{ProjectName}.Tests`.
+
+For integration tests that exercise the full RESTier pipeline, use `RestierTestHelpers` from the
+`Microsoft.Restier.Breakdance` package. For unit-testing authorization logic in isolation, you can instantiate
+your API class directly with mock dependencies.
+
+### Example
+
+Given the [Convention-Based Authorization](#convention-based-authorization) example, the tests below should have 100% code 
+coverage, and should pass without any required changes.
+
+```csharp TrippinApiAuthorizationTests.cs
+using FluentAssertions;
+using Microsoft.OData.Edm;
+using Microsoft.OData.Service.Sample.Trippin.Api;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+using NSubstitute;
+using System.Collections.Generic;
+using System.Security.Claims;
+using System.Threading;
+using Xunit;
+
+namespace Trippin.Tests.Api
+{
+
+    /// <summary>
+    /// Test cases for the RESTier Method Authorizers.
+    /// </summary>
+    public class TrippinApiAuthorizationTests
+    {
+
+        private readonly TrippinApi api;
+
+        public TrippinApiAuthorizationTests()
+        {
+            // Create mock dependencies for the API constructor.
+            var dbContext = Substitute.For<TrippinContext>();
+            var model = Substitute.For<IEdmModel>();
+            var queryHandler = Substitute.For<IQueryHandler>();
+            var submitHandler = Substitute.For<ISubmitHandler>();
+
+            api = new TrippinApi(dbContext, model, queryHandler, submitHandler);
+        }
+
+        [Fact]
+        public void CanDeleteTrips_ShouldReturnFalse()
+        {
+            api.CanDeleteTrips().Should().BeFalse();
+        }
+
+        [Fact]
+        public void CanUpdateTrips_WhenAdmin_ShouldReturnTrue()
+        {
+            AuthenticateAsAdmin();
+            api.CanUpdateTrips().Should().BeTrue();
+        }
+
+        [Fact]
+        public void CanUpdateTrips_WhenNotAdmin_ShouldReturnFalse()
+        {
+            AuthenticateAsNonAdmin();
+            api.CanUpdateTrips().Should().BeFalse();
+        }
+
+        [Fact]
+        public void CanExecuteResetDataSource_ShouldReturnFalse()
+        {
+            api.CanExecuteResetDataSource().Should().BeFalse();
+        }
+
+        /// <summary>
+        /// Sets the Thread.CurrentPrincipal to a test user with an "admin" Role Claim.
+        /// </summary>
+        private static void AuthenticateAsAdmin()
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Role, "admin"),
+            };
+            var identity = new ClaimsIdentity(claims, "Test");
+            Thread.CurrentPrincipal = new ClaimsPrincipal(identity);
+        }
+
+        /// <summary>
+        /// Sets the Thread.CurrentPrincipal to a test user without an "admin" Role Claim.
+        /// </summary>
+        private static void AuthenticateAsNonAdmin()
+        {
+            var claims = new List<Claim>();
+            var identity = new ClaimsIdentity(claims, "Test");
+            Thread.CurrentPrincipal = new ClaimsPrincipal(identity);
+        }
+
+    }
+
+}
+```

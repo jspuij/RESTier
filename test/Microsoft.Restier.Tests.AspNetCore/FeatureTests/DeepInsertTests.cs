@@ -411,6 +411,76 @@ public abstract class DeepInsertTests<TApi, TContext> : RestierTestBase<TApi>
     }
 
     [Fact]
+    public async Task DeepInsert_BindDoesNotFireConventionMethods()
+    {
+        // Use a seeded, active Book: "A Clockwork Orange"
+        var existingBookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59");
+
+        // GET the existing book to capture its original state
+        var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({existingBookId})",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        bookRequest.IsSuccessStatusCode.Should().BeTrue();
+
+        var (originalBook, _) = await bookRequest.DeserializeResponseAsync<Book>();
+        var originalTitle = originalBook.Title;
+
+        // Create a new Publisher with a bind reference to the existing Book.
+        // Key-only payload triggers IsEntityReference → NavigationBinding (not Insert).
+        // OnInsertingBook should NOT fire for the bound book.
+        var pubId = UniqueId();
+        var payload = new
+        {
+            Id = pubId,
+            Addr = new { Zip = "00000" },
+            Books = new object[]
+            {
+                new { Id = existingBookId }, // Key only → bind reference
+            },
+        };
+
+        var postResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers",
+            payload: payload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var postContent = await postResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        postResponse.StatusCode.Should().Be(HttpStatusCode.Created,
+            because: $"deep insert with bind reference should succeed. Response: {postContent}");
+
+        // Verify: book is now linked to the new publisher
+        var verifyResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Books({existingBookId})?$expand=Publisher",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        verifyResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var (verifiedBook, _) = await verifyResponse.DeserializeResponseAsync<Book>();
+        verifiedBook.PublisherId.Should().Be(pubId,
+            because: "the book should be linked to the new publisher via bind");
+        verifiedBook.Id.Should().Be(existingBookId,
+            because: "OnInsertingBook should NOT have fired for a bind reference — the book's Id must be unchanged");
+        verifiedBook.Title.Should().Be(originalTitle,
+            because: "OnInsertingBook should NOT have fired for a bind reference — the book's properties should be unchanged");
+
+        // Verify no duplicate book was created: the publisher should have exactly 1 book (the bound one)
+        var expandResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Publishers('{pubId}')?$expand=Books",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        expandResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var (newPublisher, _) = await expandResponse.DeserializeResponseAsync<Publisher>();
+        newPublisher.Books.Should().HaveCount(1,
+            because: "only the bound book should be linked — no new book should have been inserted");
+    }
+
+    [Fact]
     public async Task DeepInsert_MultiLevel()
     {
         var pubId = UniqueId();

@@ -418,6 +418,61 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
         movedBook.PublisherId.Should().Be(pubA, because: "book should now be linked to Publisher A");
     }
 
+    [Fact]
+    public async Task DeepUpdate_FiresConventionMethods()
+    {
+        // Create a Book linked to Publisher1
+        var bookPayload = new { Isbn = "5050505050505", Title = "Convention Fire Test", IsActive = true };
+        var createResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Post,
+            resource: "/Publishers('Publisher1')/Books",
+            payload: bookPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var createContent = await createResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        createResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: $"creating the book should succeed. Response: {createContent}");
+        var (createdBook, _) = await createResponse.DeserializeResponseAsync<Book>();
+
+        // Get Publisher1's current LastUpdated timestamp
+        var pubResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Publishers('Publisher1')",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        pubResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (publisher, _) = await pubResponse.DeserializeResponseAsync<Publisher>();
+        var lastUpdatedBefore = publisher.LastUpdated;
+
+        // PATCH the Book with Publisher1 inline (key + non-key props → reclassified as Update).
+        // OnUpdatingPublisher should fire and set LastUpdated to DateTimeOffset.Now.
+        var patchPayload = new
+        {
+            Publisher = new { Id = "Publisher1", Addr = new { Street = "Updated St", Zip = "11111" } },
+        };
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            new HttpMethod("PATCH"),
+            resource: $"/Books({createdBook.Id})",
+            payload: patchPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var patchContent = await patchResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: $"PATCH with inline publisher update should succeed. Response: {patchContent}");
+
+        // Verify: Publisher1.LastUpdated has changed (OnUpdatingPublisher fired)
+        var verifyResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: "/Publishers('Publisher1')",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        verifyResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var (updatedPublisher, _) = await verifyResponse.DeserializeResponseAsync<Publisher>();
+        updatedPublisher.LastUpdated.Should().BeAfter(lastUpdatedBefore,
+            because: "OnUpdatingPublisher should have set LastUpdated to DateTimeOffset.Now during the deep update");
+    }
+
     // Case A (single-nav insert with server-generated key) is not testable with the current model.
     // Publisher uses a user-supplied string key and has no OnInsertingPublisher convention.
     // Book.Id has server-side generation, but Publisher.Books is a collection nav prop, not single.

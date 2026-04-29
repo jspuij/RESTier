@@ -473,16 +473,47 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
             because: "OnUpdatingPublisher should have set LastUpdated to DateTimeOffset.Now during the deep update");
     }
 
-    // Case A: Single-nav insert with server-generated key (no key in payload).
-    // Testable via Review.Book (Book.Id is server-generated via OnInsertingBook).
-    // However, this currently fails because FindTargetEntitySet falls back to the type name
-    // "Book" instead of the entity set name "Books" when the Reviews entity set doesn't have
-    // an explicit navigation binding for Review.Book in the OData model. The EF initializer
-    // then NREs on dbContext.GetType().GetProperty("Book") since the property is "Books".
-    // The ExtractKeyValues fix (filtering by GetChangedPropertyNames) is in place, so the
-    // classifier correctly treats keyless payloads as no-key Inserts. The remaining gap is
-    // entity set name resolution in FindTargetEntitySet, which is a pre-existing infrastructure
-    // issue beyond Phase 3 scope.
+    [Fact]
+    public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_NoKey()
+    {
+        // Case A: single-nav insert with a server-generated key.
+        // Book.Publisher can't test this (Publisher has a user-supplied string key),
+        // but Review.Book CAN — Book.Id is a Guid with server-side generation via OnInsertingBook.
+        // Use a seeded Review, then PATCH it with an inline NEW Book (no Id).
+        var reviewId = Guid.Parse("00000000-0000-0000-0000-000000000101");
+        var originalBookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59");
+
+        // PATCH the Review with an inline NEW Book (no Id → server-generated via OnInsertingBook).
+        // EF wires the FK via nav prop assignment (review.Book = newBook → review.BookId updated).
+        var patchPayload = new
+        {
+            Book = new { Isbn = "7070707070707", Title = "Inline New Book", IsActive = true },
+        };
+        var patchResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            new HttpMethod("PATCH"),
+            resource: $"/Reviews({reviewId})",
+            payload: patchPayload,
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        var patchContent = await patchResponse.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        patchResponse.IsSuccessStatusCode.Should().BeTrue(
+            because: $"PATCH with inline new Book (no key) should succeed. Response: {patchContent}");
+
+        // Verify: review is now linked to a NEW book with a server-generated Id
+        var verifyResponse = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+            HttpMethod.Get,
+            resource: $"/Reviews({reviewId})?$expand=Book",
+            acceptHeader: ODataConstants.DefaultAcceptHeader,
+            serviceCollection: ConfigureServices);
+        verifyResponse.IsSuccessStatusCode.Should().BeTrue();
+        var (updatedReview, _) = await verifyResponse.DeserializeResponseAsync<Review>();
+        updatedReview.BookId.Should().NotBe(originalBookId,
+            because: "the review should now be linked to the NEW book, not the original");
+        updatedReview.BookId.Should().NotBe(Guid.Empty,
+            because: "OnInsertingBook should have assigned a server-generated Guid");
+        updatedReview.Book.Should().NotBeNull();
+        updatedReview.Book.Title.Should().Be("Inline New Book");
+    }
 
     [Fact]
     public async Task DeepUpdate_SingleNavProperty_InsertNewRelated_ClientSuppliedKey()

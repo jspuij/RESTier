@@ -207,12 +207,27 @@ namespace Microsoft.Restier.AspNetCore.Submit
             var container = model.EntityContainer;
             if (container is not null)
             {
+                // Primary: use explicit navigation bindings
                 foreach (var entitySet in container.EntitySets())
                 {
                     var navigationTarget = entitySet.FindNavigationTarget(navProperty);
-                    if (navigationTarget is not null)
+                    if (navigationTarget is not null
+                        && container.FindEntitySet(navigationTarget.Name) is not null)
                     {
                         return navigationTarget.Name;
+                    }
+                }
+
+                // Fallback: match entity set by target entity type name.
+                // Handles cases where FindNavigationTarget returns a phantom navigation source
+                // (e.g., with the type name instead of the entity set name).
+                var targetType = navProperty.ToEntityType();
+                foreach (var entitySet in container.EntitySets())
+                {
+                    if (string.Equals(entitySet.EntityType.FullTypeName(), targetType.FullTypeName(), StringComparison.Ordinal)
+                        || string.Equals(entitySet.EntityType.Name, targetType.Name, StringComparison.Ordinal))
+                    {
+                        return entitySet.Name;
                     }
                 }
             }

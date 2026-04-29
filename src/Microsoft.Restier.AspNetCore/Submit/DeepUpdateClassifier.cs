@@ -472,9 +472,21 @@ namespace Microsoft.Restier.AspNetCore.Submit
                 foreach (var entitySet in container.EntitySets())
                 {
                     var navigationTarget = entitySet.FindNavigationTarget(navProperty);
-                    if (navigationTarget is not null)
+                    if (navigationTarget is not null
+                        && container.FindEntitySet(navigationTarget.Name) is not null)
                     {
                         return navigationTarget.Name;
+                    }
+                }
+
+                // Fallback: match entity set by target entity type name.
+                var targetType = navProperty.ToEntityType();
+                foreach (var entitySet in container.EntitySets())
+                {
+                    if (string.Equals(entitySet.EntityType.FullTypeName(), targetType.FullTypeName(), StringComparison.Ordinal)
+                        || string.Equals(entitySet.EntityType.Name, targetType.Name, StringComparison.Ordinal))
+                    {
+                        return entitySet.Name;
                     }
                 }
             }

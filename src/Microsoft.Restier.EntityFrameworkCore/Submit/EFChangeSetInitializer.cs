@@ -86,7 +86,15 @@ namespace Microsoft.Restier.EntityFrameworkCore
             // Phase 2: Materialize entities and wire relationships.
             foreach (var entry in context.ChangeSet.Entries.OfType<DataModificationItem>())
             {
-                var strongTypedDbSet = dbContext.GetType().GetProperty(entry.ResourceSetName).GetValue(dbContext);
+                var dbSetProperty = dbContext.GetType().GetProperty(entry.ResourceSetName);
+                if (dbSetProperty is null)
+                {
+                    throw new InvalidOperationException(
+                        $"The DbContext '{dbContext.GetType().Name}' does not have a property named '{entry.ResourceSetName}'. " +
+                        $"Check that the entity set name matches a DbSet property on the context.");
+                }
+
+                var strongTypedDbSet = dbSetProperty.GetValue(dbContext);
                 var resourceType = strongTypedDbSet.GetType().GetGenericArguments()[0];
 
                 // This means request resource is sub type of resource type

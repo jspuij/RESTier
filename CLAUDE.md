@@ -87,17 +87,29 @@ Uses `Microsoft.Extensions.DependencyInjection` with per-route service container
 
 ## Documentation
 
-Documentation lives in `docs/msdocs/` and is built with **docfx** (not mkdocs, despite the legacy `mkdocs.yml`).
+Documentation lives in `src/Microsoft.Restier.Docs/` and is built with the **DotNetDocs SDK** (`<Project Sdk="DotNetDocs.Sdk/1.2.0">`), which generates Mintlify-flavored MDX.
 
 ```bash
-# Build docs (installs docfx as .NET global tool if missing)
-docs/msdocs/build.sh
-
-# Serve locally for preview
-docfx serve docs/msdocs/_site
+# Build the docs project (regenerates api-reference/ and docs.json)
+dotnet build src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj
 ```
 
-The navigation structure is defined in `docs/mkdocs.yml` (legacy) and `docs/msdocs/toc.yml` / `docs/msdocs/docfx.json`.
+The docs project is part of `RESTier.slnx`, so a full solution build also builds the docs:
+
+```bash
+dotnet build RESTier.slnx
+```
+
+**Authoring conventions:**
+- Hand-written content lives under `guides/`, `release-notes/`, and the project root (`index.mdx`, `quickstart.mdx`, `contribution-guidelines.mdx`, `why-restier.mdx`).
+- API reference under `api-reference/` is auto-generated from XML doc comments (six assemblies at TFM `net9.0`) and gitignored — do NOT hand-edit it.
+- Pages use Mintlify components: `<Info>`, `<Note>`, `<Tip>`, `<Warning>`, `<Steps>`, `<CodeGroup>`, `<Tabs>`, `<CardGroup>`. See existing pages for examples.
+
+**Navigation source of truth:** the `<MintlifyTemplate>` block in `Microsoft.Restier.Docs.docsproj`. The SDK regenerates `docs.json` from this template on every build, so commit `docs.json` alongside any nav-affecting change but do not hand-edit it.
+
+**Build-ordering note:** the docsproj has an explicit `BuildSourceProjectsForDocs` target that calls `<MSBuild>` on each documented source project for `net8.0` before doc generation runs. The DotNetDocs SDK resolves assembly paths against `bin/Debug/net8.0/`, and `<ProjectReference>` items alone don't reliably trigger a full Build of the multi-targeted source projects from this NoTargets-style docsproj.
+
+`assembly-list.txt` under the docs project is a Debug-build debug dump written by the SDK (not configuration). It is gitignored.
 
 ## Key Dependencies
 

@@ -53,13 +53,17 @@ namespace Microsoft.Restier.AspNetCore.NSwag
             var routeServices = odataOptions.GetRouteServices(routePrefix);
             var odataValidationSettings = routeServices.GetService<ODataValidationSettings>();
 
+            // @robertmclaws: Start off by setting defaults, but allow the user to override it.
             var settings = new OpenApiConvertSettings { TopExample = odataValidationSettings?.MaxTop ?? 5 };
             openApiSettings?.Invoke(settings);
 
+            // @robertmclaws: The host defaults internally to localhost; isn't set automatically.
             if (request is not null)
             {
                 var pathParts = new[]
                 {
+                    // @robertmclaws: You're going to think the next line is an error and want to put the second slash in.
+                    //                Don't. The second slash will be added with the string.Join(). ;)
                     $"{request.Scheme}:/",
                     request.Host.Value,
                     request.PathBase.HasValue ? request.PathBase.Value.TrimStart('/') : null,

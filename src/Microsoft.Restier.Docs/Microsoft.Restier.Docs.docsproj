@@ -75,6 +75,13 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The DotNetDocs SDK uses its own DiscoverDocumentedProjectsTask to find source projects
+             and resolves assembly paths against bin/Debug/net8.0/. ProjectReferences from this
+             NoTargets-style docsproj don't reliably trigger a full Build of multi-targeted source
+             projects (MSBuild may call GetTargetPath instead of Build), so the SDK's
+             GenerateDocumentation target can fire before the net8.0 outputs exist. The
+             BuildSourceProjects target below explicitly builds each source project for net8.0
+             before doc generation runs. -->
         <ProjectReference Include="..\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
@@ -82,5 +89,20 @@
         <ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.EntityFrameworkCore\Microsoft.Restier.EntityFrameworkCore.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <_DocsSourceProject Include="..\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.EntityFrameworkCore\Microsoft.Restier.EntityFrameworkCore.csproj" />
+    </ItemGroup>
+
+    <Target Name="BuildSourceProjectsForDocs" BeforeTargets="GenerateDocumentation">
+        <MSBuild Projects="@(_DocsSourceProject)"
+                 Targets="Build"
+                 Properties="TargetFramework=net8.0;Configuration=$(Configuration)" />
+    </Target>
 
 </Project>

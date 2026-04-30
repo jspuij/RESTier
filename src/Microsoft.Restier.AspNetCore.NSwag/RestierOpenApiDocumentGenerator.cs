@@ -16,7 +16,7 @@ namespace Microsoft.Restier.AspNetCore.NSwag
 
     /// <summary>
     /// Generates OpenAPI documents from Restier EDM models. Shared logic used by
-    /// <c>RestierOpenApiMiddleware</c>.
+    /// <see cref="RestierOpenApiMiddleware"/>.
     /// </summary>
     internal static class RestierOpenApiDocumentGenerator
     {

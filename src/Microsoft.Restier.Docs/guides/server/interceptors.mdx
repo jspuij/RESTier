@@ -19,7 +19,7 @@ that pattern is used by [Method Authorization](/guides/server/method-authorizati
 You can hook into the submit pipeline by adding `protected internal` methods to your `Api` class. The method name
 must follow the convention `On{Operation}{TargetName}`.
 
-<table style="width: 100%;">
+<table style={{width: "100%"}}>
     <tr>
         <td>The possible values for <code>{Operation}</code> (before processing) are:</td>
         <td>The possible values for <code>{Operation}</code> (after processing) are:</td>
@@ -27,7 +27,7 @@ must follow the convention `On{Operation}{TargetName}`.
     </tr>
     <tr>
         <td>
-            <ul style="margin-bottom: 0;">
+            <ul style={{marginBottom: 0}}>
                 <li>Inserting</li>
                 <li>Updating</li>
                 <li>Deleting</li>
@@ -35,15 +35,15 @@ must follow the convention `On{Operation}{TargetName}`.
             </ul>
         </td>
         <td>
-            <ul style="margin-bottom: 0;">
+            <ul style={{marginBottom: 0}}>
                 <li>Inserted</li>
                 <li>Updated</li>
                 <li>Deleted</li>
                 <li>Executed</li>
             </ul>
         </td>
-        <td style="vertical-align: text-top;">
-            <ul style="margin-bottom: 0;">
+        <td style={{verticalAlign: "text-top"}}>
+            <ul style={{marginBottom: 0}}>
                 <li><i>EntitySetName</i></li>
                 <li><i>ActionName</i></li>
             </ul>

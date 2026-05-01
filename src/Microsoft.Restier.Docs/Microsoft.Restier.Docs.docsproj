@@ -90,6 +90,7 @@
              before doc generation runs. -->
         <ProjectReference Include="..\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.AspNetCore.NSwag\Microsoft.Restier.AspNetCore.NSwag.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
@@ -99,6 +100,7 @@
     <ItemGroup>
         <_DocsSourceProject Include="..\Microsoft.Restier.Core\Microsoft.Restier.Core.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore.NSwag\Microsoft.Restier.AspNetCore.NSwag.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />

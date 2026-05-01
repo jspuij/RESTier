@@ -44,6 +44,12 @@ namespace Microsoft.Restier.AspNetCore.NSwag
                 && path.StartsWith(PathPrefix, StringComparison.OrdinalIgnoreCase)
                 && path.EndsWith(PathSuffix, StringComparison.OrdinalIgnoreCase))
             {
+                if (path.Length <= PathPrefix.Length + PathSuffix.Length)
+                {
+                    await next(context);
+                    return;
+                }
+
                 var documentName = path.Substring(PathPrefix.Length, path.Length - PathPrefix.Length - PathSuffix.Length);
                 if (!string.IsNullOrEmpty(documentName))
                 {

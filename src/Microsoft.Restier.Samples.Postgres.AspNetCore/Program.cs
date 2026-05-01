@@ -46,6 +46,8 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore
                 .AddApplicationPart(typeof(RestierTestContextApi).Assembly)
                 .AddApplicationPart(typeof(RestierController).Assembly);
 
+            builder.Services.AddRestierNSwag();
+
             var app = builder.Build();
 
             // Apply pending migrations and seed data on startup.
@@ -74,6 +76,9 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore
                 endpoints.MapRestier();
             });
 #pragma warning restore ASP0014 // Suggest using top level route registrations
+
+            app.UseRestierOpenApi();
+            app.UseRestierReDoc();
 
             app.Run();
         }

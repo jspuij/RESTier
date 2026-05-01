@@ -33,6 +33,7 @@
                                     guides/server/filters;
                                     guides/server/interceptors;
                                     guides/server/operations;
+                                    guides/server/nswag;
                                     guides/server/swagger;
                                     guides/server/testing;
                                     guides/server/naming-conventions;

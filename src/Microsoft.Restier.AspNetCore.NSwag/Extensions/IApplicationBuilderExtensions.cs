@@ -1,7 +1,12 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using Microsoft.AspNetCore.OData;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.AspNetCore.NSwag;
+using NSwag.AspNetCore;
 
 namespace Microsoft.AspNetCore.Builder
 {
@@ -21,6 +26,29 @@ namespace Microsoft.AspNetCore.Builder
         public static IApplicationBuilder UseRestierOpenApi(this IApplicationBuilder app)
         {
             app.UseMiddleware<RestierOpenApiMiddleware>();
+            return app;
+        }
+
+        /// <summary>
+        /// Adds NSwag's ReDoc middleware once per Restier route, configured with the matching
+        /// <c>/openapi/{name}/openapi.json</c> document URL.
+        /// </summary>
+        /// <param name="app">The <see cref="IApplicationBuilder"/> to add middleware to.</param>
+        /// <returns>The <see cref="IApplicationBuilder"/> for chaining.</returns>
+        public static IApplicationBuilder UseRestierReDoc(this IApplicationBuilder app)
+        {
+            var odataOptions = app.ApplicationServices.GetRequiredService<IOptions<ODataOptions>>().Value;
+            foreach (var prefix in odataOptions.GetRestierRoutePrefixes())
+            {
+                var documentName = string.IsNullOrEmpty(prefix)
+                    ? RestierOpenApiDocumentGenerator.DefaultDocumentName
+                    : prefix;
+                app.UseReDoc(settings =>
+                {
+                    settings.Path = $"/redoc/{documentName}";
+                    settings.DocumentPath = $"/openapi/{documentName}/openapi.json";
+                });
+            }
             return app;
         }
 

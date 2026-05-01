@@ -110,10 +110,47 @@ namespace Microsoft.Restier.Tests.AspNetCore.NSwag.Extensions
                 "the OpenApiConvertSettings configurator must be invoked when generating the document");
         }
 
+        [Fact]
+        public async Task UseRestierReDoc_ServesOnePagePerRoutePrefix_PointingAtRestierMiddlewareUrl()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await BuildHostAsync(
+                routes: new[] { ("", typeof(TestApi)), ("v3", typeof(TestApi)) },
+                cancellationToken,
+                configurePipeline: app =>
+                {
+                    app.UseRestierOpenApi();
+                    app.UseRestierReDoc();
+                });
+            var client = host.GetTestClient();
+
+            // NSwag's ReDoc middleware redirects /redoc/{name} -> /redoc/{name}/index.html?url={DocumentPath}.
+            // The OpenAPI URL is conveyed via the redirect Location query string, not embedded in the HTML body
+            // (the HTML extracts it from window.location.search at runtime).
+            var defaultRedirect = await client.GetAsync("/redoc/default", cancellationToken);
+            defaultRedirect.StatusCode.Should().Be(HttpStatusCode.Found,
+                "ReDoc serves the page at /redoc/{name}/index.html and redirects /redoc/{name} to it");
+            defaultRedirect.Headers.Location.Should().NotBeNull();
+            defaultRedirect.Headers.Location!.OriginalString.Should().Contain("/openapi/default/openapi.json",
+                "ReDoc must load Restier doc from the middleware URL");
+
+            var defaultPage = await client.GetAsync(defaultRedirect.Headers.Location.OriginalString, cancellationToken);
+            defaultPage.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var v3Redirect = await client.GetAsync("/redoc/v3", cancellationToken);
+            v3Redirect.StatusCode.Should().Be(HttpStatusCode.Found);
+            v3Redirect.Headers.Location.Should().NotBeNull();
+            v3Redirect.Headers.Location!.OriginalString.Should().Contain("/openapi/v3/openapi.json");
+
+            var v3Page = await client.GetAsync(v3Redirect.Headers.Location.OriginalString, cancellationToken);
+            v3Page.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
         private static async Task<IHost> BuildHostAsync(
             (string prefix, Type apiType)[] routes,
             CancellationToken cancellationToken,
-            Action<IServiceCollection> configureServices = null)
+            Action<IServiceCollection> configureServices = null,
+            Action<IApplicationBuilder> configurePipeline = null)
         {
             var builder = Host.CreateDefaultBuilder()
                 .ConfigureWebHost(web => web
@@ -148,7 +185,14 @@ namespace Microsoft.Restier.Tests.AspNetCore.NSwag.Extensions
                     {
                         app.UseRouting();
                         app.UseEndpoints(endpoints => endpoints.MapRestier());
-                        app.UseRestierOpenApi();
+                        if (configurePipeline is not null)
+                        {
+                            configurePipeline(app);
+                        }
+                        else
+                        {
+                            app.UseRestierOpenApi();
+                        }
                     }));
 
             return await builder.StartAsync(cancellationToken);

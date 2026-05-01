@@ -60,15 +60,25 @@ namespace Microsoft.AspNetCore.Builder
         public static IApplicationBuilder UseRestierNSwagUI(this IApplicationBuilder app)
         {
             var odataOptions = app.ApplicationServices.GetRequiredService<IOptions<ODataOptions>>().Value;
+            var nswagDocuments = app.ApplicationServices.GetServices<OpenApiDocumentRegistration>();
+
             app.UseSwaggerUi(settings =>
             {
                 settings.Path = "/swagger";
+
+                // Restier-derived routes first.
                 foreach (var prefix in odataOptions.GetRestierRoutePrefixes())
                 {
                     var documentName = string.IsNullOrEmpty(prefix)
                         ? RestierOpenApiDocumentGenerator.DefaultDocumentName
                         : prefix;
                     settings.SwaggerRoutes.Add(new SwaggerUiRoute(documentName, $"/openapi/{documentName}/openapi.json"));
+                }
+
+                // User-registered NSwag documents follow.
+                foreach (var registration in nswagDocuments)
+                {
+                    settings.SwaggerRoutes.Add(new SwaggerUiRoute(registration.DocumentName, $"/swagger/{registration.DocumentName}/swagger.json"));
                 }
             });
             return app;

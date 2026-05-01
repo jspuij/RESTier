@@ -175,6 +175,33 @@ namespace Microsoft.Restier.Tests.AspNetCore.NSwag.Extensions
             body.Should().Contain("/openapi/v3/openapi.json", "Swagger UI must reference the v3 Restier doc URL");
         }
 
+        [Fact]
+        public async Task UseRestierNSwagUI_IncludesUserRegisteredNSwagDocuments_InDropdown()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await BuildHostAsync(
+                routes: new[] { ("", typeof(TestApi)) },
+                cancellationToken,
+                configureServices: services =>
+                {
+                    services.AddRestierNSwag();
+                    services.AddOpenApiDocument(c => c.DocumentName = "controllers");
+                },
+                configurePipeline: app =>
+                {
+                    app.UseRestierOpenApi();
+                    app.UseRestierNSwagUI();
+                    app.UseOpenApi();
+                });
+            var client = host.GetTestClient();
+
+            var indexResponse = await client.GetAsync("/swagger/index.html", cancellationToken);
+            indexResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var body = await indexResponse.Content.ReadAsStringAsync(cancellationToken);
+            body.Should().Contain("/openapi/default/openapi.json", "Restier doc must be in the dropdown");
+            body.Should().Contain("/swagger/controllers/swagger.json", "User-registered NSwag doc must also be in the dropdown");
+        }
+
         private static async Task<IHost> BuildHostAsync(
             (string prefix, Type apiType)[] routes,
             CancellationToken cancellationToken,

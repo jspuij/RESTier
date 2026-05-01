@@ -146,6 +146,35 @@ namespace Microsoft.Restier.Tests.AspNetCore.NSwag.Extensions
             v3Page.StatusCode.Should().Be(HttpStatusCode.OK);
         }
 
+        [Fact]
+        public async Task UseRestierNSwagUI_ListsAllRestierRoutes_AsSwaggerUrls()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await BuildHostAsync(
+                routes: new[] { ("", typeof(TestApi)), ("v3", typeof(TestApi)) },
+                cancellationToken,
+                configurePipeline: app =>
+                {
+                    app.UseRestierOpenApi();
+                    app.UseRestierNSwagUI();
+                });
+            var client = host.GetTestClient();
+
+            // NSwag's Swagger UI 3 exposes its config (including the urls array) via /swagger/index.html.
+            // The default landing /swagger may redirect to /swagger/index.html (similar to ReDoc).
+            var indexResponse = await client.GetAsync("/swagger/index.html", cancellationToken);
+            if (indexResponse.StatusCode == HttpStatusCode.Found)
+            {
+                // Follow the redirect manually if NSwag redirects.
+                indexResponse = await client.GetAsync(indexResponse.Headers.Location!.OriginalString, cancellationToken);
+            }
+            indexResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var body = await indexResponse.Content.ReadAsStringAsync(cancellationToken);
+            body.Should().Contain("/openapi/default/openapi.json", "Swagger UI must reference the default Restier doc URL");
+            body.Should().Contain("/openapi/v3/openapi.json", "Swagger UI must reference the v3 Restier doc URL");
+        }
+
         private static async Task<IHost> BuildHostAsync(
             (string prefix, Type apiType)[] routes,
             CancellationToken cancellationToken,

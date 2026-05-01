@@ -52,6 +52,28 @@ namespace Microsoft.AspNetCore.Builder
             return app;
         }
 
+        /// <summary>
+        /// Adds NSwag's Swagger UI 3 host at <c>/swagger</c> with a dropdown listing every Restier route.
+        /// </summary>
+        /// <param name="app">The <see cref="IApplicationBuilder"/> to add middleware to.</param>
+        /// <returns>The <see cref="IApplicationBuilder"/> for chaining.</returns>
+        public static IApplicationBuilder UseRestierNSwagUI(this IApplicationBuilder app)
+        {
+            var odataOptions = app.ApplicationServices.GetRequiredService<IOptions<ODataOptions>>().Value;
+            app.UseSwaggerUi(settings =>
+            {
+                settings.Path = "/swagger";
+                foreach (var prefix in odataOptions.GetRestierRoutePrefixes())
+                {
+                    var documentName = string.IsNullOrEmpty(prefix)
+                        ? RestierOpenApiDocumentGenerator.DefaultDocumentName
+                        : prefix;
+                    settings.SwaggerRoutes.Add(new SwaggerUiRoute(documentName, $"/openapi/{documentName}/openapi.json"));
+                }
+            });
+            return app;
+        }
+
     }
 
 }

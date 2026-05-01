@@ -68,7 +68,52 @@ namespace Microsoft.Restier.Tests.AspNetCore.NSwag.Extensions
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
 
-        private static async Task<IHost> BuildHostAsync((string prefix, Type apiType)[] routes, CancellationToken cancellationToken)
+        [Fact]
+        public async Task UseRestierOpenApi_ReflectsInboundHostAndPathBase_InServiceRoot()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await BuildHostAsync(routes: new[] { ("v3", typeof(TestApi)) }, cancellationToken);
+            var client = host.GetTestClient();
+            client.DefaultRequestHeaders.Host = "example.com:8443";
+
+            var response = await client.GetAsync("/openapi/v3/openapi.json", cancellationToken);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(json);
+            var serverUrl = doc.RootElement.GetProperty("servers")[0].GetProperty("url").GetString();
+            serverUrl.Should().Contain("example.com:8443", "ServiceRoot host must reflect the inbound Host header");
+            serverUrl.Should().EndWith("/v3", "ServiceRoot must include the route prefix");
+        }
+
+        [Fact]
+        public async Task AddRestierNSwag_InvokesOpenApiConvertSettingsCallback_OnEachRequest()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var callbackInvocations = 0;
+            using var host = await BuildHostAsync(
+                routes: new[] { ("", typeof(TestApi)) },
+                cancellationToken,
+                configureServices: services =>
+                {
+                    services.AddRestierNSwag(settings =>
+                    {
+                        settings.TopExample = 42;
+                        System.Threading.Interlocked.Increment(ref callbackInvocations);
+                    });
+                });
+            var client = host.GetTestClient();
+
+            var response = await client.GetAsync("/openapi/default/openapi.json", cancellationToken);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            callbackInvocations.Should().BeGreaterThan(0,
+                "the OpenApiConvertSettings configurator must be invoked when generating the document");
+        }
+
+        private static async Task<IHost> BuildHostAsync(
+            (string prefix, Type apiType)[] routes,
+            CancellationToken cancellationToken,
+            Action<IServiceCollection> configureServices = null)
         {
             var builder = Host.CreateDefaultBuilder()
                 .ConfigureWebHost(web => web
@@ -90,7 +135,14 @@ namespace Microsoft.Restier.Tests.AspNetCore.NSwag.Extensions
                                     }
                                 }
                             });
-                        services.AddRestierNSwag();
+                        if (configureServices is not null)
+                        {
+                            configureServices(services);
+                        }
+                        else
+                        {
+                            services.AddRestierNSwag();
+                        }
                     })
                     .Configure(app =>
                     {

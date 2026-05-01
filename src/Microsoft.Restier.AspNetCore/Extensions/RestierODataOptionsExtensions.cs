@@ -114,7 +114,8 @@ public static class RestierODataOptionsExtensions
         modelBuildingServices.AddSingleton(typeof(RestierNamingConvention), (object)namingConvention);
         modelBuildingServices.AddSingleton< IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
             .AddSingleton(new RestierWebApiModelExtender(type))
-            .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type, sp.GetRequiredService<RestierWebApiModelExtender>()));
+            .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type, sp.GetRequiredService<RestierWebApiModelExtender>()))
+            .AddSingleton<IChainedService<IModelBuilder>>(sp => new ConventionBasedAnnotationModelBuilder(type));
 
         IEdmModel model;
         RestierWebApiModelExtender modelExtender;
@@ -166,6 +167,7 @@ public static class RestierODataOptionsExtensions
             services.AddSingleton<IChainedService<IModelBuilder>, RestierWebApiModelBuilder>()
                 .AddSingleton(modelExtender)
                 .AddSingleton<IChainedService<IModelBuilder>>(sp => new RestierWebApiOperationModelBuilder(type, sp.GetRequiredService<RestierWebApiModelExtender>()))
+                .AddSingleton<IChainedService<IModelBuilder>>(sp => new ConventionBasedAnnotationModelBuilder(type))
                 .AddSingleton<IChainedService<IModelMapper>, RestierWebApiModelMapper>()
                 .AddSingleton<IChainedService<IQueryExpressionExpander>, RestierQueryExpressionExpander>()
                 .AddSingleton<IChainedService<IQueryExpressionSourcer>, RestierQueryExpressionSourcer>();

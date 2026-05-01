@@ -12,6 +12,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.EntityFrameworkCore;
 using Microsoft.Restier.Samples.Northwind.AspNet.Controllers;
+using NSwag.AspNetCore;
 using System;
 
 namespace Microsoft.Restier.Samples.Northwind.AspNetCore
@@ -66,7 +67,8 @@ namespace Microsoft.Restier.Samples.Northwind.AspNetCore
                 .AddApplicationPart(typeof(NorthwindApi).Assembly)
                 .AddApplicationPart(typeof(RestierController).Assembly);
 
-            services.AddRestierSwagger();
+            services.AddRestierNSwag();
+            services.AddOpenApiDocument(c => c.DocumentName = "controllers");
 
             //RWM: Since AddRestier calls .AddAuthorization(), you can uncomment the line below if you want every request to be authenticated.
             //services.Configure<AuthorizationOptions>(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -96,7 +98,15 @@ namespace Microsoft.Restier.Samples.Northwind.AspNetCore
                 endpoints.MapRestier();
             });
 
-            app.UseRestierSwaggerUI();
+            app.UseRestierOpenApi();
+            app.UseRestierReDoc();
+            app.UseRestierNSwagUI();
+            app.UseOpenApi();
+            app.UseReDoc(c =>
+            {
+                c.Path = "/redoc/controllers";
+                c.DocumentPath = "/swagger/controllers/swagger.json";
+            });
         }
 
     }

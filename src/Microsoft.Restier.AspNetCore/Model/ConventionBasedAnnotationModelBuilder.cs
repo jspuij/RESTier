@@ -65,7 +65,7 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
     {
         foreach (var schemaType in model.SchemaElements.OfType<IEdmSchemaType>())
         {
-            if (schemaType is not IEdmStructuredType)
+            if (schemaType is not IEdmStructuredType structuredType)
             {
                 continue;
             }
@@ -77,6 +77,26 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
             }
 
             ApplyDescription(model, schemaType, clrType);
+            ApplyPropertyAnnotations(model, structuredType, clrType);
+        }
+    }
+
+    private static void ApplyPropertyAnnotations(
+        EdmModel model,
+        IEdmStructuredType structuredType,
+        Type clrType)
+    {
+        foreach (var edmProperty in structuredType.DeclaredProperties)
+        {
+            var clrProperty = clrType.GetProperty(
+                edmProperty.Name,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (clrProperty is null)
+            {
+                continue;
+            }
+
+            ApplyDescription(model, edmProperty, clrProperty);
         }
     }
 

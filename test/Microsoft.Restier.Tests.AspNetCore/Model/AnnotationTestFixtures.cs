@@ -59,3 +59,11 @@ internal class DescribedEntity
 {
     public int Id { get; set; }
 }
+
+internal class EntityWithDescribedProperty
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.Description("The display name of the entity.")]
+    public string Name { get; set; }
+}

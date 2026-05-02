@@ -37,4 +37,28 @@ public class ConventionBasedAnnotationModelBuilderTests
         var stringValue = annotation.Value.Should().BeAssignableTo<IEdmStringConstantExpression>().Subject;
         stringValue.Value.Should().Be("A described entity.");
     }
+
+    [Fact]
+    public void GetEdmModel_EmitsCoreDescription_WhenPropertyHasDescriptionAttribute()
+    {
+        // Arrange
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithDescribedProperty>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        // Act
+        var result = sut.GetEdmModel();
+
+        // Assert
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithDescribedProperty).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithDescribedProperty.Name));
+
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("The display name of the entity.");
+    }
 }

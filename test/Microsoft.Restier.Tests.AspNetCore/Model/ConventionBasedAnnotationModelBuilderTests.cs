@@ -13,6 +13,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Model;
 public class ConventionBasedAnnotationModelBuilderTests
 {
     private const string CoreDescriptionTerm = "Org.OData.Core.V1.Description";
+    private const string CoreComputedTerm = "Org.OData.Core.V1.Computed";
 
     [Fact]
     public void GetEdmModel_EmitsCoreDescription_WhenEntityTypeHasDescriptionAttribute()
@@ -109,5 +110,60 @@ public class ConventionBasedAnnotationModelBuilderTests
             .Should().ContainSingle().Subject;
 
         ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("Returns the active record count.");
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsCoreComputed_WhenPropertyIsDatabaseGeneratedIdentity()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithIdentityKey>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithIdentityKey).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithIdentityKey.Id));
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreComputedTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmBooleanConstantExpression)annotation.Value).Value.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsCoreComputed_WhenPropertyIsDatabaseGeneratedComputed()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithComputedProperty>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithComputedProperty).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithComputedProperty.UpdatedAt));
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreComputedTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmBooleanConstantExpression)annotation.Value).Value.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetEdmModel_DoesNotEmitCoreComputed_WhenPropertyIsDatabaseGeneratedNone()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithNoneOption>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithNoneOption).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithNoneOption.Name));
+        result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreComputedTerm)
+            .Should().BeEmpty();
     }
 }

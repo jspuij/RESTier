@@ -107,3 +107,28 @@ internal class ApiWithDescribedOperation : ApiBase
     [System.ComponentModel.Description("Returns the active record count.")]
     public int CountActive() => 0;
 }
+
+internal class EntityWithIdentityKey
+{
+    [System.ComponentModel.DataAnnotations.Schema.DatabaseGenerated(
+        System.ComponentModel.DataAnnotations.Schema.DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+}
+
+internal class EntityWithComputedProperty
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.DatabaseGenerated(
+        System.ComponentModel.DataAnnotations.Schema.DatabaseGeneratedOption.Computed)]
+    public System.DateTime UpdatedAt { get; set; }
+}
+
+internal class EntityWithNoneOption
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.DatabaseGenerated(
+        System.ComponentModel.DataAnnotations.Schema.DatabaseGeneratedOption.None)]
+    public string Name { get; set; }
+}

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
 using Microsoft.OData.Edm;
@@ -133,7 +134,32 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
             }
 
             ApplyDescription(model, edmProperty, clrProperty);
+            ApplyComputed(model, edmProperty, clrProperty);
         }
+    }
+
+    private static void ApplyComputed(
+        EdmModel model,
+        IEdmVocabularyAnnotatable target,
+        PropertyInfo clrProperty)
+    {
+        var attr = clrProperty.GetCustomAttribute<DatabaseGeneratedAttribute>(inherit: true);
+        if (attr is null || attr.DatabaseGeneratedOption == DatabaseGeneratedOption.None)
+        {
+            return;
+        }
+
+        if (HasAnnotation(model, target, CoreVocabularyModel.ComputedTerm))
+        {
+            return;
+        }
+
+        var annotation = new EdmVocabularyAnnotation(
+            target,
+            CoreVocabularyModel.ComputedTerm,
+            new EdmBooleanConstant(true));
+        annotation.SetSerializationLocation(model, EdmVocabularyAnnotationSerializationLocation.Inline);
+        model.AddVocabularyAnnotation(annotation);
     }
 
     private static void ApplyDescription(

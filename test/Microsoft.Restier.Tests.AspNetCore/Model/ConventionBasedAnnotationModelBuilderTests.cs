@@ -17,6 +17,7 @@ public class ConventionBasedAnnotationModelBuilderTests
     private const string CoreImmutableTerm = "Org.OData.Core.V1.Immutable";
     private const string ValidationMinimumTerm = "Org.OData.Validation.V1.Minimum";
     private const string ValidationMaximumTerm = "Org.OData.Validation.V1.Maximum";
+    private const string ValidationPatternTerm = "Org.OData.Validation.V1.Pattern";
 
     [Fact]
     public void GetEdmModel_EmitsCoreDescription_WhenEntityTypeHasDescriptionAttribute()
@@ -293,5 +294,25 @@ public class ConventionBasedAnnotationModelBuilderTests
             .Should().BeEmpty();
         result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMaximumTerm)
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsValidationPattern_WhenPropertyHasRegularExpression()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithRegexProperty>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithRegexProperty).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithRegexProperty.CountryCode));
+
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationPatternTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("^[A-Z]{2}$");
     }
 }

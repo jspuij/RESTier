@@ -180,3 +180,11 @@ internal class EntityWithRangeOnString
     [System.ComponentModel.DataAnnotations.Range(0, 10)]
     public string Label { get; set; }
 }
+
+internal class EntityWithRegexProperty
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.RegularExpression("^[A-Z]{2}$")]
+    public string CountryCode { get; set; }
+}

@@ -36,6 +36,8 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
         ValidationVocabularyModel.Instance.FindDeclaredTerm("Org.OData.Validation.V1.Minimum");
     private static readonly IEdmTerm ValidationMaximumTerm =
         ValidationVocabularyModel.Instance.FindDeclaredTerm("Org.OData.Validation.V1.Maximum");
+    private static readonly IEdmTerm ValidationPatternTerm =
+        ValidationVocabularyModel.Instance.FindDeclaredTerm("Org.OData.Validation.V1.Pattern");
 
     private readonly Type apiType;
     private readonly Dictionary<string, MethodInfo> operationMethods;
@@ -145,7 +147,32 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
             ApplyComputed(model, edmProperty, clrProperty);
             ApplyImmutable(model, edmProperty, clrProperty);
             ApplyRange(model, edmProperty, clrProperty);
+            ApplyPattern(model, edmProperty, clrProperty);
         }
+    }
+
+    private static void ApplyPattern(
+        EdmModel model,
+        IEdmVocabularyAnnotatable target,
+        PropertyInfo clrProperty)
+    {
+        var attr = clrProperty.GetCustomAttribute<RegularExpressionAttribute>(inherit: true);
+        if (attr is null || string.IsNullOrEmpty(attr.Pattern))
+        {
+            return;
+        }
+
+        if (HasAnnotation(model, target, ValidationPatternTerm))
+        {
+            return;
+        }
+
+        var annotation = new EdmVocabularyAnnotation(
+            target,
+            ValidationPatternTerm,
+            new EdmStringConstant(attr.Pattern));
+        annotation.SetSerializationLocation(model, EdmVocabularyAnnotationSerializationLocation.Inline);
+        model.AddVocabularyAnnotation(annotation);
     }
 
     private static void ApplyRange(

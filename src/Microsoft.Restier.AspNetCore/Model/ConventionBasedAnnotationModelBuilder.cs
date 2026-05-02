@@ -4,7 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Microsoft.OData.Edm;
@@ -29,6 +32,11 @@ namespace Microsoft.Restier.AspNetCore.Model;
 /// </remarks>
 public class ConventionBasedAnnotationModelBuilder : IModelBuilder
 {
+    private static readonly IEdmTerm ValidationMinimumTerm =
+        ValidationVocabularyModel.Instance.FindDeclaredTerm("Org.OData.Validation.V1.Minimum");
+    private static readonly IEdmTerm ValidationMaximumTerm =
+        ValidationVocabularyModel.Instance.FindDeclaredTerm("Org.OData.Validation.V1.Maximum");
+
     private readonly Type apiType;
     private readonly Dictionary<string, MethodInfo> operationMethods;
 
@@ -136,7 +144,91 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
             ApplyDescription(model, edmProperty, clrProperty);
             ApplyComputed(model, edmProperty, clrProperty);
             ApplyImmutable(model, edmProperty, clrProperty);
+            ApplyRange(model, edmProperty, clrProperty);
         }
+    }
+
+    private static void ApplyRange(
+        EdmModel model,
+        IEdmProperty edmProperty,
+        PropertyInfo clrProperty)
+    {
+        var attr = clrProperty.GetCustomAttribute<RangeAttribute>(inherit: true);
+        if (attr is null)
+        {
+            return;
+        }
+
+        if (edmProperty.Type.Definition is not IEdmPrimitiveType primitive)
+        {
+            Trace.TraceWarning(
+                "ConventionBasedAnnotationModelBuilder: [Range] on '{0}.{1}' is not a primitive property; skipping.",
+                clrProperty.DeclaringType?.FullName, clrProperty.Name);
+            return;
+        }
+
+        EmitRangeBound(model, edmProperty, primitive, attr.Minimum, ValidationMinimumTerm, clrProperty);
+        EmitRangeBound(model, edmProperty, primitive, attr.Maximum, ValidationMaximumTerm, clrProperty);
+    }
+
+    private static void EmitRangeBound(
+        EdmModel model,
+        IEdmVocabularyAnnotatable target,
+        IEdmPrimitiveType primitive,
+        object boundValue,
+        IEdmTerm term,
+        PropertyInfo clrProperty)
+    {
+        if (boundValue is null)
+        {
+            return;
+        }
+
+        if (HasAnnotation(model, target, term))
+        {
+            return;
+        }
+
+        IEdmExpression expression;
+        try
+        {
+            switch (primitive.PrimitiveKind)
+            {
+                case EdmPrimitiveTypeKind.Byte:
+                case EdmPrimitiveTypeKind.SByte:
+                case EdmPrimitiveTypeKind.Int16:
+                case EdmPrimitiveTypeKind.Int32:
+                case EdmPrimitiveTypeKind.Int64:
+                    expression = new EdmIntegerConstant(
+                        Convert.ToInt64(boundValue, CultureInfo.InvariantCulture));
+                    break;
+                case EdmPrimitiveTypeKind.Single:
+                case EdmPrimitiveTypeKind.Double:
+                    expression = new EdmFloatingConstant(
+                        Convert.ToDouble(boundValue, CultureInfo.InvariantCulture));
+                    break;
+                case EdmPrimitiveTypeKind.Decimal:
+                    expression = new EdmDecimalConstant(
+                        Convert.ToDecimal(boundValue, CultureInfo.InvariantCulture));
+                    break;
+                default:
+                    Trace.TraceWarning(
+                        "ConventionBasedAnnotationModelBuilder: [Range] on '{0}.{1}' targets primitive kind {2}, which is not supported; skipping.",
+                        clrProperty.DeclaringType?.FullName, clrProperty.Name, primitive.PrimitiveKind);
+                    return;
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        {
+            Trace.TraceWarning(
+                "ConventionBasedAnnotationModelBuilder: [Range] value '{0}' on '{1}.{2}' could not be converted: {3}; skipping.",
+                boundValue, clrProperty.DeclaringType?.FullName, clrProperty.Name, ex.Message);
+            return;
+        }
+
+        var annotation = new EdmVocabularyAnnotation(target, term, expression);
+        annotation.SetSerializationLocation(model, EdmVocabularyAnnotationSerializationLocation.Inline);
+        model.AddVocabularyAnnotation(annotation);
     }
 
     private static void ApplyImmutable(

@@ -148,3 +148,35 @@ internal class EntityWithReadOnlyFalse
     [System.ComponentModel.ReadOnly(false)]
     public string Notes { get; set; }
 }
+
+internal class EntityWithIntRange
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Range(0, 100)]
+    public int Score { get; set; }
+}
+
+internal class EntityWithDoubleRange
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Range(0.0, 1.0)]
+    public double Ratio { get; set; }
+}
+
+internal class EntityWithDecimalRange
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Range(typeof(decimal), "0.00", "999.99")]
+    public decimal Price { get; set; }
+}
+
+internal class EntityWithRangeOnString
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Range(0, 10)]
+    public string Label { get; set; }
+}

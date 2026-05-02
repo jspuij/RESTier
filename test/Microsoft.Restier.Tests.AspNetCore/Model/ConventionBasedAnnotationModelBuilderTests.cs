@@ -15,6 +15,8 @@ public class ConventionBasedAnnotationModelBuilderTests
     private const string CoreDescriptionTerm = "Org.OData.Core.V1.Description";
     private const string CoreComputedTerm = "Org.OData.Core.V1.Computed";
     private const string CoreImmutableTerm = "Org.OData.Core.V1.Immutable";
+    private const string ValidationMinimumTerm = "Org.OData.Validation.V1.Minimum";
+    private const string ValidationMaximumTerm = "Org.OData.Validation.V1.Maximum";
 
     [Fact]
     public void GetEdmModel_EmitsCoreDescription_WhenEntityTypeHasDescriptionAttribute()
@@ -201,6 +203,95 @@ public class ConventionBasedAnnotationModelBuilderTests
         var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithReadOnlyFalse).FullName);
         var property = entityType.FindProperty(nameof(EntityWithReadOnlyFalse.Notes));
         result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreImmutableTerm)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsIntegerMinMax_WhenIntPropertyHasRangeAttribute()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithIntRange>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithIntRange).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithIntRange.Score));
+
+        var min = result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMinimumTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmIntegerConstantExpression)min.Value).Value.Should().Be(0L);
+
+        var max = result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMaximumTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmIntegerConstantExpression)max.Value).Value.Should().Be(100L);
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsFloatingMinMax_WhenDoublePropertyHasRangeAttribute()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithDoubleRange>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithDoubleRange).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithDoubleRange.Ratio));
+
+        var min = result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMinimumTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmFloatingConstantExpression)min.Value).Value.Should().Be(0.0);
+
+        var max = result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMaximumTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmFloatingConstantExpression)max.Value).Value.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsDecimalMinMax_WhenDecimalPropertyHasRangeAttribute()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithDecimalRange>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithDecimalRange).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithDecimalRange.Price));
+
+        var min = result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMinimumTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmDecimalConstantExpression)min.Value).Value.Should().Be(0.00m);
+
+        var max = result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMaximumTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmDecimalConstantExpression)max.Value).Value.Should().Be(999.99m);
+    }
+
+    [Fact]
+    public void GetEdmModel_DoesNotEmitMinMax_WhenRangeAppliedToStringProperty()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithRangeOnString>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithRangeOnString).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithRangeOnString.Label));
+
+        result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMinimumTerm)
+            .Should().BeEmpty();
+        result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationMaximumTerm)
             .Should().BeEmpty();
     }
 }

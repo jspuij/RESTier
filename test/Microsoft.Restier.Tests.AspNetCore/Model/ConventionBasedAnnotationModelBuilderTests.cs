@@ -61,4 +61,28 @@ public class ConventionBasedAnnotationModelBuilderTests
 
         ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("The display name of the entity.");
     }
+
+    [Fact]
+    public void GetEdmModel_EmitsCoreDescription_WhenComplexTypeHasDescriptionAttribute()
+    {
+        // Arrange
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithComplexProperty>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        // Act
+        var result = sut.GetEdmModel();
+
+        // Assert
+        var complexType = result.FindDeclaredType(typeof(DescribedComplex).FullName);
+        complexType.Should().BeAssignableTo<IEdmComplexType>("ODataConventionModelBuilder should infer DescribedComplex as a complex type");
+
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(complexType, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("A postal address.");
+    }
 }

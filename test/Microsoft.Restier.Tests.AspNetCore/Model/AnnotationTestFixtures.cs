@@ -67,3 +67,18 @@ internal class EntityWithDescribedProperty
     [System.ComponentModel.Description("The display name of the entity.")]
     public string Name { get; set; }
 }
+
+[System.ComponentModel.Description("A postal address.")]
+internal class DescribedComplex
+{
+    public string Street { get; set; }
+
+    public string Zip { get; set; }
+}
+
+internal class EntityWithComplexProperty
+{
+    public int Id { get; set; }
+
+    public DescribedComplex Address { get; set; }
+}

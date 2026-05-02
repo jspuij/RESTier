@@ -26,6 +26,22 @@ internal static class AnnotationTestFixtures
         return (EdmModel)builder.GetEdmModel();
     }
 
+    public static EdmModel BuildModelWithUnboundFunction(
+        string namespaceName,
+        string functionName,
+        IEdmTypeReference returnTypeRef = null)
+    {
+        var model = new EdmModel();
+        var container = new EdmEntityContainer(namespaceName, "Default");
+        model.AddElement(container);
+
+        returnTypeRef ??= EdmCoreModel.Instance.GetPrimitive(EdmPrimitiveTypeKind.Int32, false);
+        var function = new EdmFunction(namespaceName, functionName, returnTypeRef);
+        model.AddElement(function);
+        container.AddFunctionImport(functionName, function);
+        return model;
+    }
+
     /// <summary>
     /// Inner builder that returns a fixed model. Used to feed a known input model
     /// into the system-under-test without invoking the real RESTier chain.
@@ -81,4 +97,13 @@ internal class EntityWithComplexProperty
     public int Id { get; set; }
 
     public DescribedComplex Address { get; set; }
+}
+
+internal class ApiWithDescribedOperation : ApiBase
+{
+    public ApiWithDescribedOperation() : base(null, null, null) { }
+
+    [Microsoft.Restier.AspNetCore.Model.UnboundOperation]
+    [System.ComponentModel.Description("Returns the active record count.")]
+    public int CountActive() => 0;
 }

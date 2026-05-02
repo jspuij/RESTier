@@ -2,6 +2,7 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
@@ -28,6 +29,7 @@ namespace Microsoft.Restier.AspNetCore.Model;
 public class ConventionBasedAnnotationModelBuilder : IModelBuilder
 {
     private readonly Type apiType;
+    private readonly Dictionary<string, MethodInfo> operationMethods;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ConventionBasedAnnotationModelBuilder"/> class.
@@ -38,6 +40,30 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
     {
         Ensure.NotNull(apiType, nameof(apiType));
         this.apiType = apiType;
+        this.operationMethods = BuildOperationIndex(apiType);
+    }
+
+    private static Dictionary<string, MethodInfo> BuildOperationIndex(Type apiType)
+    {
+        var index = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
+        var methods = apiType
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Public
+                      | BindingFlags.FlattenHierarchy | BindingFlags.Instance)
+            .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object));
+
+        foreach (var method in methods)
+        {
+            if (method.GetCustomAttribute<OperationAttribute>(inherit: true) is null)
+            {
+                continue;
+            }
+
+            // EDM operation name is the C# method name. The operation attributes
+            // do not currently expose a Name override.
+            index.TryAdd(method.Name, method);
+        }
+
+        return index;
     }
 
     /// <summary>
@@ -61,7 +87,7 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
         return model;
     }
 
-    private static void ApplyAnnotations(EdmModel model)
+    private void ApplyAnnotations(EdmModel model)
     {
         foreach (var schemaType in model.SchemaElements.OfType<IEdmSchemaType>())
         {
@@ -78,6 +104,16 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
 
             ApplyDescription(model, schemaType, clrType);
             ApplyPropertyAnnotations(model, structuredType, clrType);
+        }
+
+        foreach (var operation in model.SchemaElements.OfType<IEdmOperation>())
+        {
+            if (!operationMethods.TryGetValue(operation.Name, out var method))
+            {
+                continue;
+            }
+
+            ApplyDescription(model, operation, method);
         }
     }
 

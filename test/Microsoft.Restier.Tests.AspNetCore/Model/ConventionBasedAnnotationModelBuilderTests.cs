@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System.Linq;
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.OData.Edm.Vocabularies;
@@ -84,5 +85,29 @@ public class ConventionBasedAnnotationModelBuilderTests
             .Should().ContainSingle().Subject;
 
         ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("A postal address.");
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsCoreDescription_WhenOperationMethodHasDescriptionAttribute()
+    {
+        // Arrange
+        var inputModel = AnnotationTestFixtures.BuildModelWithUnboundFunction(
+            namespaceName: "Microsoft.Restier.Tests.AspNetCore.Model",
+            functionName: nameof(ApiWithDescribedOperation.CountActive));
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(ApiWithDescribedOperation))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        // Act
+        var result = sut.GetEdmModel();
+
+        // Assert
+        var operation = result.SchemaElements.OfType<IEdmOperation>().Single();
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(operation, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("Returns the active record count.");
     }
 }

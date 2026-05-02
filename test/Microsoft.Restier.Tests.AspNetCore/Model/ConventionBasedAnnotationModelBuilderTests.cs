@@ -1,11 +1,9 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System;
 using FluentAssertions;
 using Microsoft.OData.Edm;
 using Microsoft.OData.Edm.Vocabularies;
-using Microsoft.OData.Edm.Vocabularies.V1;
 using Microsoft.Restier.AspNetCore.Model;
 using Xunit;
 

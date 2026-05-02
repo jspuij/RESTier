@@ -42,11 +42,14 @@ internal static class AnnotationTestFixtures
     }
 
     /// <summary>
-    /// Stub API class used as the <c>apiType</c> argument to the system-under-test
-    /// when no operation scanning is being exercised.
+    /// Stub API class used as the <c>apiType</c> argument to the system-under-test.
+    /// Only the type metadata (via <c>typeof(StubApi)</c>) is consumed by the builder;
+    /// the constructor is never invoked at runtime by the tests, so the <see langword="null"/>
+    /// arguments to <see cref="Microsoft.Restier.Core.ApiBase"/> are safe in practice.
     /// </summary>
     public class StubApi : ApiBase
     {
+        // Constructor is never executed; only typeof(StubApi) is used by the operation index.
         public StubApi() : base(null, null, null) { }
     }
 }

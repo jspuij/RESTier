@@ -48,15 +48,13 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
     /// <inheritdoc />
     public IEdmModel GetEdmModel()
     {
-        if (Inner is null)
+        var inner = Inner?.GetEdmModel();
+        if (inner is not EdmModel model)
         {
-            return null;
-        }
-
-        var model = Inner.GetEdmModel() as EdmModel;
-        if (model is null)
-        {
-            return null;
+            // Annotation enrichment requires EdmModel APIs (AddVocabularyAnnotation).
+            // If the inner model is null or a different IEdmModel implementation,
+            // pass it through unchanged so the chain is preserved.
+            return inner;
         }
 
         ApplyAnnotations(model);
@@ -67,16 +65,18 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
     {
         foreach (var schemaType in model.SchemaElements.OfType<IEdmSchemaType>())
         {
-            if (schemaType is IEdmStructuredType structuredType)
+            if (schemaType is not IEdmStructuredType)
             {
-                var clrType = model.GetAnnotationValue<ClrTypeAnnotation>(schemaType)?.ClrType;
-                if (clrType is null)
-                {
-                    continue;
-                }
-
-                ApplyDescription(model, schemaType, clrType);
+                continue;
             }
+
+            var clrType = model.GetAnnotationValue<ClrTypeAnnotation>(schemaType)?.ClrType;
+            if (clrType is null)
+            {
+                continue;
+            }
+
+            ApplyDescription(model, schemaType, clrType);
         }
     }
 

@@ -2,19 +2,21 @@
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
+using System.Linq;
+using System.Reflection;
 using Microsoft.OData.Edm;
+using Microsoft.OData.Edm.Csdl;
+using Microsoft.OData.Edm.Vocabularies;
+using Microsoft.OData.Edm.Vocabularies.V1;
+using Microsoft.OData.ModelBuilder;
 using Microsoft.Restier.Core.Model;
 
 namespace Microsoft.Restier.AspNetCore.Model;
 
 /// <summary>
 /// A chained <see cref="IModelBuilder"/> that scans CLR types referenced by the
-/// EDM model for .NET attributes such as <see cref="System.ComponentModel.DescriptionAttribute"/>,
-/// <see cref="System.ComponentModel.DataAnnotations.Schema.DatabaseGeneratedAttribute"/>,
-/// <see cref="System.ComponentModel.ReadOnlyAttribute"/>,
-/// <see cref="System.ComponentModel.DataAnnotations.RangeAttribute"/>, and
-/// <see cref="System.ComponentModel.DataAnnotations.RegularExpressionAttribute"/>,
-/// and emits the corresponding OData vocabulary annotations.
+/// EDM model for .NET attributes and emits the corresponding OData vocabulary annotations.
 /// </summary>
 /// <remarks>
 /// Runs last in the model-building chain so it can annotate every entity, complex
@@ -51,6 +53,61 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
             return null;
         }
 
-        return Inner.GetEdmModel();
+        var model = Inner.GetEdmModel() as EdmModel;
+        if (model is null)
+        {
+            return null;
+        }
+
+        ApplyAnnotations(model);
+        return model;
+    }
+
+    private static void ApplyAnnotations(EdmModel model)
+    {
+        foreach (var schemaType in model.SchemaElements.OfType<IEdmSchemaType>())
+        {
+            if (schemaType is IEdmStructuredType structuredType)
+            {
+                var clrType = model.GetAnnotationValue<ClrTypeAnnotation>(schemaType)?.ClrType;
+                if (clrType is null)
+                {
+                    continue;
+                }
+
+                ApplyDescription(model, schemaType, clrType);
+            }
+        }
+    }
+
+    private static void ApplyDescription(
+        EdmModel model,
+        IEdmVocabularyAnnotatable target,
+        MemberInfo clrMember)
+    {
+        var description = clrMember.GetCustomAttribute<DescriptionAttribute>(inherit: true)?.Description;
+        if (string.IsNullOrEmpty(description))
+        {
+            return;
+        }
+
+        if (HasAnnotation(model, target, CoreVocabularyModel.DescriptionTerm))
+        {
+            return;
+        }
+
+        var annotation = new EdmVocabularyAnnotation(
+            target,
+            CoreVocabularyModel.DescriptionTerm,
+            new EdmStringConstant(description));
+        annotation.SetSerializationLocation(model, EdmVocabularyAnnotationSerializationLocation.Inline);
+        model.AddVocabularyAnnotation(annotation);
+    }
+
+    private static bool HasAnnotation(IEdmModel model, IEdmVocabularyAnnotatable target, IEdmTerm term)
+    {
+        return model
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(target, term.FullName())
+            .Any();
     }
 }

@@ -15,6 +15,14 @@ your EDM model and serve an interactive Swagger UI for exploring your API. This 
 client-code generation, and combining Restier with plain ASP.NET Core controllers in the same
 application's OpenAPI surface. Both packages remain supported.</Note>
 
+<Tip>
+RESTier emits OData vocabulary annotations from standard .NET attributes
+like `[Description]`, `[DatabaseGenerated]`, and `[Range]` automatically.
+Swagger picks these up and surfaces them as descriptions, `readOnly` flags,
+and validation constraints in your OpenAPI document — no extra
+configuration needed. See [OpenAPI Annotation Attributes](./openapi-annotations).
+</Tip>
+
 ## Setup
 
 ### Install the NuGet Package

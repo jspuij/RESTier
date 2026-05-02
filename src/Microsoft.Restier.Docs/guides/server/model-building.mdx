@@ -290,3 +290,13 @@ The final process of building the model follows the chain of responsibility patt
  
 If the `Inner` property is not called, the inner builders are skipped entirely, giving you full control over the model.
 This chain of responsibility pattern applies not only to `IModelBuilder` but also to all other chained services in RESTier.
+
+<Note>
+For the common case of attaching descriptions and validation hints to your
+model, you don't need a custom `IModelBuilder` — RESTier's convention
+builder maps standard .NET attributes (`[Description]`, `[DatabaseGenerated]`,
+`[ReadOnly]`, `[Range]`, `[RegularExpression]`) to OData vocabulary annotations
+automatically. See [OpenAPI Annotation Attributes](./openapi-annotations).
+Use a custom builder when the conventions don't cover what you need —
+e.g., capabilities, role-based restrictions, or dynamic descriptions.
+</Note>

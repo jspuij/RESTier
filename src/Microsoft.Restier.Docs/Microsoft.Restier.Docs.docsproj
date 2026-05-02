@@ -35,6 +35,7 @@
                                     guides/server/operations;
                                     guides/server/nswag;
                                     guides/server/swagger;
+                                    guides/server/openapi-annotations;
                                     guides/server/testing;
                                     guides/server/naming-conventions;
                                     guides/server/concurrency;

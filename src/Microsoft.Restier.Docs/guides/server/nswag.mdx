@@ -13,6 +13,14 @@ client-code-generation tooling. This is provided by the `Microsoft.Restier.AspNe
 <Note>NSwag is the recommended OpenAPI integration for new Restier projects. The
 [Swashbuckle-based Swagger package](swagger) remains supported for projects already invested in it.</Note>
 
+<Tip>
+RESTier emits OData vocabulary annotations from standard .NET attributes
+like `[Description]`, `[DatabaseGenerated]`, and `[Range]` automatically.
+NSwag picks these up and surfaces them as descriptions, `readOnly` flags,
+and validation constraints in your OpenAPI document — no extra
+configuration needed. See [OpenAPI Annotation Attributes](./openapi-annotations).
+</Tip>
+
 ## Setup
 
 ### Install the NuGet Package

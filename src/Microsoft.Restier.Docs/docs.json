@@ -33,6 +33,7 @@
               "guides/server/operations",
               "guides/server/nswag",
               "guides/server/swagger",
+              "guides/server/openapi-annotations",
               "guides/server/testing",
               "guides/server/naming-conventions",
               "guides/server/concurrency",
@@ -210,6 +211,7 @@
                         "pages": [
                           "api-reference/Microsoft/Restier/AspNetCore/Model/index",
                           "api-reference/Microsoft/Restier/AspNetCore/Model/BoundOperationAttribute",
+                          "api-reference/Microsoft/Restier/AspNetCore/Model/ConventionBasedAnnotationModelBuilder",
                           "api-reference/Microsoft/Restier/AspNetCore/Model/OperationAttribute",
                           "api-reference/Microsoft/Restier/AspNetCore/Model/OperationType",
                           "api-reference/Microsoft/Restier/AspNetCore/Model/ResourceAttribute",

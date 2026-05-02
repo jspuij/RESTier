@@ -14,6 +14,7 @@ public class ConventionBasedAnnotationModelBuilderTests
 {
     private const string CoreDescriptionTerm = "Org.OData.Core.V1.Description";
     private const string CoreComputedTerm = "Org.OData.Core.V1.Computed";
+    private const string CoreImmutableTerm = "Org.OData.Core.V1.Immutable";
 
     [Fact]
     public void GetEdmModel_EmitsCoreDescription_WhenEntityTypeHasDescriptionAttribute()
@@ -164,6 +165,42 @@ public class ConventionBasedAnnotationModelBuilderTests
         var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithNoneOption).FullName);
         var property = entityType.FindProperty(nameof(EntityWithNoneOption.Name));
         result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreComputedTerm)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetEdmModel_EmitsCoreImmutable_WhenPropertyIsReadOnlyTrue()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithReadOnlyTrue>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithReadOnlyTrue).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithReadOnlyTrue.CreatedOn));
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreImmutableTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmBooleanConstantExpression)annotation.Value).Value.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetEdmModel_DoesNotEmitCoreImmutable_WhenPropertyIsReadOnlyFalse()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithReadOnlyFalse>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithReadOnlyFalse).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithReadOnlyFalse.Notes));
+        result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreImmutableTerm)
             .Should().BeEmpty();
     }
 }

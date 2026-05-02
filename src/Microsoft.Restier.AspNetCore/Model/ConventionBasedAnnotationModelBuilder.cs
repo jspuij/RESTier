@@ -135,7 +135,32 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
 
             ApplyDescription(model, edmProperty, clrProperty);
             ApplyComputed(model, edmProperty, clrProperty);
+            ApplyImmutable(model, edmProperty, clrProperty);
         }
+    }
+
+    private static void ApplyImmutable(
+        EdmModel model,
+        IEdmVocabularyAnnotatable target,
+        PropertyInfo clrProperty)
+    {
+        var attr = clrProperty.GetCustomAttribute<ReadOnlyAttribute>(inherit: true);
+        if (attr is null || !attr.IsReadOnly)
+        {
+            return;
+        }
+
+        if (HasAnnotation(model, target, CoreVocabularyModel.ImmutableTerm))
+        {
+            return;
+        }
+
+        var annotation = new EdmVocabularyAnnotation(
+            target,
+            CoreVocabularyModel.ImmutableTerm,
+            new EdmBooleanConstant(true));
+        annotation.SetSerializationLocation(model, EdmVocabularyAnnotationSerializationLocation.Inline);
+        model.AddVocabularyAnnotation(annotation);
     }
 
     private static void ApplyComputed(

@@ -132,3 +132,19 @@ internal class EntityWithNoneOption
         System.ComponentModel.DataAnnotations.Schema.DatabaseGeneratedOption.None)]
     public string Name { get; set; }
 }
+
+internal class EntityWithReadOnlyTrue
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.ReadOnly(true)]
+    public System.DateTimeOffset CreatedOn { get; set; }
+}
+
+internal class EntityWithReadOnlyFalse
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.ReadOnly(false)]
+    public string Notes { get; set; }
+}

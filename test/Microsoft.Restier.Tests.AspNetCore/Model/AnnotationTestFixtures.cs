@@ -188,3 +188,17 @@ internal class EntityWithRegexProperty
     [System.ComponentModel.DataAnnotations.RegularExpression("^[A-Z]{2}$")]
     public string CountryCode { get; set; }
 }
+
+[System.ComponentModel.Description("From attribute.")]
+internal class EntityWithExistingAnnotation
+{
+    public int Id { get; set; }
+}
+
+internal class EntityWithMaxLength
+{
+    public int Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(13)]
+    public string Code { get; set; }
+}

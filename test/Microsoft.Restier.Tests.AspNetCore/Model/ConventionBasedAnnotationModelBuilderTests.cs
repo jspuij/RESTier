@@ -1,9 +1,11 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using FluentAssertions;
 using Microsoft.OData.Edm;
+using Microsoft.OData.Edm.Csdl;
 using Microsoft.OData.Edm.Vocabularies;
 using Microsoft.Restier.AspNetCore.Model;
 using Xunit;
@@ -314,5 +316,82 @@ public class ConventionBasedAnnotationModelBuilderTests
             .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, ValidationPatternTerm)
             .Should().ContainSingle().Subject;
         ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("^[A-Z]{2}$");
+    }
+
+    [Fact]
+    public void GetEdmModel_DoesNotOverrideExistingDescriptionAnnotation()
+    {
+        // Arrange — build the model and pre-add a Description annotation manually.
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithExistingAnnotation>();
+        var entityType = inputModel.FindDeclaredType(typeof(EntityWithExistingAnnotation).FullName);
+        var preExisting = new EdmVocabularyAnnotation(
+            entityType,
+            Microsoft.OData.Edm.Vocabularies.V1.CoreVocabularyModel.DescriptionTerm,
+            new EdmStringConstant("Pre-existing."));
+        preExisting.SetSerializationLocation(inputModel, EdmVocabularyAnnotationSerializationLocation.Inline);
+        inputModel.AddVocabularyAnnotation(preExisting);
+
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        // Act
+        var result = sut.GetEdmModel();
+
+        // Assert — the pre-existing annotation survives; no second annotation was added.
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(entityType, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("Pre-existing.");
+    }
+
+    [Fact]
+    public void GetEdmModel_ReturnsNull_WhenInnerIsNull()
+    {
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = null,
+        };
+
+        sut.GetEdmModel().Should().BeNull();
+    }
+
+    [Fact]
+    public void GetEdmModel_ReturnsNull_WhenInnerReturnsNull()
+    {
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(null),
+        };
+
+        sut.GetEdmModel().Should().BeNull();
+    }
+
+    [Fact]
+    public void Constructor_Throws_WhenApiTypeIsNull()
+    {
+        var act = () => new ConventionBasedAnnotationModelBuilder(null);
+        act.Should().Throw<ArgumentNullException>().WithParameterName("apiType");
+    }
+
+    [Fact]
+    public void GetEdmModel_DoesNotEmitVocabularyAnnotation_ForMaxLengthAttribute()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWith<EntityWithMaxLength>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithMaxLength).FullName);
+        var property = entityType.FindProperty(nameof(EntityWithMaxLength.Code));
+
+        // Assert — no Validation.MaxLength vocabulary annotation; structural facet remains.
+        result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, "Org.OData.Validation.V1.MaxLength")
+            .Should().BeEmpty();
+        property.Type.AsString().MaxLength.Should().Be(13, "the structural facet should still carry the constraint");
     }
 }

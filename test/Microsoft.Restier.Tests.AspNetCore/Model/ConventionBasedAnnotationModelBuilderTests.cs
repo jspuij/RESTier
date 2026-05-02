@@ -394,4 +394,66 @@ public class ConventionBasedAnnotationModelBuilderTests
             .Should().BeEmpty();
         property.Type.AsString().MaxLength.Should().Be(13, "the structural facet should still carry the constraint");
     }
+
+    [Fact]
+    public void GetEdmModel_AnnotatesOperation_WhenMethodIsDeclaredOnBaseClass()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWithUnboundFunction(
+            namespaceName: "Microsoft.Restier.Tests.AspNetCore.Model",
+            functionName: nameof(BaseApiWithOperation.InheritedOp));
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(DerivedApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var operation = result.SchemaElements.OfType<IEdmOperation>().Single();
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(operation, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("Inherited operation.");
+    }
+
+    [Fact]
+    public void GetEdmModel_AnnotatesOperation_WhenMethodIsProtectedInternal()
+    {
+        var inputModel = AnnotationTestFixtures.BuildModelWithUnboundFunction(
+            namespaceName: "Microsoft.Restier.Tests.AspNetCore.Model",
+            functionName: "ProtectedOp");
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(ApiWithProtectedOperation))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        var result = sut.GetEdmModel();
+
+        var operation = result.SchemaElements.OfType<IEdmOperation>().Single();
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(operation, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("Protected operation.");
+    }
+
+    [Fact]
+    public void Constructor_DoesNotIndexSpecialNameMethods_AsOperations()
+    {
+        // Arrange — feed in a model with a function named "get_Item" (the indexer's getter name).
+        var inputModel = AnnotationTestFixtures.BuildModelWithUnboundFunction(
+            namespaceName: "Microsoft.Restier.Tests.AspNetCore.Model",
+            functionName: "get_Item");
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(ApiWithIndexerProperty))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        // Act
+        var result = sut.GetEdmModel();
+
+        // Assert — the [Description] on the indexer property should NOT be picked up
+        // as an operation description, because get_Item is IsSpecialName.
+        var operation = result.SchemaElements.OfType<IEdmOperation>().Single();
+        result.FindVocabularyAnnotations<IEdmVocabularyAnnotation>(operation, CoreDescriptionTerm)
+            .Should().BeEmpty();
+    }
 }

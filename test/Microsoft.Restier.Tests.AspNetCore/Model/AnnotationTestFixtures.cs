@@ -202,3 +202,35 @@ internal class EntityWithMaxLength
     [System.ComponentModel.DataAnnotations.MaxLength(13)]
     public string Code { get; set; }
 }
+
+internal class BaseApiWithOperation : ApiBase
+{
+    public BaseApiWithOperation() : base(null, null, null) { }
+
+    [Microsoft.Restier.AspNetCore.Model.UnboundOperation]
+    [System.ComponentModel.Description("Inherited operation.")]
+    public int InheritedOp() => 0;
+}
+
+internal class DerivedApi : BaseApiWithOperation
+{
+    public DerivedApi() : base() { }
+}
+
+internal class ApiWithProtectedOperation : ApiBase
+{
+    public ApiWithProtectedOperation() : base(null, null, null) { }
+
+    [Microsoft.Restier.AspNetCore.Model.UnboundOperation]
+    [System.ComponentModel.Description("Protected operation.")]
+    protected internal int ProtectedOp() => 0;
+}
+
+internal class ApiWithIndexerProperty : ApiBase
+{
+    public ApiWithIndexerProperty() : base(null, null, null) { }
+
+    // The compiler-emitted get_Item/set_Item methods will have IsSpecialName=true.
+    [System.ComponentModel.Description("Should not be treated as an operation.")]
+    public int this[int i] => 0;
+}

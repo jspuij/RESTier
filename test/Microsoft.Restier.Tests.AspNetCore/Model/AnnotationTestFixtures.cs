@@ -230,7 +230,15 @@ internal class ApiWithIndexerProperty : ApiBase
 {
     public ApiWithIndexerProperty() : base(null, null, null) { }
 
-    // The compiler-emitted get_Item/set_Item methods will have IsSpecialName=true.
-    [System.ComponentModel.Description("Should not be treated as an operation.")]
-    public int this[int i] => 0;
+    // The compiler-emitted get_Item method has IsSpecialName=true.
+    // We deliberately apply [UnboundOperation] and [Description] to the *get
+    // accessor* (not the property) so they land on the synthesized get_Item
+    // method. Without the IsSpecialName guard in the operation scan, this
+    // would be picked up as an operation and annotated.
+    public int this[int i]
+    {
+        [Microsoft.Restier.AspNetCore.Model.UnboundOperation]
+        [System.ComponentModel.Description("Should not be treated as an operation.")]
+        get => 0;
+    }
 }

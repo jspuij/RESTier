@@ -58,7 +58,7 @@ Microsoft.Restier.AspNetCore  (BEHAVIOR UNCHANGED — adds two type-only contrac
   • IRestierApiVersionRegistry, RestierApiVersionDescriptor (read-only contracts)
 ```
 
-Three existing packages get registry-aware updates:
+Two existing packages get registry-aware updates:
 
 - **`Microsoft.Restier.AspNetCore.NSwag`** — when the registry is in DI, OpenAPI documents are looked up by version group name (`v1`, `v2`) instead of route prefix; the **UI helpers** `UseRestierReDoc` and `UseRestierNSwagUI` enumerate versions from the registry instead of route prefixes. Falls back to prefix-based behavior when the registry is absent (full back-compat).
 - **`Microsoft.Restier.AspNetCore.Swagger`** — mirrored change to the document generator and any UI helpers that enumerate prefixes.
@@ -265,15 +265,17 @@ Dependencies: `Microsoft.Restier.AspNetCore`, `Asp.Versioning.OData`, `Asp.Versi
 
 Three integration points must be made registry-aware. All three resolve `IRestierApiVersionRegistry` via `IServiceProvider.GetService<IRestierApiVersionRegistry>()` (null-tolerant). When the registry is present, behavior switches to version-based naming; when absent, behavior is unchanged.
 
+**Materialization invariant (mandatory for all integration points that read the registry directly):** before reading any descriptor, the integration point MUST first read `IOptions<ODataOptions>.Value` (resolved from the same scope). This deterministically runs the `IConfigureOptions<ODataOptions>` pipeline that populates the registry, so registry reads can't observe an empty list. This invariant applies to UI helpers running during middleware setup (before any HTTP request), to the description provider, and to the headers middleware. It is not duplicate work — `IOptions<T>.Value` caches.
+
 | File | Change |
 |------|--------|
-| `RestierOpenApiDocumentGenerator.cs` | Accept optional registry. Document name `"v1"` → look up via `registry.FindByGroupName("v1")` to get the route prefix; generate from that EDM. Falls back to prefix-based lookup for unversioned routes. |
+| `RestierOpenApiDocumentGenerator.cs` | Accept optional registry. Document name `"v1"` → look up via `registry.FindByGroupName("v1")` to get the route prefix; generate from that EDM. Falls back to prefix-based lookup for unversioned routes. The generator is invoked from `RestierOpenApiMiddleware`, which already resolves `IOptions<ODataOptions>.Value` for its own work, so the materialization invariant is satisfied without an extra touch here. |
 | `RestierOpenApiMiddleware.cs` | Path pattern unchanged (`/openapi/{documentName}/openapi.json`). The `documentName` may now be a version group (`"v1"`) or a route prefix; the generator handles both. |
-| `Extensions/IApplicationBuilderExtensions.cs` (`UseRestierReDoc`, `UseRestierNSwagUI`) | When the registry is present, enumerate **versions** from the registry rather than route prefixes from `ODataOptions.GetRestierRoutePrefixes()`. Each ReDoc instance and each `SwaggerUiRoute` uses `descriptor.GroupName` as the document name and `/openapi/{groupName}/openapi.json` as the URL. When the registry is absent, the existing prefix-enumeration path is used. |
+| `Extensions/IApplicationBuilderExtensions.cs` (`UseRestierReDoc`, `UseRestierNSwagUI`) | These run during `Configure(...)`, **before any HTTP request**. They MUST resolve `IOptions<ODataOptions>.Value` first to satisfy the materialization invariant (the existing code already does so to enumerate prefixes — keep that line and read the registry afterward). When the registry is present, enumerate **versions** from the registry rather than route prefixes from `ODataOptions.GetRestierRoutePrefixes()`. Each ReDoc instance and each `SwaggerUiRoute` uses `descriptor.GroupName` as the document name and `/openapi/{groupName}/openapi.json` as the URL. When the registry is absent, the existing prefix-enumeration path is used. |
 
 ### `Microsoft.Restier.AspNetCore.Swagger` (mirrored changes)
 
-Same three integration points: document generator, middleware, and any UI helpers that enumerate prefixes. To be inventoried during plan-writing.
+Same integration points: document generator, middleware, and any UI helpers that enumerate prefixes — all subject to the same materialization invariant. Exact files to be inventoried during plan-writing.
 
 ### `Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore` (new sample)
 
@@ -301,21 +303,27 @@ Both live in a new `Microsoft.Restier.AspNetCore.Versioning` namespace within th
 `services.AddRestierApiVersioning(configure)` does **not** require modifying or replacing `AddRestier`. It works as follows:
 
 1. **`AddRestierApiVersioning(configure)` runs synchronously during `ConfigureServices`:**
-   - Creates an internal `RestierApiVersioningBuilder` that captures pending version registrations from the user's `configure` delegate.
-   - Registers `RestierApiVersionRegistry` as a singleton against both itself and `IRestierApiVersionRegistry`.
-   - Registers the builder as a singleton.
-   - Registers `IApiVersionDescriptionProvider` adapter.
-   - Registers an `IConfigureOptions<ODataOptions>` (`RestierApiVersioningOptionsConfigurator`) whose `Configure(ODataOptions options)` method:
-     - Resolves the builder and registry from the constructor-injected `IServiceProvider` (the options-configurator pattern supports this).
-     - For each pending version registration: composes the prefix, calls `options.AddRestierRoute<TApi>(prefix, configureRouteServices, ...)`, and adds a descriptor to the registry.
+   - **Find or create** the `RestierApiVersioningBuilder` instance: enumerate `services` looking for an existing `ServiceDescriptor` whose `ServiceType` is `RestierApiVersioningBuilder`. If present, retrieve the `ImplementationInstance`. If absent, instantiate a new builder and register it with `services.AddSingleton<RestierApiVersioningBuilder>(builder)` (note: an instance registration so the same instance is observed both during `ConfigureServices` and at resolution time). **Do not** use `TryAddSingleton` for the builder — the find-or-create lookup already enforces single-instance, and `TryAddSingleton` would silently discard subsequent additions.
+   - Invoke the user's `configure(builder)` delegate, which calls `builder.AddVersion<TApi>(...)` one or more times. Each call appends a `PendingVersionRegistration` record to the builder's internal list.
+   - The remaining service registrations (registry, description provider, options configurator) use `TryAddSingleton` / `TryAddEnumerable` — they're naturally idempotent across multiple `AddRestierApiVersioning` calls because nothing about their identity changes from one call to the next:
+     - `RestierApiVersionRegistry` registered as a singleton against itself and `IRestierApiVersionRegistry`.
+     - `IApiVersionDescriptionProvider` adapter.
+     - `IConfigureOptions<ODataOptions>` (`RestierApiVersioningOptionsConfigurator`) whose `Configure(ODataOptions options)` method resolves the same builder and registry from constructor-injected `IServiceProvider`, iterates the builder's pending registrations once, and for each one composes the prefix, calls `options.AddRestierRoute<TApi>(prefix, configureRouteServices, ...)`, and adds a descriptor to the registry. The configurator guards with a "ran already" flag so a re-materialization (rare but possible) does not double-register.
 2. **When `IOptions<ODataOptions>.Value` is first materialized** (from `MapRestier`, `RestierOpenApiMiddleware`, etc.), all `IConfigureOptions<ODataOptions>` instances run. Both the user's `AddRestier` lambda and our `RestierApiVersioningOptionsConfigurator` execute against the same `ODataOptions` instance. Order doesn't matter because they touch independent route prefixes.
 3. **No global statics, no Startup-time bridges, no new lambda parameters.** The registry is populated at the same moment `AddRestierRoute` is — when `ODataOptions` materializes — using only DI-resolvable services.
-4. **The registry must be readable before any HTTP request.** ApiExplorer / Swashbuckle / NSwag may resolve `IApiVersionDescriptionProvider` (or `IRestierApiVersionRegistry` directly) during host startup, before any request hits `MapRestier`. To guarantee the registry has been populated by the time it is read:
-   - `RestierApiVersionDescriptionProvider` constructor takes `IOptions<ODataOptions>` and the registry; on first access to its descriptions, it reads `odataOptions.Value` once, which deterministically runs all `IConfigureOptions<ODataOptions>` (including ours), populating the registry before the read.
-   - The same pattern is used in `RestierVersionHeadersMiddleware` (touches `IOptions<ODataOptions>.Value` once on first request) so direct registry consumers also see a populated registry.
-   - Any consumer that resolves `IRestierApiVersionRegistry` directly is documented to require the same touch (or to rely on a description provider, which already does it).
+4. **Materialization invariant (mandatory for any consumer that reads `IRestierApiVersionRegistry` directly).** The registry is only populated when `IOptions<ODataOptions>.Value` first materializes. ApiExplorer / Swashbuckle / NSwag may resolve `IApiVersionDescriptionProvider` (or the registry) during host startup, and UI helpers (`UseRestierReDoc`, `UseRestierNSwagUI`, Swagger equivalents) run during `Configure(...)` — both happen **before any HTTP request**. To prevent any consumer from observing an empty registry, the invariant is:
 
-If the user calls `AddRestierApiVersioning` more than once, each call appends to the same builder (idempotent for the singleton registrations).
+   > **Every component that reads `IRestierApiVersionRegistry` MUST first resolve `IOptions<ODataOptions>.Value` from the same scope.** `IOptions<T>.Value` caches, so the cost is paid once.
+
+   Components in scope (and how they comply):
+   - `RestierApiVersionDescriptionProvider` — constructor takes `IOptions<ODataOptions>` and the registry; reads `.Value` before reading the registry.
+   - `RestierVersionHeadersMiddleware` — already resolves `IOptions<ODataOptions>.Value` to look up route prefixes; reads the registry afterward.
+   - `UseRestierReDoc` / `UseRestierNSwagUI` (NSwag) and Swagger UI helpers — already resolve `IOptions<ODataOptions>.Value` to enumerate prefixes; if a registry is present, read it afterward in the same method.
+   - `RestierOpenApiMiddleware` (NSwag) and Swagger middleware equivalents — already resolve `IOptions<ODataOptions>.Value`; registry reads piggyback safely.
+
+   Anything new added in the future that reads the registry directly is required to follow the same pattern. Tests assert the invariant by constructing a host, resolving the description provider (and exercising the UI helper paths) without making any HTTP request, and asserting the descriptors are non-empty.
+
+If the user calls `AddRestierApiVersioning` more than once, each call locates the existing builder via the `ServiceDescriptor` lookup described in step 1 and appends additional `PendingVersionRegistration` records. The supporting service registrations are idempotent. A single `RestierApiVersioningOptionsConfigurator` runs once when `ODataOptions` materializes, applies all accumulated pending registrations, and marks itself complete.
 
 ## Data flow
 
@@ -417,7 +425,7 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 - `ApiVersionAttributeReader` — reads major/minor; reads deprecated flag; throws when `[ApiVersion]` is missing; explicitly does NOT read sunset (sunset comes from `RestierVersioningOptions.SunsetDate`).
 - `RestierApiVersionRegistry` — add/find by version, prefix, group; collision detection.
 - `ApiVersionSegmentFormatters` — `Major`, `MajorMinor`, custom delegate produce expected segments for representative versions (`1.0`, `2.1`, `1-Beta`).
-- `RestierApiVersioningServiceCollectionExtensions` / `RestierApiVersioningBuilder` — registers the registry, builder, `IConfigureOptions<ODataOptions>`, and `IApiVersionDescriptionProvider` adapter; multiple `AddRestierApiVersioning` calls are idempotent for service registrations and append for version registrations.
+- `RestierApiVersioningServiceCollectionExtensions` / `RestierApiVersioningBuilder` — registers the registry, builder, `IConfigureOptions<ODataOptions>`, and `IApiVersionDescriptionProvider` adapter; multiple `AddRestierApiVersioning` calls are idempotent for service registrations and append for version registrations. **Test:** call `AddRestierApiVersioning` twice with one version each; build the host; assert the registry contains both versions and that exactly one `RestierApiVersioningBuilder` `ServiceDescriptor` exists in the collection. Inverse test: with `TryAddSingleton` semantics naively used for the builder, the second-call version would be lost — guard against regressions.
 - `RestierApiVersionDescriptionProvider` — when resolved before any request, reading `Descriptions` populates the registry (via `IOptions<ODataOptions>.Value`) and returns the expected entries. Test: build a host, resolve the provider, read descriptions without making any HTTP request, assert `v1`/`v2` are present.
 - `RestierApiVersioningOptionsConfigurator` — when invoked against a real `ODataOptions`, composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicates; honors `ExplicitRoutePrefix`; imperative overload bypasses attribute reader.
 - `RestierApiVersionDescriptionProvider` — surfaces registry entries with correct group names and deprecated flags.

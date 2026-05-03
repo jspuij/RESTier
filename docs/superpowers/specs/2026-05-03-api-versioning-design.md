@@ -207,11 +207,21 @@ public interface IRestierApiVersionRegistry
     IReadOnlyList<RestierApiVersionDescriptor> Descriptors { get; }
     RestierApiVersionDescriptor FindByPrefix(string routePrefix);
     RestierApiVersionDescriptor FindByGroupName(string groupName);
+
+    /// <summary>
+    /// Returns descriptors that share the supplied logical API group key
+    /// (the <c>basePrefix</c> passed to <c>AddVersion</c>). Used by the
+    /// headers middleware so api-supported-versions / api-deprecated-versions
+    /// reflect only the API the request belongs to, not unrelated APIs at
+    /// other prefixes.
+    /// </summary>
+    IReadOnlyList<RestierApiVersionDescriptor> FindByBasePrefix(string basePrefix);
 }
 
 public sealed class RestierApiVersionDescriptor
 {
     public string Version { get; }           // "1.0", "2.0", etc.
+    public string BasePrefix { get; }        // logical API group, e.g. "api" or "orders"
     public string RoutePrefix { get; }       // composed (e.g., "api/v1")
     public Type ApiType { get; }             // e.g., typeof(NorthwindApiV1)
     public bool IsDeprecated { get; }
@@ -219,6 +229,10 @@ public sealed class RestierApiVersionDescriptor
     public DateTimeOffset? SunsetDate { get; }
 }
 ```
+
+`BasePrefix` is the logical API key. Two routes registered with the same `basePrefix` belong to the same logical API; headers reported on one are reported across the whole group.
+
+When `RestierVersioningOptions.ExplicitRoutePrefix` is used (composed-prefix bypass), `BasePrefix` is set to the explicit prefix value with the trailing version segment stripped if a `SegmentFormatter`-style segment is detected; otherwise `BasePrefix` is set to the explicit prefix verbatim. The intent is that `BasePrefix` always names the logical API, never the per-version route. (Behavior pinned by tests.)
 
 The **concrete implementation** and a strongly-typed view live in **`Microsoft.Restier.AspNetCore.Versioning`** (which references `Asp.Versioning.OData`):
 
@@ -263,15 +277,19 @@ Dependencies: `Microsoft.Restier.AspNetCore`, `Asp.Versioning.OData`, `Asp.Versi
 
 ### `Microsoft.Restier.AspNetCore.NSwag` (changes)
 
-Three integration points must be made registry-aware. All three resolve `IRestierApiVersionRegistry` via `IServiceProvider.GetService<IRestierApiVersionRegistry>()` (null-tolerant). When the registry is present, behavior switches to version-based naming; when absent, behavior is unchanged.
+Three integration points must be made registry-aware. All three resolve `IRestierApiVersionRegistry` via `IServiceProvider.GetService<IRestierApiVersionRegistry>()` (null-tolerant).
+
+**"Registry effectively absent" rule.** The fallback to existing prefix-based behavior fires when the registry is **null OR has no descriptors** — not only when the service is unregistered. This handles the case where the user added the Versioning package but never registered any versions; the helpers continue to behave as today instead of producing empty UI dropdowns.
+
+**Mixed versioned + unversioned routes (UI enumeration only).** When the registry has descriptors AND the user also has unversioned Restier routes registered via `AddRestierRoute<TApi>`, UI helpers MUST emit one entry per registry descriptor (using `GroupName` as the doc name) AND one entry per route prefix in `ODataOptions.GetRestierRoutePrefixes()` that does not match any descriptor's `RoutePrefix`. Result: in an app with `api/v1`, `api/v2`, and an unversioned route at `legacy`, the dropdown shows `v1`, `v2`, and `legacy` (or `default` if the unversioned prefix is empty). Document and middleware paths still resolve correctly because `RestierOpenApiDocumentGenerator` already accepts both group-name and route-prefix lookups.
 
 **Materialization invariant (mandatory for all integration points that read the registry directly):** before reading any descriptor, the integration point MUST first read `IOptions<ODataOptions>.Value` (resolved from the same scope). This deterministically runs the `IConfigureOptions<ODataOptions>` pipeline that populates the registry, so registry reads can't observe an empty list. This invariant applies to UI helpers running during middleware setup (before any HTTP request), to the description provider, and to the headers middleware. It is not duplicate work — `IOptions<T>.Value` caches.
 
 | File | Change |
 |------|--------|
-| `RestierOpenApiDocumentGenerator.cs` | Accept optional registry. Document name `"v1"` → look up via `registry.FindByGroupName("v1")` to get the route prefix; generate from that EDM. Falls back to prefix-based lookup for unversioned routes. The generator is invoked from `RestierOpenApiMiddleware`, which already resolves `IOptions<ODataOptions>.Value` for its own work, so the materialization invariant is satisfied without an extra touch here. |
+| `RestierOpenApiDocumentGenerator.cs` | Accept optional registry. Document name `"v1"` → look up via `registry.FindByGroupName("v1")` to get the route prefix; generate from that EDM. Falls back to prefix-based lookup when the registry is absent or has no descriptors, AND for any document name that doesn't resolve via the registry (i.e., unversioned routes intermingled with versioned ones). The generator is invoked from `RestierOpenApiMiddleware`, which already resolves `IOptions<ODataOptions>.Value` for its own work, so the materialization invariant is satisfied without an extra touch here. |
 | `RestierOpenApiMiddleware.cs` | Path pattern unchanged (`/openapi/{documentName}/openapi.json`). The `documentName` may now be a version group (`"v1"`) or a route prefix; the generator handles both. |
-| `Extensions/IApplicationBuilderExtensions.cs` (`UseRestierReDoc`, `UseRestierNSwagUI`) | These run during `Configure(...)`, **before any HTTP request**. They MUST resolve `IOptions<ODataOptions>.Value` first to satisfy the materialization invariant (the existing code already does so to enumerate prefixes — keep that line and read the registry afterward). When the registry is present, enumerate **versions** from the registry rather than route prefixes from `ODataOptions.GetRestierRoutePrefixes()`. Each ReDoc instance and each `SwaggerUiRoute` uses `descriptor.GroupName` as the document name and `/openapi/{groupName}/openapi.json` as the URL. When the registry is absent, the existing prefix-enumeration path is used. |
+| `Extensions/IApplicationBuilderExtensions.cs` (`UseRestierReDoc`, `UseRestierNSwagUI`) | These run during `Configure(...)`, **before any HTTP request**. They MUST resolve `IOptions<ODataOptions>.Value` first to satisfy the materialization invariant (the existing code already does so to enumerate prefixes — keep that line and read the registry afterward). When the registry has descriptors, enumerate (a) every version from the registry as `GroupName` → `/openapi/{GroupName}/openapi.json`, plus (b) every prefix in `ODataOptions.GetRestierRoutePrefixes()` that is NOT covered by any descriptor's `RoutePrefix`, mapped to the existing prefix-or-`default` document name. When the registry is absent or empty, the existing prefix-enumeration path is used unchanged. |
 
 ### `Microsoft.Restier.AspNetCore.Swagger` (mirrored changes)
 
@@ -375,8 +393,13 @@ GET /api/v1/Customers('ALFKI')
     │     This is segment-boundary safe: "/api/v1" matches "/api/v1/Customers" and
     │     "/api/v1" itself, but does NOT match "/api/v10/anything".
     │   - longest-prefix match wins (so a non-versioned "api" route doesn't shadow "api/v1")
-    │   - if matched: set api-supported-versions, api-deprecated-versions; emit Sunset
-    │     only if descriptor.SunsetDate is set; never overwrite headers already present
+    │   - if matched, look up the matched descriptor's BasePrefix (e.g., "api"). Use
+    │     registry.FindByBasePrefix(basePrefix) to compute api-supported-versions /
+    │     api-deprecated-versions over ONLY the descriptors in that logical API group.
+    │     Versions from unrelated APIs registered at other base prefixes (e.g.,
+    │     "orders" vs "inventory") do not leak into each other's headers.
+    │   - emit Sunset only if the matched descriptor.SunsetDate is set
+    │   - never overwrite headers already present
     │
     └─ Response returned with versioning headers.
 ```
@@ -405,13 +428,15 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 |----------|----------|
 | `services.AddRestierApiVersioning` not called but versioning expected | Versioned routes simply aren't registered (the `IConfigureOptions<ODataOptions>` is absent). Documentation makes this prerequisite explicit. |
 | `[ApiVersion]` missing on attribute-driven path | `InvalidOperationException` when the `IConfigureOptions<ODataOptions>` runs (i.e., on first request / first `IOptions<ODataOptions>.Value` access), with the type name and a one-line fix (the imperative overload). Throws are surfaced as InvalidOperationException at startup-equivalent time, not as runtime 500s on user requests, because the options-configurator pipeline propagates these to the host startup path on first materialization. |
-| Same `(ApiVersion, basePrefix)` registered twice | `InvalidOperationException` listing both API types. |
+| Same `(ApiVersion, basePrefix)` registered twice | `InvalidOperationException` listing both API types. (`basePrefix` is captured on `RestierApiVersionDescriptor.BasePrefix`; the configurator's dedup check compares against existing descriptors.) |
 | Different versions colliding on the composed prefix (custom formatter collision) | `InvalidOperationException` naming both versions and the colliding prefix. |
 | `[ApiVersion]` declares state conflicting with imperative override | Imperative call wins. Documented in XML doc. |
 | Multiple versions on one `ApiBase` | Each becomes an independent route registration; descriptors are independent but share `ApiType`. |
 | Request to `/api` (no version segment) | 404 unless the user registers a non-versioned `AddRestierRoute<TApi>` at `"api"` themselves. |
-| Versioning package present, no versioned routes | Empty registry; NSwag/Swagger glue falls back; middleware no-ops. |
+| Versioning package present, no versioned routes | Empty registry; NSwag/Swagger glue falls back to existing prefix-based behavior (per the "registry effectively absent" rule — null OR empty triggers fallback); headers middleware no-ops. |
 | Versioning package absent, NSwag present | Existing prefix-based behavior preserved. |
+| Mixed versioned and unversioned Restier routes in the same app | UI helpers emit one entry per registry descriptor (by `GroupName`) plus one entry per `GetRestierRoutePrefixes()` prefix not represented in the registry. Both versioned and unversioned routes appear in the dropdown. |
+| Two logical APIs at different `basePrefix`es (e.g., `orders` and `inventory`) each with multiple versions | Headers middleware reports `api-supported-versions` / `api-deprecated-versions` for the matched logical API only — `/orders/v1` returns Orders' versions; `/inventory/v1` returns Inventory's. No cross-leak. |
 | Batching at `/api/v1/$batch` | Works automatically: each versioned route gets its own `RestierBatchHandler { PrefixName = "api/v1" }` from the existing `AddRestierRoute`. |
 | Sunset date in the past | `Sunset` header still emitted; no automatic 410. Future enhancement. |
 | `UseRestierVersionHeaders` not registered | No exception; versioning routes simply don't carry the headers. |
@@ -429,7 +454,7 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 - `RestierApiVersionDescriptionProvider` — when resolved before any request, reading `Descriptions` populates the registry (via `IOptions<ODataOptions>.Value`) and returns the expected entries. Test: build a host, resolve the provider, read descriptions without making any HTTP request, assert `v1`/`v2` are present.
 - `RestierApiVersioningOptionsConfigurator` — when invoked against a real `ODataOptions`, composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicates; honors `ExplicitRoutePrefix`; imperative overload bypasses attribute reader.
 - `RestierApiVersionDescriptionProvider` — surfaces registry entries with correct group names and deprecated flags.
-- `RestierVersionHeadersMiddleware` — adds expected headers for matched prefix; no-ops for unmatched paths; emits `Sunset` only when set; doesn't duplicate headers already present; **boundary cases**: `/api/v10/...` does NOT match `api/v1`; `/api/v1` (exact) matches; `/api/v1/$metadata` matches; `PathBase` is stripped before matching.
+- `RestierVersionHeadersMiddleware` — adds expected headers for matched prefix; no-ops for unmatched paths; emits `Sunset` only when set; doesn't duplicate headers already present; **boundary cases**: `/api/v10/...` does NOT match `api/v1`; `/api/v1` (exact) matches; `/api/v1/$metadata` matches; `PathBase` is stripped before matching. **Group isolation:** with two logical APIs registered (`orders/v1`, `orders/v2`, `inventory/v1`), a request to `/orders/v1` reports only `orders` versions in `api-supported-versions`; a request to `/inventory/v1` reports only `inventory`'s. Verified by direct middleware test.
 
 ### Integration tests — same project, `IntegrationTests/`
 
@@ -456,7 +481,7 @@ Breakdance-style in-memory host with two versioned APIs:
 ### Existing test projects
 
 - `Microsoft.Restier.Tests.AspNetCore` — one regression test confirming `MapRestier` still works without versioning (no behavior change on the unversioned path).
-- `Microsoft.Restier.Tests.AspNetCore.NSwag` and `…Swagger` — tests for the registry-aware paths in **all three** integration points (document generator, middleware, and UI helpers `UseRestierReDoc` / `UseRestierNSwagUI`); registry-absent fallback for each.
+- `Microsoft.Restier.Tests.AspNetCore.NSwag` and `…Swagger` — tests for the registry-aware paths in **all three** integration points (document generator, middleware, and UI helpers `UseRestierReDoc` / `UseRestierNSwagUI`); registry-absent fallback for each; **registry-empty fallback** (registry registered but contains zero descriptors → existing prefix-based behavior); **mixed routes** (versioned + unversioned in the same app → UI dropdown contains both registry group names AND any `GetRestierRoutePrefixes()` entries not represented by registry descriptors).
 
 ### Sample-based smoke (manual, documented)
 
@@ -485,7 +510,7 @@ A short release note entry under `release-notes/`.
 - New csproj `src/Microsoft.Restier.AspNetCore.Versioning/Microsoft.Restier.AspNetCore.Versioning.csproj` — multi-targets `net8.0;net9.0;net10.0` (matching the AspNetCore-family packages — no `net48`), signed with `restier.snk`, warnings-as-errors, implicit usings off, nullable off.
 - New csproj `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Microsoft.Restier.Tests.AspNetCore.Versioning.csproj` — xUnit v3, FluentAssertions (AwesomeAssertions), NSubstitute.
 - New sample `src/Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore/...`.
-- All four added to `RESTier.slnx`.
+- All three new projects (`Microsoft.Restier.AspNetCore.Versioning`, `Microsoft.Restier.Tests.AspNetCore.Versioning`, `Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore`) added to `RESTier.slnx`.
 - Docs project `Microsoft.Restier.Docs.docsproj` includes `Microsoft.Restier.AspNetCore.Versioning` in its source list so the API reference is generated.
 
 ## Open questions for the implementation plan

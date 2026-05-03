@@ -42,24 +42,26 @@ This design fills that gap with an opt-in package.
 
 ```
 ASP.NET Core MVC + Asp.Versioning  (user-configured AddApiVersioning())
-                                                                     │
-Microsoft.Restier.AspNetCore.Versioning  (NEW, opt-in package)       │
-  • AddRestierVersionedApi<TApi>(...) extensions                     │
-  • Reads [ApiVersion] from ApiBase types                            │
-  • Composes route prefix:  basePrefix + "/" + segmentFormatter(v)   ▼
-  • Calls existing AddRestierRoute<TApi>(composedPrefix, ...)
-  • Registers RestierApiVersionRegistry (singleton)
-  • Registers IApiVersionDescriptionProvider adapter
+                                                                       │
+Microsoft.Restier.AspNetCore.Versioning  (NEW, opt-in package)         │
+  • services.AddRestierApiVersioning(builder => builder                │
+        .AddVersion<TApi>(basePrefix, configureRouteServices, ...))    │
+  • Registers RestierApiVersionRegistry (singleton, IRestierApiVersionRegistry)
+  • Registers IConfigureOptions<ODataOptions> that, when ODataOptions  │
+    is materialized, iterates collected versions and calls             │
+    oDataOptions.AddRestierRoute<TApi>(composedPrefix, ...)            │
+  • Registers IApiVersionDescriptionProvider adapter                   ▼
   • Provides UseRestierVersionHeaders() middleware
 
-Microsoft.Restier.AspNetCore  (UNCHANGED except for one DI marker)
+Microsoft.Restier.AspNetCore  (BEHAVIOR UNCHANGED — adds two type-only contracts)
   • AddRestierRoute<TApi>(prefix, ...)  — works as today
+  • IRestierApiVersionRegistry, RestierApiVersionDescriptor (read-only contracts)
 ```
 
-Two existing packages get small, registry-aware updates:
+Three existing packages get registry-aware updates:
 
-- **`Microsoft.Restier.AspNetCore.NSwag`** — when the registry is in DI, OpenAPI documents are looked up by version group name (`v1`, `v2`) instead of route prefix. Falls back to prefix-based behavior when the registry is absent (full back-compat).
-- **`Microsoft.Restier.AspNetCore.Swagger`** — mirrored change.
+- **`Microsoft.Restier.AspNetCore.NSwag`** — when the registry is in DI, OpenAPI documents are looked up by version group name (`v1`, `v2`) instead of route prefix; the **UI helpers** `UseRestierReDoc` and `UseRestierNSwagUI` enumerate versions from the registry instead of route prefixes. Falls back to prefix-based behavior when the registry is absent (full back-compat).
+- **`Microsoft.Restier.AspNetCore.Swagger`** — mirrored change to the document generator and any UI helpers that enumerate prefixes.
 
 A new sample, **`Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore`**, demonstrates end-to-end wiring with a real V1/V2 delta.
 
@@ -82,27 +84,24 @@ services.AddApiVersioning(o =>
     o.ApiVersionReader = new UrlSegmentApiVersionReader();
 }).AddApiExplorer();
 
-// Registers RestierApiVersionRegistry + IApiVersionDescriptionProvider adapter
-// in outer DI, and arms the static-during-Startup accessor used by the
-// ODataOptions-level extensions below. Required when using AddRestierVersionedApi.
-services.AddRestierApiVersioning();
-
 services
     .AddControllers()
     .AddRestier(options =>
     {
         options.Select().Expand().Filter().OrderBy().SetMaxTop(100).Count();
-
-        options
-          .AddRestierVersionedApi<NorthwindApiV1>("api", restierServices =>
-          {
-              restierServices.AddEFCoreProviderServices<NorthwindContextV1>(...);
-          })
-          .AddRestierVersionedApi<NorthwindApiV2>("api", restierServices =>
-          {
-              restierServices.AddEFCoreProviderServices<NorthwindContextV2>(...);
-          });
+        // No version-specific calls here.
     });
+
+services.AddRestierApiVersioning(builder => builder
+    .AddVersion<NorthwindApiV1>("api", restierServices =>
+    {
+        restierServices.AddEFCoreProviderServices<NorthwindContextV1>(...);
+    })
+    .AddVersion<NorthwindApiV2>("api", restierServices =>
+    {
+        restierServices.AddEFCoreProviderServices<NorthwindContextV2>(...);
+    },
+    options => options.SunsetDate = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero)));
 
 // in Configure(...)
 app.UseRouting();
@@ -114,16 +113,30 @@ app.UseEndpoints(e =>
 });
 ```
 
+**Why `services.AddRestierApiVersioning(...)` rather than calls inside the `AddRestier` lambda?** RESTier passes the `AddRestier` lambda through `IMvcBuilder.AddOData(setupAction)`, which OData registers as `services.Configure<ODataOptions>(setupAction)`. That lambda runs **lazily**, when `IOptions<ODataOptions>.Value` is first materialized — typically inside `MapRestier()`, well after `ConfigureServices` finishes. Registering versioned routes from inside that lambda would force any registry-population mechanism to either keep a global static alive past Startup (fragile) or pass an `IServiceProvider` parameter through the lambda. Putting versioning on `IServiceCollection` and using `IConfigureOptions<ODataOptions>` with constructor-injected `IServiceProvider` resolves both problems cleanly.
+
 ### Extension surface
 
 ```csharp
 namespace Microsoft.Restier.AspNetCore.Versioning;
 
-public static class RestierVersionedODataOptionsExtensions
+public static class RestierApiVersioningServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers Restier API versioning: the <see cref="IRestierApiVersionRegistry"/> singleton,
+    /// the <see cref="IApiVersionDescriptionProvider"/> adapter, and an
+    /// <see cref="IConfigureOptions{ODataOptions}"/> that adds versioned Restier routes when
+    /// <c>ODataOptions</c> is materialized.
+    /// </summary>
+    public static IServiceCollection AddRestierApiVersioning(
+        this IServiceCollection services,
+        Action<IRestierApiVersioningBuilder> configure);
+}
+
+public interface IRestierApiVersioningBuilder
 {
     // Attribute-driven (reads [ApiVersion] from TApi)
-    public static ODataOptions AddRestierVersionedApi<TApi>(
-        this ODataOptions oDataOptions,
+    IRestierApiVersioningBuilder AddVersion<TApi>(
         string basePrefix,
         Action<IServiceCollection> configureRouteServices,
         Action<RestierVersioningOptions> configureVersioning = null,
@@ -132,8 +145,7 @@ public static class RestierVersionedODataOptionsExtensions
         where TApi : ApiBase;
 
     // Imperative — for users who don't want [ApiVersion] on their class
-    public static ODataOptions AddRestierVersionedApi<TApi>(
-        this ODataOptions oDataOptions,
+    IRestierApiVersioningBuilder AddVersion<TApi>(
         ApiVersion apiVersion,
         string basePrefix,
         Action<IServiceCollection> configureRouteServices,
@@ -143,8 +155,7 @@ public static class RestierVersionedODataOptionsExtensions
         where TApi : ApiBase;
 
     // One ApiBase serving multiple versions
-    public static ODataOptions AddRestierVersionedApi<TApi>(
-        this ODataOptions oDataOptions,
+    IRestierApiVersioningBuilder AddVersion<TApi>(
         IEnumerable<ApiVersion> apiVersions,
         string basePrefix,
         Action<IServiceCollection> configureRouteServices,
@@ -161,6 +172,14 @@ public sealed class RestierVersioningOptions
 
     /// <summary>Override the composed route prefix entirely (skips SegmentFormatter and basePrefix composition).</summary>
     public string ExplicitRoutePrefix { get; set; }
+
+    /// <summary>
+    /// Optional sunset date for this version, surfaced as the <c>Sunset</c> response header
+    /// by <c>UseRestierVersionHeaders</c>. <c>[ApiVersion]</c> does not carry sunset metadata,
+    /// so it must be configured here per call. (Future: integrate with
+    /// <c>Asp.Versioning.IPolicyManager</c> for policy-driven sunset.)
+    /// </summary>
+    public DateTimeOffset? SunsetDate { get; set; }
 }
 
 public static class ApiVersionSegmentFormatters
@@ -226,28 +245,35 @@ NSwag and Swagger consume `IRestierApiVersionRegistry` (resolved via `IServicePr
 
 | File | Purpose |
 |------|---------|
-| `Extensions/RestierApiVersioningServiceCollectionExtensions.cs` | `services.AddRestierApiVersioning()` — registers the registry, the `IApiVersionDescriptionProvider` adapter, arms the Startup-time accessor. |
-| `Extensions/RestierVersionedODataOptionsExtensions.cs` | The three `AddRestierVersionedApi<TApi>` overloads. |
+| `Extensions/RestierApiVersioningServiceCollectionExtensions.cs` | `services.AddRestierApiVersioning(configure)` — entry point; registers the registry, the `IApiVersionDescriptionProvider` adapter, and the `IConfigureOptions<ODataOptions>` that adds versioned routes. |
 | `Extensions/RestierVersionedApplicationBuilderExtensions.cs` | `UseRestierVersionHeaders()`. |
+| `IRestierApiVersioningBuilder.cs` | Public builder contract used by the `configure` delegate. |
+| `Internal/RestierApiVersioningBuilder.cs` | Concrete builder; accumulates pending version registrations and a `Configure(ODataOptions, IServiceProvider)` method invoked from `IConfigureOptions<ODataOptions>`. |
+| `Internal/RestierApiVersioningOptionsConfigurator.cs` | `IConfigureOptions<ODataOptions>` that resolves the registry and the builder from DI and applies all pending registrations to the materialized `ODataOptions`. |
 | `RestierApiVersionRegistry.cs` | Internal concrete `IRestierApiVersionRegistry` implementation; mutable from inside the package. |
-| `RestierVersioningOptions.cs` | Per-route options. |
+| `RestierVersioningOptions.cs` | Per-route options (segment formatter, explicit prefix, sunset date). |
 | `ApiVersionSegmentFormatters.cs` | Built-in formatters. |
-| `Internal/ApiVersionAttributeReader.cs` | Reads `[ApiVersion]` / deprecated / sunset metadata. |
-| `Internal/RestierApiVersioningStartupContext.cs` | Static-during-Startup accessor that bridges `services.AddRestierApiVersioning()` to the `ODataOptions` lambda. |
+| `Internal/ApiVersionAttributeReader.cs` | Reads `[ApiVersion]` (version + deprecated). Sunset is **not** read here — it's per-call via `RestierVersioningOptions.SunsetDate`. |
 | `Internal/RestierApiVersionDescriptionProvider.cs` | `IApiVersionDescriptionProvider` adapter sourced from the registry. |
-| `Middleware/RestierVersionHeadersMiddleware.cs` | Adds version-discovery headers based on the matched prefix. |
+| `Middleware/RestierVersionHeadersMiddleware.cs` | Adds version-discovery headers based on the matched prefix using `PathString.StartsWithSegments` (segment-boundary safe; `PathBase`-aware). |
 
-Targets: `net8.0`, `net9.0`, `net48` (matching the rest of the solution).
+Targets: `net8.0;net9.0;net10.0` (matching `Microsoft.Restier.AspNetCore` and the rest of the AspNetCore-family packages — no `net48`, since these are ASP.NET Core packages).
 
 Dependencies: `Microsoft.Restier.AspNetCore`, `Asp.Versioning.OData`, `Asp.Versioning.Mvc.ApiExplorer`.
 
-### `Microsoft.Restier.AspNetCore.NSwag` (small change)
+### `Microsoft.Restier.AspNetCore.NSwag` (changes)
 
-`RestierOpenApiDocumentGenerator` and `RestierOpenApiMiddleware` gain an optional `RestierApiVersionRegistry` constructor parameter resolved from DI (null-tolerant). When the registry is present, the URL pattern becomes `/openapi/{groupName}/openapi.json` and lookup is `registry.FindByGroupName(documentName)` first, with fallback to the existing prefix-based path. When the registry is absent, behavior is unchanged.
+Three integration points must be made registry-aware. All three resolve `IRestierApiVersionRegistry` via `IServiceProvider.GetService<IRestierApiVersionRegistry>()` (null-tolerant). When the registry is present, behavior switches to version-based naming; when absent, behavior is unchanged.
 
-### `Microsoft.Restier.AspNetCore.Swagger` (mirrored change)
+| File | Change |
+|------|--------|
+| `RestierOpenApiDocumentGenerator.cs` | Accept optional registry. Document name `"v1"` → look up via `registry.FindByGroupName("v1")` to get the route prefix; generate from that EDM. Falls back to prefix-based lookup for unversioned routes. |
+| `RestierOpenApiMiddleware.cs` | Path pattern unchanged (`/openapi/{documentName}/openapi.json`). The `documentName` may now be a version group (`"v1"`) or a route prefix; the generator handles both. |
+| `Extensions/IApplicationBuilderExtensions.cs` (`UseRestierReDoc`, `UseRestierNSwagUI`) | When the registry is present, enumerate **versions** from the registry rather than route prefixes from `ODataOptions.GetRestierRoutePrefixes()`. Each ReDoc instance and each `SwaggerUiRoute` uses `descriptor.GroupName` as the document name and `/openapi/{groupName}/openapi.json` as the URL. When the registry is absent, the existing prefix-enumeration path is used. |
 
-Same shape, applied to the equivalent Swashbuckle integration code.
+### `Microsoft.Restier.AspNetCore.Swagger` (mirrored changes)
+
+Same three integration points: document generator, middleware, and any UI helpers that enumerate prefixes. To be inventoried during plan-writing.
 
 ### `Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore` (new sample)
 
@@ -264,45 +290,58 @@ Two `DbContext` subclasses (`NorthwindContextV1`, `NorthwindContextV2`) hide V2-
 Two type-only additions, no behavior changes:
 
 - `IRestierApiVersionRegistry` (interface)
-- `RestierApiVersionDescriptor` (record-style class)
+- `RestierApiVersionDescriptor` (sealed class with read-only properties)
 
 Both live in a new `Microsoft.Restier.AspNetCore.Versioning` namespace within the package. No new dependencies — they reference only `System.*`.
 
 **Why here, not in the Versioning package?** NSwag and Swagger need to consume the registry contract without taking a dependency on `Asp.Versioning.OData`. Putting the read-only contract in the base package (which both already reference) is the simplest path. The Versioning package owns the mutable concrete implementation.
 
-### Mechanism for populating the registry from inside the `AddRestier` lambda
+### Mechanism for populating the registry
 
-`AddRestierVersionedApi` is invoked on `ODataOptions`, but the `RestierApiVersionRegistry` lives in outer DI (so middleware and `IApiVersionDescriptionProvider` can resolve it). To bridge:
+`services.AddRestierApiVersioning(configure)` does **not** require modifying or replacing `AddRestier`. It works as follows:
 
-1. The user calls `services.AddRestierApiVersioning()` once in `ConfigureServices`. This:
-   - Registers `RestierApiVersionRegistry` as a singleton (and against `IRestierApiVersionRegistry`).
-   - Registers the `IApiVersionDescriptionProvider` adapter.
-   - Sets a static-during-Startup accessor — `RestierApiVersioningStartupContext.Current` — to the registry instance just created. This is a thread-safe assignment, valid for the lifetime of `ConfigureServices`. (Same pattern as `WebHostBuilderContext` and similar Startup-time accessors.)
+1. **`AddRestierApiVersioning(configure)` runs synchronously during `ConfigureServices`:**
+   - Creates an internal `RestierApiVersioningBuilder` that captures pending version registrations from the user's `configure` delegate.
+   - Registers `RestierApiVersionRegistry` as a singleton against both itself and `IRestierApiVersionRegistry`.
+   - Registers the builder as a singleton.
+   - Registers `IApiVersionDescriptionProvider` adapter.
+   - Registers an `IConfigureOptions<ODataOptions>` (`RestierApiVersioningOptionsConfigurator`) whose `Configure(ODataOptions options)` method:
+     - Resolves the builder and registry from the constructor-injected `IServiceProvider` (the options-configurator pattern supports this).
+     - For each pending version registration: composes the prefix, calls `options.AddRestierRoute<TApi>(prefix, configureRouteServices, ...)`, and adds a descriptor to the registry.
+2. **When `IOptions<ODataOptions>.Value` is first materialized** (from `MapRestier`, `RestierOpenApiMiddleware`, etc.), all `IConfigureOptions<ODataOptions>` instances run. Both the user's `AddRestier` lambda and our `RestierApiVersioningOptionsConfigurator` execute against the same `ODataOptions` instance. Order doesn't matter because they touch independent route prefixes.
+3. **No global statics, no Startup-time bridges, no new lambda parameters.** The registry is populated at the same moment `AddRestierRoute` is — when `ODataOptions` materializes — using only DI-resolvable services.
 
-2. Inside the `AddRestier` lambda, `AddRestierVersionedApi` reads `RestierApiVersioningStartupContext.Current` and adds descriptors to the registry. If the accessor is null (user forgot `AddRestierApiVersioning()`), it throws `InvalidOperationException` with a clear message naming the missing call.
-
-3. After `ConfigureServices` completes, the static accessor is cleared (or simply ignored — by then the registry is in DI and consumers resolve it the normal way).
-
-This keeps the user-facing call sites identical to today's `AddRestierRoute` pattern (no new lambda parameter), at the cost of one explicit `AddRestierApiVersioning()` registration. The throw-on-missing makes the failure mode unambiguous.
+If the user calls `AddRestierApiVersioning` more than once, each call appends to the same builder (idempotent for the singleton registrations).
 
 ## Data flow
 
 ### Registration time
 
 ```
-AddRestierVersionedApi<NorthwindApiV1>("api", svc => {...})
+ConfigureServices:
+    services.AddRestierApiVersioning(b => b
+        .AddVersion<NorthwindApiV1>("api", svc => {...})
+        .AddVersion<NorthwindApiV2>("api", svc => {...}))
     │
-    ├─ ApiVersionAttributeReader.Read(typeof(NorthwindApiV1))
-    │   → ApiVersion(1,0), IsDeprecated=true, SunsetDate=null
+    ├─ Register RestierApiVersionRegistry singleton (idempotent)
+    ├─ Register IApiVersionDescriptionProvider adapter
+    ├─ Register IConfigureOptions<ODataOptions> (RestierApiVersioningOptionsConfigurator)
+    └─ Builder.AddVersion calls just append to a pending-registrations list
+
+ODataOptions materialized (lazy, e.g., from MapRestier):
+    IConfigureOptions<ODataOptions>.Configure(options) runs
     │
-    ├─ Compose prefix: "api" + "/" + segmentFormatter(v) → "api/v1"
-    │
-    ├─ Ensure RestierApiVersionRegistry singleton exists
-    │
-    ├─ Append RestierApiVersionDescriptor to registry
-    │
-    └─ Delegate to existing oDataOptions.AddRestierRoute<NorthwindApiV1>(
-         "api/v1", configureRouteServices, useRestierBatching, namingConvention)
+    └─ For each pending registration:
+        ├─ ApiVersionAttributeReader.Read(typeof(TApi))  // attribute path
+        │   → ApiVersion(1,0), IsDeprecated=true
+        │   (sunset comes from RestierVersioningOptions.SunsetDate, not the attribute)
+        │
+        ├─ Compose prefix: "api" + "/" + segmentFormatter(v) → "api/v1"
+        │
+        ├─ Append RestierApiVersionDescriptor to registry
+        │
+        └─ options.AddRestierRoute<TApi>(
+             "api/v1", configureRouteServices, useRestierBatching, namingConvention)
 ```
 
 ### Request time — versioned OData call
@@ -316,11 +355,16 @@ GET /api/v1/Customers('ALFKI')
     ├─ RestierRouteValueTransformer.TransformAsync (UNCHANGED)
     │   parses, dispatches to RestierController.Get
     │
-    ├─ RestierVersionHeadersMiddleware:
-    │   - matches request prefix against registry
-    │   - sets api-supported-versions: 1.0, 2.0
-    │   - sets api-deprecated-versions: 1.0
-    │   - if SunsetDate set: Sunset: <RFC 1123 date>
+    ├─ RestierVersionHeadersMiddleware (registered via UseRestierVersionHeaders,
+    │  before MapRestier; runs on the response side):
+    │   - normalize request path: strip PathBase using HttpContext.Request.PathBase
+    │   - for each registry descriptor, test
+    │       request.Path.StartsWithSegments(new PathString("/" + descriptor.RoutePrefix))
+    │     This is segment-boundary safe: "/api/v1" matches "/api/v1/Customers" and
+    │     "/api/v1" itself, but does NOT match "/api/v10/anything".
+    │   - longest-prefix match wins (so a non-versioned "api" route doesn't shadow "api/v1")
+    │   - if matched: set api-supported-versions, api-deprecated-versions; emit Sunset
+    │     only if descriptor.SunsetDate is set; never overwrite headers already present
     │
     └─ Response returned with versioning headers.
 ```
@@ -347,7 +391,8 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 
 | Scenario | Behavior |
 |----------|----------|
-| `[ApiVersion]` missing on attribute-driven path | `InvalidOperationException` at registration with the type name and a one-line fix (the imperative overload). |
+| `services.AddRestierApiVersioning` not called but versioning expected | Versioned routes simply aren't registered (the `IConfigureOptions<ODataOptions>` is absent). Documentation makes this prerequisite explicit. |
+| `[ApiVersion]` missing on attribute-driven path | `InvalidOperationException` when the `IConfigureOptions<ODataOptions>` runs (i.e., on first request / first `IOptions<ODataOptions>.Value` access), with the type name and a one-line fix (the imperative overload). Throws are surfaced as InvalidOperationException at startup-equivalent time, not as runtime 500s on user requests, because the options-configurator pipeline propagates these to the host startup path on first materialization. |
 | Same `(ApiVersion, basePrefix)` registered twice | `InvalidOperationException` listing both API types. |
 | Different versions colliding on the composed prefix (custom formatter collision) | `InvalidOperationException` naming both versions and the colliding prefix. |
 | `[ApiVersion]` declares state conflicting with imperative override | Imperative call wins. Documented in XML doc. |
@@ -358,17 +403,20 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 | Batching at `/api/v1/$batch` | Works automatically: each versioned route gets its own `RestierBatchHandler { PrefixName = "api/v1" }` from the existing `AddRestierRoute`. |
 | Sunset date in the past | `Sunset` header still emitted; no automatic 410. Future enhancement. |
 | `UseRestierVersionHeaders` not registered | No exception; versioning routes simply don't carry the headers. |
+| Request path containing a "look-alike" prefix (e.g., `/api/v10/...` when only `api/v1` is registered) | Middleware does not match (segment-boundary check). No headers attached. The `/api/v10/...` request is handled by the underlying routing in the normal way (404 if no route matches). |
+| Application has a non-empty `PathBase` (reverse proxy) | Middleware strips `HttpContext.Request.PathBase` before applying the StartsWithSegments check, so prefixes match against the application-relative path consistent with how `MapRestier` routes are mounted. |
 
 ## Testing strategy
 
 ### Unit tests — `Microsoft.Restier.Tests.AspNetCore.Versioning` (new project)
 
-- `ApiVersionAttributeReader` — reads major/minor; deprecated; sunset; throws when missing.
+- `ApiVersionAttributeReader` — reads major/minor; reads deprecated flag; throws when `[ApiVersion]` is missing; explicitly does NOT read sunset (sunset comes from `RestierVersioningOptions.SunsetDate`).
 - `RestierApiVersionRegistry` — add/find by version, prefix, group; collision detection.
 - `ApiVersionSegmentFormatters` — `Major`, `MajorMinor`, custom delegate produce expected segments for representative versions (`1.0`, `2.1`, `1-Beta`).
-- `RestierVersionedODataOptionsExtensions` — composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicates; honors `ExplicitRoutePrefix`; imperative overload bypasses attribute reader.
+- `RestierApiVersioningServiceCollectionExtensions` / `RestierApiVersioningBuilder` — registers the registry, builder, `IConfigureOptions<ODataOptions>`, and `IApiVersionDescriptionProvider` adapter; multiple `AddRestierApiVersioning` calls are idempotent for service registrations and append for version registrations.
+- `RestierApiVersioningOptionsConfigurator` — when invoked against a real `ODataOptions`, composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicates; honors `ExplicitRoutePrefix`; imperative overload bypasses attribute reader.
 - `RestierApiVersionDescriptionProvider` — surfaces registry entries with correct group names and deprecated flags.
-- `RestierVersionHeadersMiddleware` — adds expected headers for matched prefix; no-ops for unmatched paths; emits `Sunset` only when set; doesn't duplicate headers already present.
+- `RestierVersionHeadersMiddleware` — adds expected headers for matched prefix; no-ops for unmatched paths; emits `Sunset` only when set; doesn't duplicate headers already present; **boundary cases**: `/api/v10/...` does NOT match `api/v1`; `/api/v1` (exact) matches; `/api/v1/$metadata` matches; `PathBase` is stripped before matching.
 
 ### Integration tests — same project, `IntegrationTests/`
 
@@ -387,11 +435,15 @@ Breakdance-style in-memory host with two versioned APIs:
 | `GET /openapi/v1/openapi.json` | Returns V1-shaped OpenAPI; `info.version == "1.0"`. |
 | `GET /openapi/v2/openapi.json` | Returns V2-shaped OpenAPI. |
 | `GET /openapi/api/v1/openapi.json` (legacy path) | Falls back to prefix lookup; returns V1 doc. |
+| NSwag UI (`/swagger`) listing | Dropdown shows `v1`/`v2` (registry-driven), not `api/v1`/`api/v2`. |
+| ReDoc paths | One ReDoc instance per version, mounted at `/redoc/v1`, `/redoc/v2`. |
+| Headers boundary | `GET /api/v10/anything` returns 404 with no `api-supported-versions` header (no segment-boundary collision with `/api/v1`). `GET /api/v1` (exact) carries headers. |
+| Reverse-proxy `PathBase` | App mounted under `/odata-svc` (`PathBase="/odata-svc"`); `GET /odata-svc/api/v1/Customers` carries headers (PathBase stripped before matching). |
 
 ### Existing test projects
 
 - `Microsoft.Restier.Tests.AspNetCore` — one regression test confirming `MapRestier` still works without versioning (no behavior change on the unversioned path).
-- `Microsoft.Restier.Tests.AspNetCore.NSwag` and `…Swagger` — tests for registry-aware doc-name lookup and registry-absent fallback.
+- `Microsoft.Restier.Tests.AspNetCore.NSwag` and `…Swagger` — tests for the registry-aware paths in **all three** integration points (document generator, middleware, and UI helpers `UseRestierReDoc` / `UseRestierNSwagUI`); registry-absent fallback for each.
 
 ### Sample-based smoke (manual, documented)
 
@@ -427,4 +479,5 @@ A short release note entry under `release-notes/`.
 
 - Whether to expose `IApiVersionDescriptionProvider` as a *replacement* or *additional* provider when the user's MVC controllers also use Asp.Versioning. Default: additional (do not replace), so the user's MVC-controller versions and Restier versions both surface. Tested either way.
 - Whether `RestierApiVersionDescriptor` should expose the strongly-typed `ApiVersion` via an extension method on `IRestierApiVersionRegistry` (defined in the Versioning package) for consumers that are willing to take the dependency. Default: yes, as a quality-of-life affordance.
-- Final naming of `RestierApiVersioningStartupContext` — bikeshed at implementation time.
+- Whether to integrate sunset propagation with `Asp.Versioning.IPolicyManager` in a follow-up so policy-driven sunset is honored without per-call configuration. Tracked as a deferred enhancement.
+- Inventory of UI helpers in `Microsoft.Restier.AspNetCore.Swagger` that enumerate prefixes — to be done at plan-writing time.

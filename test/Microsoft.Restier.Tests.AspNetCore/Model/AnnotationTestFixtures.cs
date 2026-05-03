@@ -26,6 +26,20 @@ internal static class AnnotationTestFixtures
         return (EdmModel)builder.GetEdmModel();
     }
 
+    /// <summary>
+    /// Builds an <see cref="EdmModel"/> from a single CLR entity type via
+    /// <see cref="ODataConventionModelBuilder"/> with <c>EnableLowerCamelCase</c>
+    /// applied, so EDM property names will be lower-camel-case (e.g. "displayName")
+    /// while the CLR side keeps PascalCase ("DisplayName").
+    /// </summary>
+    public static EdmModel BuildLowerCamelCaseModelWith<T>() where T : class
+    {
+        var builder = new ODataConventionModelBuilder();
+        builder.EnableLowerCamelCase();
+        builder.EntityType<T>();
+        return (EdmModel)builder.GetEdmModel();
+    }
+
     public static EdmModel BuildModelWithUnboundFunction(
         string namespaceName,
         string functionName,

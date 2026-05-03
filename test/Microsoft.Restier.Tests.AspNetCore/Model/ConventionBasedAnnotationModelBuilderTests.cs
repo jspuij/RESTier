@@ -71,6 +71,31 @@ public class ConventionBasedAnnotationModelBuilderTests
     }
 
     [Fact]
+    public void GetEdmModel_EmitsCoreDescription_WhenEdmPropertyNameIsLowerCamelCase()
+    {
+        // Arrange — EnableLowerCamelCase() makes the EDM property name "name",
+        // while the CLR property is "Name" with [Description].
+        var inputModel = AnnotationTestFixtures.BuildLowerCamelCaseModelWith<EntityWithDescribedProperty>();
+        var sut = new ConventionBasedAnnotationModelBuilder(typeof(AnnotationTestFixtures.StubApi))
+        {
+            Inner = new AnnotationTestFixtures.StaticInnerBuilder(inputModel),
+        };
+
+        // Act
+        var result = sut.GetEdmModel();
+
+        // Assert — annotation lands on the camelCased EDM property "name".
+        var entityType = (IEdmEntityType)result.FindDeclaredType(typeof(EntityWithDescribedProperty).FullName);
+        var property = entityType.FindProperty("name");
+        property.Should().NotBeNull("ODataConventionModelBuilder.EnableLowerCamelCase() should rename Name to name");
+
+        var annotation = result
+            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(property, CoreDescriptionTerm)
+            .Should().ContainSingle().Subject;
+        ((IEdmStringConstantExpression)annotation.Value).Value.Should().Be("The display name of the entity.");
+    }
+
+    [Fact]
     public void GetEdmModel_EmitsCoreDescription_WhenComplexTypeHasDescriptionAttribute()
     {
         // Arrange

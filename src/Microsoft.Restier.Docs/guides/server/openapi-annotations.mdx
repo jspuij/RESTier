@@ -207,10 +207,30 @@ This produces:
 Use a custom `IModelBuilder` (see [Customizing the Entity Model](./model-building#custom-model-extension))
 to extend or override the default behavior.
 
-**Opt out of a single annotation:**
+<Note>
+Custom builders registered via `AddChainedService<IModelBuilder>` run **inside**
+the convention annotation builder — meaning your builder runs first, the
+convention builder enriches its result. You cannot remove a convention-emitted
+annotation from a custom builder. Instead, **pre-add the annotation you want**
+and the convention builder will see it and skip emitting its own (the convention
+builder is idempotent — it never overrides a term already present on a target).
+</Note>
+
+**Opt out of `Computed` on a specific property:**
+
+The submit pipeline only drops a property from request bodies when `Core.V1.Computed = true`.
+Pre-adding `Core.V1.Computed = false` neutralizes both the convention emission
+and the submit-pipeline behavior:
 
 ```csharp
-public class RemoveComputedFromIdBuilder : IModelBuilder
+using System.Linq;
+using Microsoft.OData.Edm;
+using Microsoft.OData.Edm.Csdl;
+using Microsoft.OData.Edm.Vocabularies;
+using Microsoft.OData.Edm.Vocabularies.V1;
+using Microsoft.Restier.Core.Model;
+
+public class OptOutOfComputedForId : IModelBuilder
 {
     public IModelBuilder Inner { get; set; }
 
@@ -219,8 +239,6 @@ public class RemoveComputedFromIdBuilder : IModelBuilder
         var inner = Inner?.GetEdmModel();
         if (inner is not EdmModel model)
         {
-            // Pass through anything that isn't an EdmModel — we can only
-            // remove annotations from a concrete EdmModel.
             return inner;
         }
 
@@ -228,21 +246,23 @@ public class RemoveComputedFromIdBuilder : IModelBuilder
         var idProperty = widget?.FindProperty("Id");
         if (idProperty is null) return model;
 
-        var existing = model
-            .FindVocabularyAnnotations<IEdmVocabularyAnnotation>(idProperty,
-                "Org.OData.Core.V1.Computed")
-            .ToList();
-        foreach (var annotation in existing)
-        {
-            model.RemoveVocabularyAnnotation(annotation);
-        }
+        // Convention builder skips emission if ANY Core.V1.Computed annotation
+        // already exists on the target. The submit pipeline triggers
+        // IgnoreForCreation/IgnoreForUpdate only on Computed = true, so this
+        // neutralizes the side-effect.
+        var annotation = new EdmVocabularyAnnotation(
+            idProperty,
+            CoreVocabularyModel.ComputedTerm,
+            new EdmBooleanConstant(false));
+        annotation.SetSerializationLocation(model, EdmVocabularyAnnotationSerializationLocation.Inline);
+        model.AddVocabularyAnnotation(annotation);
 
         return model;
     }
 }
 ```
 
-Register it after the Restier services so it runs after the convention builder:
+Register it inside `AddRestierRoute` like any other chained model builder:
 
 ```csharp
 options.AddRestierRoute<CatalogApi>(restierServices =>
@@ -250,9 +270,13 @@ options.AddRestierRoute<CatalogApi>(restierServices =>
     restierServices
         .AddEFCoreProviderServices<CatalogContext>(/* ... */)
         .AddChainedService<IModelBuilder>((sp, next) =>
-            new RemoveComputedFromIdBuilder { Inner = next });
+            new OptOutOfComputedForId { Inner = next });
 });
 ```
+
+The same pattern works for `Core.V1.Immutable` (pre-add `false`), `Core.V1.Description`
+(pre-add a different string — the convention will not override yours), and the
+validation terms.
 
 <Tip>
 For more elaborate annotations — e.g., capabilities (`UpdateRestrictions`,

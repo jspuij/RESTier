@@ -135,9 +135,14 @@ public class ConventionBasedAnnotationModelBuilder : IModelBuilder
     {
         foreach (var edmProperty in structuredType.DeclaredProperties)
         {
+            // Resolve the CLR property name through the EDM->CLR mapper.
+            // This honors EnableLowerCamelCase() and any EDM-name overrides
+            // by reading ClrPropertyInfoAnnotation set by ODataConventionModelBuilder,
+            // and matches the resolution path the submit pipeline already uses.
+            var clrName = EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model);
             var clrProperty = clrType.GetProperty(
-                edmProperty.Name,
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                clrName,
+                BindingFlags.Public | BindingFlags.Instance);
             if (clrProperty is null)
             {
                 continue;

@@ -40,8 +40,8 @@ below for the opt-out pattern.
 | .NET attribute | Target | OData term | OpenAPI effect | Server effect |
 |---|---|---|---|---|
 | `[Description("…")]` | type, property, operation | `Org.OData.Core.V1.Description` | `description` | none |
-| `[DatabaseGenerated(Identity)]` / `[DatabaseGenerated(Computed)]` | property | `Org.OData.Core.V1.Computed` | `readOnly: true` | dropped from POST and PATCH bodies |
-| `[ReadOnly(true)]` | property | `Org.OData.Core.V1.Immutable` | `readOnly: true` (in update payloads) | dropped from PATCH bodies |
+| `[DatabaseGenerated(Identity)]` / `[DatabaseGenerated(Computed)]` | property | `Org.OData.Core.V1.Computed` | `readOnly: true` | dropped from POST, PATCH, and PUT bodies |
+| `[ReadOnly(true)]` | property | `Org.OData.Core.V1.Immutable` | `readOnly: true` (in update payloads) | dropped from PATCH and PUT bodies |
 | `[Range(min, max)]` | numeric property | `Org.OData.Validation.V1.Minimum` / `Maximum` | `minimum` / `maximum` | none |
 | `[RegularExpression(pattern)]` | string property | `Org.OData.Validation.V1.Pattern` | `pattern` | none |
 
@@ -188,7 +188,7 @@ methods too:
 ```csharp
 [UnboundOperation]
 [Description("Returns widgets created in the last seven days.")]
-public IQueryable<Widget> GetRecentWidgets() => /* ... */;
+public IQueryable<Widget> GetRecentWidgets() => DbContext.Widgets.Where(w => w.CreatedOn >= DateTimeOffset.UtcNow.AddDays(-7));
 ```
 
 This produces:
@@ -216,8 +216,13 @@ public class RemoveComputedFromIdBuilder : IModelBuilder
 
     public IEdmModel GetEdmModel()
     {
-        var model = (EdmModel)Inner?.GetEdmModel();
-        if (model is null) return null;
+        var inner = Inner?.GetEdmModel();
+        if (inner is not EdmModel model)
+        {
+            // Pass through anything that isn't an EdmModel — we can only
+            // remove annotations from a concrete EdmModel.
+            return inner;
+        }
 
         var widget = model.FindDeclaredType("Contoso.Catalog.Widget") as IEdmEntityType;
         var idProperty = widget?.FindProperty("Id");

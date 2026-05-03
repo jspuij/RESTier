@@ -254,7 +254,7 @@ NSwag and Swagger consume `IRestierApiVersionRegistry` (resolved via `IServicePr
 | `RestierVersioningOptions.cs` | Per-route options (segment formatter, explicit prefix, sunset date). |
 | `ApiVersionSegmentFormatters.cs` | Built-in formatters. |
 | `Internal/ApiVersionAttributeReader.cs` | Reads `[ApiVersion]` (version + deprecated). Sunset is **not** read here — it's per-call via `RestierVersioningOptions.SunsetDate`. |
-| `Internal/RestierApiVersionDescriptionProvider.cs` | `IApiVersionDescriptionProvider` adapter sourced from the registry. |
+| `Internal/RestierApiVersionDescriptionProvider.cs` | `IApiVersionDescriptionProvider` adapter sourced from the registry. **Depends on `IOptions<ODataOptions>`** and reads `.Value` before reading the registry, forcing the `IConfigureOptions<ODataOptions>` pipeline to run (and thereby populating the registry) on the first description-provider read. This avoids returning an empty list when ApiExplorer or Swashbuckle resolves the provider during host startup, before any HTTP request has touched `MapRestier`. |
 | `Middleware/RestierVersionHeadersMiddleware.cs` | Adds version-discovery headers based on the matched prefix using `PathString.StartsWithSegments` (segment-boundary safe; `PathBase`-aware). |
 
 Targets: `net8.0;net9.0;net10.0` (matching `Microsoft.Restier.AspNetCore` and the rest of the AspNetCore-family packages — no `net48`, since these are ASP.NET Core packages).
@@ -283,7 +283,7 @@ Two API classes with a real surface delta:
 
 Two `DbContext` subclasses (`NorthwindContextV1`, `NorthwindContextV2`) hide V2-only members from V1's model via `OnModelCreating` `Ignore(...)` calls — the simplest pattern that matches RESTier's "the type defines the surface" philosophy.
 
-`Startup.cs` wires `AddApiVersioning` → `AddRestier` → `AddRestierVersionedApi<...>` → `UseRestierVersionHeaders` → `MapRestier`. NSwag UI dropdown lists `v1` and `v2`.
+`Startup.cs` wires `AddApiVersioning` → `AddControllers().AddRestier(options => …)` → `AddRestierApiVersioning(builder => builder.AddVersion<NorthwindApiV1>(...).AddVersion<NorthwindApiV2>(...))` → `UseRestierVersionHeaders` → `MapRestier`. NSwag UI dropdown lists `v1` and `v2`.
 
 ### `Microsoft.Restier.AspNetCore` — minimal additions
 
@@ -310,6 +310,10 @@ Both live in a new `Microsoft.Restier.AspNetCore.Versioning` namespace within th
      - For each pending version registration: composes the prefix, calls `options.AddRestierRoute<TApi>(prefix, configureRouteServices, ...)`, and adds a descriptor to the registry.
 2. **When `IOptions<ODataOptions>.Value` is first materialized** (from `MapRestier`, `RestierOpenApiMiddleware`, etc.), all `IConfigureOptions<ODataOptions>` instances run. Both the user's `AddRestier` lambda and our `RestierApiVersioningOptionsConfigurator` execute against the same `ODataOptions` instance. Order doesn't matter because they touch independent route prefixes.
 3. **No global statics, no Startup-time bridges, no new lambda parameters.** The registry is populated at the same moment `AddRestierRoute` is — when `ODataOptions` materializes — using only DI-resolvable services.
+4. **The registry must be readable before any HTTP request.** ApiExplorer / Swashbuckle / NSwag may resolve `IApiVersionDescriptionProvider` (or `IRestierApiVersionRegistry` directly) during host startup, before any request hits `MapRestier`. To guarantee the registry has been populated by the time it is read:
+   - `RestierApiVersionDescriptionProvider` constructor takes `IOptions<ODataOptions>` and the registry; on first access to its descriptions, it reads `odataOptions.Value` once, which deterministically runs all `IConfigureOptions<ODataOptions>` (including ours), populating the registry before the read.
+   - The same pattern is used in `RestierVersionHeadersMiddleware` (touches `IOptions<ODataOptions>.Value` once on first request) so direct registry consumers also see a populated registry.
+   - Any consumer that resolves `IRestierApiVersionRegistry` directly is documented to require the same touch (or to rely on a description provider, which already does it).
 
 If the user calls `AddRestierApiVersioning` more than once, each call appends to the same builder (idempotent for the singleton registrations).
 
@@ -414,6 +418,7 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 - `RestierApiVersionRegistry` — add/find by version, prefix, group; collision detection.
 - `ApiVersionSegmentFormatters` — `Major`, `MajorMinor`, custom delegate produce expected segments for representative versions (`1.0`, `2.1`, `1-Beta`).
 - `RestierApiVersioningServiceCollectionExtensions` / `RestierApiVersioningBuilder` — registers the registry, builder, `IConfigureOptions<ODataOptions>`, and `IApiVersionDescriptionProvider` adapter; multiple `AddRestierApiVersioning` calls are idempotent for service registrations and append for version registrations.
+- `RestierApiVersionDescriptionProvider` — when resolved before any request, reading `Descriptions` populates the registry (via `IOptions<ODataOptions>.Value`) and returns the expected entries. Test: build a host, resolve the provider, read descriptions without making any HTTP request, assert `v1`/`v2` are present.
 - `RestierApiVersioningOptionsConfigurator` — when invoked against a real `ODataOptions`, composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicates; honors `ExplicitRoutePrefix`; imperative overload bypasses attribute reader.
 - `RestierApiVersionDescriptionProvider` — surfaces registry entries with correct group names and deprecated flags.
 - `RestierVersionHeadersMiddleware` — adds expected headers for matched prefix; no-ops for unmatched paths; emits `Sunset` only when set; doesn't duplicate headers already present; **boundary cases**: `/api/v10/...` does NOT match `api/v1`; `/api/v1` (exact) matches; `/api/v1/$metadata` matches; `PathBase` is stripped before matching.
@@ -469,7 +474,7 @@ A short release note entry under `release-notes/`.
 
 ## Build and packaging
 
-- New csproj `src/Microsoft.Restier.AspNetCore.Versioning/Microsoft.Restier.AspNetCore.Versioning.csproj` — multi-targets `net8.0;net9.0;net48`, signed with `restier.snk`, warnings-as-errors, implicit usings off, nullable off (matching the rest of the solution).
+- New csproj `src/Microsoft.Restier.AspNetCore.Versioning/Microsoft.Restier.AspNetCore.Versioning.csproj` — multi-targets `net8.0;net9.0;net10.0` (matching the AspNetCore-family packages — no `net48`), signed with `restier.snk`, warnings-as-errors, implicit usings off, nullable off.
 - New csproj `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Microsoft.Restier.Tests.AspNetCore.Versioning.csproj` — xUnit v3, FluentAssertions (AwesomeAssertions), NSubstitute.
 - New sample `src/Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore/...`.
 - All four added to `RESTier.slnx`.

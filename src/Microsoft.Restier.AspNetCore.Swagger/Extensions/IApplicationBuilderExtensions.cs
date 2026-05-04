@@ -6,6 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.AspNetCore.Swagger;
+using Microsoft.Restier.AspNetCore.Versioning;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Microsoft.AspNetCore.Builder
 {
@@ -18,6 +22,8 @@ namespace Microsoft.AspNetCore.Builder
 
         /// <summary>
         /// Adds middleware to serve OpenAPI documents and the Swagger UI for all registered Restier routes.
+        /// Registry descriptors are enumerated first (one endpoint per <c>GroupName</c>), then any remaining
+        /// route prefixes not represented in the registry.
         /// </summary>
         /// <param name="app">The <see cref="IApplicationBuilder"/> to add middleware to.</param>
         /// <returns>The <see cref="IApplicationBuilder"/> for chaining.</returns>
@@ -25,13 +31,34 @@ namespace Microsoft.AspNetCore.Builder
         {
             app.UseMiddleware<RestierOpenApiMiddleware>();
 
+            // Materialization invariant.
+            var odataOptions = app.ApplicationServices
+                .GetRequiredService<IOptions<ODataOptions>>().Value;
+            var registry = app.ApplicationServices.GetService<IRestierApiVersionRegistry>();
+
+            var hasRegistryDescriptors = registry is { Descriptors.Count: > 0 };
+            var registryPrefixes = hasRegistryDescriptors
+                ? new HashSet<string>(registry.Descriptors.Select(d => d.RoutePrefix), StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
+
             app.UseSwaggerUI(c =>
             {
-                var odataOptions = app.ApplicationServices
-                    .GetRequiredService<IOptions<ODataOptions>>().Value;
+                if (hasRegistryDescriptors)
+                {
+                    foreach (var descriptor in registry.Descriptors)
+                    {
+                        var documentName = descriptor.GroupName;
+                        c.SwaggerEndpoint($"swagger/{documentName}/swagger.json", documentName);
+                    }
+                }
 
                 foreach (var prefix in odataOptions.GetRestierRoutePrefixes())
                 {
+                    if (registryPrefixes.Contains(prefix))
+                    {
+                        continue;
+                    }
+
                     var documentName = string.IsNullOrEmpty(prefix)
                         ? RestierOpenApiDocumentGenerator.DefaultDocumentName
                         : prefix;

@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Microsoft.Restier.AspNetCore.Versioning\Microsoft.Restier.AspNetCore.Versioning.csproj" />
+    <ProjectReference Include="..\..\src\Microsoft.Restier.AspNetCore.NSwag\Microsoft.Restier.AspNetCore.NSwag.csproj" />
   </ItemGroup>
 
   <ItemGroup>

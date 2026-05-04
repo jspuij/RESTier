@@ -3,38 +3,39 @@
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OData;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.OData;
+using Microsoft.Restier.AspNetCore.Versioning;
 using System;
 using System.Threading.Tasks;
 
 namespace Microsoft.Restier.AspNetCore.Swagger
 {
 
-    /// <summary>
-    /// Middleware that serves OpenAPI documents generated from Restier EDM models.
-    /// </summary>
     internal class RestierOpenApiMiddleware
     {
 
         private readonly RequestDelegate next;
         private readonly IOptions<ODataOptions> odataOptions;
+        private readonly IServiceProvider rootServices;
         private readonly Action<OpenApiConvertSettings> openApiSettings;
 
         public RestierOpenApiMiddleware(
             RequestDelegate next,
             IOptions<ODataOptions> odataOptions,
+            IServiceProvider rootServices,
             Action<OpenApiConvertSettings> openApiSettings = null)
         {
             this.next = next;
             this.odataOptions = odataOptions;
+            this.rootServices = rootServices;
             this.openApiSettings = openApiSettings;
         }
 
         public async Task InvokeAsync(HttpContext context)
         {
-            // Match requests like /swagger/{documentName}/swagger.json
             var path = context.Request.Path.Value;
             if (path is not null
                 && path.StartsWith("/swagger/", StringComparison.OrdinalIgnoreCase)
@@ -45,11 +46,15 @@ namespace Microsoft.Restier.AspNetCore.Swagger
 
                 if (!string.IsNullOrEmpty(documentName))
                 {
+                    var options = odataOptions.Value;
+                    var registry = rootServices.GetService<IRestierApiVersionRegistry>();
+
                     var document = RestierOpenApiDocumentGenerator.GenerateDocument(
                         documentName,
-                        odataOptions.Value,
+                        options,
                         context.Request,
-                        openApiSettings);
+                        openApiSettings,
+                        registry);
 
                     if (document is not null)
                     {

@@ -1,11 +1,13 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System.Linq;
 using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.AspNetCore.NSwag;
+using Microsoft.Restier.AspNetCore.Versioning;
 using NSwag.AspNetCore;
 
 namespace Microsoft.AspNetCore.Builder
@@ -37,9 +39,38 @@ namespace Microsoft.AspNetCore.Builder
         /// <returns>The <see cref="IApplicationBuilder"/> for chaining.</returns>
         public static IApplicationBuilder UseRestierReDoc(this IApplicationBuilder app)
         {
-            var odataOptions = app.ApplicationServices.GetRequiredService<IOptions<ODataOptions>>().Value;
+            // Materialization invariant: read .Value first.
+            var odataOptions = app.ApplicationServices
+                .GetRequiredService<IOptions<ODataOptions>>().Value;
+            var registry = app.ApplicationServices
+                .GetService<IRestierApiVersionRegistry>();
+
+            var hasRegistryDescriptors = registry is { Descriptors.Count: > 0 };
+            var registryPrefixes = hasRegistryDescriptors
+                ? new System.Collections.Generic.HashSet<string>(
+                    registry.Descriptors.Select(d => d.RoutePrefix), System.StringComparer.Ordinal)
+                : new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+
+            if (hasRegistryDescriptors)
+            {
+                foreach (var descriptor in registry.Descriptors)
+                {
+                    var documentName = descriptor.GroupName;
+                    app.UseReDoc(settings =>
+                    {
+                        settings.Path = $"/redoc/{documentName}";
+                        settings.DocumentPath = $"/openapi/{documentName}/openapi.json";
+                    });
+                }
+            }
+
             foreach (var prefix in odataOptions.GetRestierRoutePrefixes())
             {
+                if (registryPrefixes.Contains(prefix))
+                {
+                    continue;
+                }
+
                 var documentName = string.IsNullOrEmpty(prefix)
                     ? RestierOpenApiDocumentGenerator.DefaultDocumentName
                     : prefix;
@@ -49,6 +80,7 @@ namespace Microsoft.AspNetCore.Builder
                     settings.DocumentPath = $"/openapi/{documentName}/openapi.json";
                 });
             }
+
             return app;
         }
 
@@ -59,23 +91,45 @@ namespace Microsoft.AspNetCore.Builder
         /// <returns>The <see cref="IApplicationBuilder"/> for chaining.</returns>
         public static IApplicationBuilder UseRestierNSwagUI(this IApplicationBuilder app)
         {
-            var odataOptions = app.ApplicationServices.GetRequiredService<IOptions<ODataOptions>>().Value;
+            // Materialization invariant: read .Value first.
+            var odataOptions = app.ApplicationServices
+                .GetRequiredService<IOptions<ODataOptions>>().Value;
+            var registry = app.ApplicationServices
+                .GetService<IRestierApiVersionRegistry>();
             var nswagDocuments = app.ApplicationServices.GetServices<OpenApiDocumentRegistration>();
+
+            var hasRegistryDescriptors = registry is { Descriptors.Count: > 0 };
+            var registryPrefixes = hasRegistryDescriptors
+                ? new System.Collections.Generic.HashSet<string>(
+                    registry.Descriptors.Select(d => d.RoutePrefix), System.StringComparer.Ordinal)
+                : new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
 
             app.UseSwaggerUi(settings =>
             {
                 settings.Path = "/swagger";
 
-                // Restier-derived routes first.
+                if (hasRegistryDescriptors)
+                {
+                    foreach (var descriptor in registry.Descriptors)
+                    {
+                        var documentName = descriptor.GroupName;
+                        settings.SwaggerRoutes.Add(new SwaggerUiRoute(documentName, $"/openapi/{documentName}/openapi.json"));
+                    }
+                }
+
                 foreach (var prefix in odataOptions.GetRestierRoutePrefixes())
                 {
+                    if (registryPrefixes.Contains(prefix))
+                    {
+                        continue;
+                    }
+
                     var documentName = string.IsNullOrEmpty(prefix)
                         ? RestierOpenApiDocumentGenerator.DefaultDocumentName
                         : prefix;
                     settings.SwaggerRoutes.Add(new SwaggerUiRoute(documentName, $"/openapi/{documentName}/openapi.json"));
                 }
 
-                // User-registered NSwag documents follow.
                 foreach (var registration in nswagDocuments)
                 {
                     settings.SwaggerRoutes.Add(new SwaggerUiRoute(registration.DocumentName, $"/swagger/{registration.DocumentName}/swagger.json"));

@@ -135,7 +135,10 @@ public static class RestierApiVersioningServiceCollectionExtensions
 
 public interface IRestierApiVersioningBuilder
 {
-    // Attribute-driven (reads [ApiVersion] from TApi)
+    // Attribute-driven: reads every [ApiVersion] attribute on TApi.
+    // Because [ApiVersion] supports AllowMultiple, a single class can declare more than one
+    // version this way — covering the "one ApiBase serves multiple versions" case without
+    // a dedicated overload.
     IRestierApiVersioningBuilder AddVersion<TApi>(
         string basePrefix,
         Action<IServiceCollection> configureRouteServices,
@@ -144,19 +147,11 @@ public interface IRestierApiVersioningBuilder
         RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
         where TApi : ApiBase;
 
-    // Imperative — for users who don't want [ApiVersion] on their class
+    // Imperative — for users who don't want [ApiVersion] on their class.
+    // Carries an explicit `deprecated` flag because no attribute is read.
     IRestierApiVersioningBuilder AddVersion<TApi>(
         ApiVersion apiVersion,
-        string basePrefix,
-        Action<IServiceCollection> configureRouteServices,
-        Action<RestierVersioningOptions> configureVersioning = null,
-        bool useRestierBatching = true,
-        RestierNamingConvention namingConvention = RestierNamingConvention.PascalCase)
-        where TApi : ApiBase;
-
-    // One ApiBase serving multiple versions
-    IRestierApiVersioningBuilder AddVersion<TApi>(
-        IEnumerable<ApiVersion> apiVersions,
+        bool deprecated,
         string basePrefix,
         Action<IServiceCollection> configureRouteServices,
         Action<RestierVersioningOptions> configureVersioning = null,
@@ -232,9 +227,9 @@ public sealed class RestierApiVersionDescriptor
 
 `BasePrefix` is the logical API key. Two routes registered with the same `basePrefix` belong to the same logical API; headers reported on one are reported across the whole group.
 
-When `RestierVersioningOptions.ExplicitRoutePrefix` is used (composed-prefix bypass), `BasePrefix` is set to the explicit prefix value with the trailing version segment stripped if a `SegmentFormatter`-style segment is detected; otherwise `BasePrefix` is set to the explicit prefix verbatim. The intent is that `BasePrefix` always names the logical API, never the per-version route. (Behavior pinned by tests.)
+`BasePrefix` is taken verbatim from the `basePrefix` argument the user passes to `AddVersion`, regardless of whether `RestierVersioningOptions.ExplicitRoutePrefix` is set. The `basePrefix` argument is the user's explicit declaration of the logical API key, so trusting it (rather than deriving from `ExplicitRoutePrefix`) keeps the rule unambiguous. Implementation and tests both follow this convention.
 
-The **concrete implementation** and a strongly-typed view live in **`Microsoft.Restier.AspNetCore.Versioning`** (which references `Asp.Versioning.OData`):
+The **concrete implementation** and a strongly-typed view live in **`Microsoft.Restier.AspNetCore.Versioning`** (which references `Asp.Versioning.Mvc` / `Asp.Versioning.Mvc.ApiExplorer`, NOT `Asp.Versioning.OData` — see Tech Stack note below):
 
 ```csharp
 namespace Microsoft.Restier.AspNetCore.Versioning;
@@ -273,7 +268,9 @@ NSwag and Swagger consume `IRestierApiVersionRegistry` (resolved via `IServicePr
 
 Targets: `net8.0;net9.0;net10.0` (matching `Microsoft.Restier.AspNetCore` and the rest of the AspNetCore-family packages — no `net48`, since these are ASP.NET Core packages).
 
-Dependencies: `Microsoft.Restier.AspNetCore`, `Asp.Versioning.OData`, `Asp.Versioning.Mvc.ApiExplorer`.
+Dependencies: `Microsoft.Restier.AspNetCore`, `Asp.Versioning.Mvc`, `Asp.Versioning.Mvc.ApiExplorer`.
+
+> **Tech-stack note (rationale for the dependency choice):** the spec deliberately does **not** depend on `Asp.Versioning.OData`. That package pins `Microsoft.AspNetCore.OData` 8.x, which conflicts with RESTier's OData 9.x. RESTier also doesn't need its types: we don't use `ODataModelBuilder` or `VersionedODataModelBuilder` (RESTier builds EDMs from `ApiBase` conventions). All version-reading and ApiExplorer integration we need lives in the AspNetCore-version-agnostic `Asp.Versioning.Mvc` and `Asp.Versioning.Mvc.ApiExplorer` packages.
 
 ### `Microsoft.Restier.AspNetCore.NSwag` (changes)
 
@@ -314,7 +311,7 @@ Two type-only additions, no behavior changes:
 
 Both live in a new `Microsoft.Restier.AspNetCore.Versioning` namespace within the package. No new dependencies — they reference only `System.*`.
 
-**Why here, not in the Versioning package?** NSwag and Swagger need to consume the registry contract without taking a dependency on `Asp.Versioning.OData`. Putting the read-only contract in the base package (which both already reference) is the simplest path. The Versioning package owns the mutable concrete implementation.
+**Why here, not in the Versioning package?** NSwag and Swagger need to consume the registry contract without taking a dependency on `Asp.Versioning.Mvc`. Putting the read-only contract in the base package (which both already reference) is the simplest path. The Versioning package owns the mutable concrete implementation.
 
 ### Mechanism for populating the registry
 

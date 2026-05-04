@@ -1936,6 +1936,40 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Extensions
                 && d.ImplementationType == typeof(RestierApiVersioningOptionsConfigurator));
         }
 
+        [Fact]
+        public void AddRestierApiVersioning_ReplacesAnyPriorIApiVersionDescriptionProviderWithComposite()
+        {
+            // Simulate a prior Asp.Versioning registration (e.g., AddApiVersioning().AddApiExplorer()).
+            var services = new ServiceCollection();
+            var priorProvider = NSubstitute.Substitute.For<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider>();
+            services.AddSingleton(priorProvider);
+
+            services.AddRestierApiVersioning(b => { });
+
+            // Exactly one provider descriptor remains; it's a factory registration.
+            var providerDescriptors = services
+                .Where(d => d.ServiceType == typeof(Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider))
+                .ToArray();
+            providerDescriptors.Should().HaveCount(1);
+            providerDescriptors[0].ImplementationFactory.Should().NotBeNull(
+                "the composite is registered via factory so it can capture and inject the prior provider");
+        }
+
+        [Fact]
+        public void AddRestierApiVersioning_CalledTwice_DoesNotDoubleReplaceProvider()
+        {
+            var services = new ServiceCollection();
+            var priorProvider = NSubstitute.Substitute.For<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider>();
+            services.AddSingleton(priorProvider);
+
+            services.AddRestierApiVersioning(b => { });
+            services.AddRestierApiVersioning(b => { });
+
+            services
+                .Where(d => d.ServiceType == typeof(Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider))
+                .Should().HaveCount(1);
+        }
+
         private class SampleApi : ApiBase
         {
             public SampleApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
@@ -1972,6 +2006,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.Restier.AspNetCore.Versioning.Internal;
+
+// IMPORTANT (registration ordering): if the consumer calls AddApiVersioning().AddApiExplorer()
+// (the canonical setup), they MUST do so BEFORE calling AddRestierApiVersioning. The composite
+// IApiVersionDescriptionProvider captures the prior registration as `inner` so MVC controller
+// versions still surface.
 
 namespace Microsoft.Restier.AspNetCore.Versioning
 {
@@ -2018,7 +2057,14 @@ namespace Microsoft.Restier.AspNetCore.Versioning
             services.TryAddSingleton<RestierApiVersionRegistry>();
             services.TryAddSingleton<IRestierApiVersionRegistry>(sp => sp.GetRequiredService<RestierApiVersionRegistry>());
             services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<ODataOptions>, RestierApiVersioningOptionsConfigurator>());
-            services.TryAddSingleton<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider, RestierApiVersionDescriptionProvider>();
+
+            // IApiVersionDescriptionProvider is single-instance in Asp.Versioning's API. The
+            // canonical setup calls AddApiVersioning().AddApiExplorer() before this method,
+            // which registers Asp.Versioning's DefaultApiVersionDescriptionProvider.
+            // TryAddSingleton would silently skip our adapter and ApiExplorer would never see
+            // RESTier routes. Use a composite that wraps the prior provider (if any) so MVC
+            // controller versions and Restier versions both surface.
+            ReplaceApiVersionDescriptionProviderWithComposite(services);
 
             return services;
         }
@@ -2043,12 +2089,59 @@ namespace Microsoft.Restier.AspNetCore.Versioning
             return created;
         }
 
+        /// <summary>
+        /// Replace any existing <see cref="Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider"/>
+        /// registration with a composite <see cref="RestierApiVersionDescriptionProvider"/> that
+        /// wraps the prior provider as <c>inner</c>. The canonical setup runs
+        /// <c>AddApiVersioning().AddApiExplorer()</c> first; if so, the prior registration is
+        /// Asp.Versioning's <c>DefaultApiVersionDescriptionProvider</c>, and the composite merges
+        /// MVC-controller descriptions with the Restier registry's descriptions.
+        /// </summary>
+        private static void ReplaceApiVersionDescriptionProviderWithComposite(IServiceCollection services)
+        {
+            var providerType = typeof(Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider);
+
+            // If the composite is already registered (multiple AddRestierApiVersioning calls),
+            // do not re-replace.
+            var existing = services.LastOrDefault(d => d.ServiceType == providerType);
+            if (existing is { ImplementationFactory: not null }
+                && existing.ImplementationFactory.Method.Name.Contains("RestierApiVersionDescriptionProvider", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var prior = existing;
+            if (prior is not null)
+            {
+                services.Remove(prior);
+            }
+
+            services.AddSingleton<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider>(sp =>
+            {
+                Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider inner = null;
+                if (prior is not null)
+                {
+                    inner = prior.ImplementationInstance as Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider
+                        ?? (prior.ImplementationFactory is { } factory
+                            ? (Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider)factory(sp)
+                            : prior.ImplementationType is { } implType
+                                ? (Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider)ActivatorUtilities.CreateInstance(sp, implType)
+                                : null);
+                }
+
+                return new RestierApiVersionDescriptionProvider(
+                    sp.GetRequiredService<IOptions<ODataOptions>>(),
+                    sp.GetRequiredService<IRestierApiVersionRegistry>(),
+                    inner);
+            });
+        }
+
     }
 
 }
 ```
 
-> **Note:** This method registers `RestierApiVersionDescriptionProvider` as the implementation type of `IApiVersionDescriptionProvider`. That class is added in Task 12; the test file in Step 1 above won't compile yet. Add a single empty placeholder class file in this step so the package compiles for now:
+> **Note:** The composite-replacement code above resolves `RestierApiVersionDescriptionProvider` (added in Task 12) via `ActivatorUtilities`-style instantiation through the factory delegate. Add a placeholder class so the package compiles after Task 11. The placeholder must already accept the three constructor parameters that the factory passes in (otherwise Task 11's tests can't construct it).
 >
 > Path: `src/Microsoft.Restier.AspNetCore.Versioning/Internal/RestierApiVersionDescriptionProvider.cs`
 >
@@ -2058,15 +2151,24 @@ namespace Microsoft.Restier.AspNetCore.Versioning
 >
 > using System;
 > using System.Collections.Generic;
+> using Asp.Versioning;
 > using Asp.Versioning.ApiExplorer;
+> using Microsoft.AspNetCore.OData;
+> using Microsoft.Extensions.Options;
 >
 > namespace Microsoft.Restier.AspNetCore.Versioning
 > {
->     // Placeholder; full implementation lands in Task 12.
+>     // Placeholder; full composite implementation lands in Task 12.
 >     internal sealed class RestierApiVersionDescriptionProvider : IApiVersionDescriptionProvider
 >     {
+>         public RestierApiVersionDescriptionProvider(
+>             IOptions<ODataOptions> odataOptions,
+>             IRestierApiVersionRegistry registry,
+>             IApiVersionDescriptionProvider inner)
+>         {
+>         }
 >         public IReadOnlyList<ApiVersionDescription> ApiVersionDescriptions => throw new NotImplementedException();
->         public bool IsDeprecated(Asp.Versioning.ApiVersion apiVersion) => throw new NotImplementedException();
+>         public bool IsDeprecated(ApiVersion apiVersion) => throw new NotImplementedException();
 >     }
 > }
 > ```
@@ -2120,6 +2222,7 @@ Path: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Internal/RestierApiVer
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
@@ -2156,9 +2259,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Internal
                 return new ODataOptions();
             });
 
-            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry);
+            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry, inner: null);
 
-            // Read the descriptions; the provider must touch IOptions.Value first.
             var descriptions = provider.ApiVersionDescriptions;
 
             optionsAccessed.Should().BeTrue("the provider must read IOptions<ODataOptions>.Value before reading the registry");
@@ -2177,7 +2279,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Internal
 
             var odataOptions = Substitute.For<IOptions<ODataOptions>>();
             odataOptions.Value.Returns(new ODataOptions());
-            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry);
+            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry, inner: null);
 
             provider.ApiVersionDescriptions.Should().HaveCount(2);
             provider.ApiVersionDescriptions.Should().ContainSingle(d => d.ApiVersion == new ApiVersion(1, 0) && d.IsDeprecated && d.GroupName == "v1");
@@ -2185,7 +2287,28 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Internal
         }
 
         [Fact]
-        public void IsDeprecated_ReturnsTrueOnlyWhenAllDescriptorsAreDeprecated()
+        public void ApiVersionDescriptions_WhenInnerProviderPresent_MergesInnerAndRestierDescriptions()
+        {
+            var registry = new RestierApiVersionRegistry();
+            registry.Add(new ApiVersion(2, 0), "api", "api/v2", typeof(SampleApi), false, "v2", null);
+
+            var inner = Substitute.For<IApiVersionDescriptionProvider>();
+            inner.ApiVersionDescriptions.Returns(new[]
+            {
+                new ApiVersionDescription(new ApiVersion(1, 0), "controllers-v1", deprecated: false),
+            });
+
+            var odataOptions = Substitute.For<IOptions<ODataOptions>>();
+            odataOptions.Value.Returns(new ODataOptions());
+            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry, inner);
+
+            provider.ApiVersionDescriptions.Should().HaveCount(2);
+            provider.ApiVersionDescriptions.Should().ContainSingle(d => d.GroupName == "controllers-v1");
+            provider.ApiVersionDescriptions.Should().ContainSingle(d => d.GroupName == "v2");
+        }
+
+        [Fact]
+        public void IsDeprecated_ReturnsTrueOnlyWhenAllRestierDescriptorsAreDeprecated()
         {
             var registry = new RestierApiVersionRegistry();
             registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), isDeprecated: true, "v1", null);
@@ -2193,11 +2316,27 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Internal
 
             var odataOptions = Substitute.For<IOptions<ODataOptions>>();
             odataOptions.Value.Returns(new ODataOptions());
-            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry);
+            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry, inner: null);
 
             provider.IsDeprecated(new ApiVersion(1, 0)).Should().BeTrue();
             provider.IsDeprecated(new ApiVersion(2, 0)).Should().BeFalse();
             provider.IsDeprecated(new ApiVersion(99, 0)).Should().BeFalse();
+        }
+
+        [Fact]
+        public void IsDeprecated_DelegatesToInnerForVersionsNotInRegistry()
+        {
+            var registry = new RestierApiVersionRegistry();
+            registry.Add(new ApiVersion(2, 0), "api", "api/v2", typeof(SampleApi), false, "v2", null);
+
+            var inner = Substitute.For<IApiVersionDescriptionProvider>();
+            inner.IsDeprecated(new ApiVersion(1, 0)).Returns(true);
+
+            var odataOptions = Substitute.For<IOptions<ODataOptions>>();
+            odataOptions.Value.Returns(new ODataOptions());
+            var provider = new RestierApiVersionDescriptionProvider(odataOptions, registry, inner);
+
+            provider.IsDeprecated(new ApiVersion(1, 0)).Should().BeTrue("inner provider says so");
         }
 
         private class SampleApi : ApiBase
@@ -2241,39 +2380,47 @@ namespace Microsoft.Restier.AspNetCore.Versioning
 {
 
     /// <summary>
-    /// <see cref="IApiVersionDescriptionProvider"/> adapter sourced from
-    /// <see cref="IRestierApiVersionRegistry"/>. Honors the materialization invariant by
-    /// touching <c>IOptions&lt;ODataOptions&gt;.Value</c> before reading the registry.
+    /// Composite <see cref="IApiVersionDescriptionProvider"/>: merges descriptions from an
+    /// optional <paramref name="inner"/> provider (typically Asp.Versioning's
+    /// <c>DefaultApiVersionDescriptionProvider</c>, which reports MVC-controller versions)
+    /// with descriptions sourced from <see cref="IRestierApiVersionRegistry"/>. Honors the
+    /// materialization invariant by touching <c>IOptions&lt;ODataOptions&gt;.Value</c> before
+    /// reading the registry.
     /// </summary>
     internal sealed class RestierApiVersionDescriptionProvider : IApiVersionDescriptionProvider
     {
 
         private readonly IOptions<ODataOptions> _odataOptions;
         private readonly IRestierApiVersionRegistry _registry;
+        private readonly IApiVersionDescriptionProvider _inner;
 
         public RestierApiVersionDescriptionProvider(
             IOptions<ODataOptions> odataOptions,
-            IRestierApiVersionRegistry registry)
+            IRestierApiVersionRegistry registry,
+            IApiVersionDescriptionProvider inner)
         {
             _odataOptions = odataOptions ?? throw new ArgumentNullException(nameof(odataOptions));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+            _inner = inner;   // optional
         }
 
         public IReadOnlyList<ApiVersionDescription> ApiVersionDescriptions
         {
             get
             {
-                // Materialization invariant: read .Value first to deterministically run all
-                // IConfigureOptions<ODataOptions>, including the configurator that populates
-                // the registry. IOptions<T>.Value caches.
+                // Materialization invariant.
                 _ = _odataOptions.Value;
 
-                return _registry.Descriptors
+                IEnumerable<ApiVersionDescription> innerDescriptions = _inner?.ApiVersionDescriptions
+                    ?? Array.Empty<ApiVersionDescription>();
+
+                var registryDescriptions = _registry.Descriptors
                     .Select(d => new ApiVersionDescription(
                         ApiVersion.Parse(d.Version),
                         d.GroupName,
-                        d.IsDeprecated))
-                    .ToArray();
+                        d.IsDeprecated));
+
+                return innerDescriptions.Concat(registryDescriptions).ToArray();
             }
         }
 
@@ -2286,11 +2433,18 @@ namespace Microsoft.Restier.AspNetCore.Versioning
 
             _ = _odataOptions.Value;
 
-            var matches = _registry.Descriptors
-                .Where(d => string.Equals(d.Version, apiVersion.ToString(), StringComparison.Ordinal))
+            var versionString = apiVersion.ToString();
+            var registryMatches = _registry.Descriptors
+                .Where(d => string.Equals(d.Version, versionString, StringComparison.Ordinal))
                 .ToArray();
 
-            return matches.Length > 0 && matches.All(d => d.IsDeprecated);
+            if (registryMatches.Length > 0)
+            {
+                return registryMatches.All(d => d.IsDeprecated);
+            }
+
+            // Not a Restier-registered version; defer to the inner provider (e.g., MVC controllers).
+            return _inner?.IsDeprecated(apiVersion) ?? false;
         }
 
     }
@@ -2336,9 +2490,9 @@ COMMIT
 - Create: `src/Microsoft.Restier.AspNetCore.Versioning/Middleware/RestierVersionHeadersMiddleware.cs`
 - Create: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Middleware/RestierVersionHeadersMiddlewareTests.cs`
 
-The middleware is a response-side filter: it inspects the request path (with `PathBase` stripped), longest-prefix-matches against registry descriptors via `PathString.StartsWithSegments`, and emits headers using the matched descriptor's `BasePrefix` group. It uses `HttpResponse.OnStarting` so headers are set before the response begins.
+The middleware is a response-side filter: it inspects the request path (which ASP.NET Core has already made `PathBase`-relative), longest-prefix-matches against registry descriptors via `PathString.StartsWithSegments`, and registers a `Response.OnStarting` callback that emits headers using the matched descriptor's `BasePrefix` group. The matching logic is exposed as a static method (`TryMatch`) so it can be unit-tested without spinning up a host. Header behavior (group isolation, sunset, "do not overwrite") is verified in the integration tests of Phase 8 because it depends on `OnStarting` firing — which only happens with a real `TestServer`.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the failing tests for `TryMatch` (the path-matching unit)**
 
 Path: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Middleware/RestierVersionHeadersMiddlewareTests.cs`
 
@@ -2346,168 +2500,85 @@ Path: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Middleware/RestierVers
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System;
-using System.Threading.Tasks;
 using Asp.Versioning;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.OData;
-using Microsoft.Extensions.Options;
 using Microsoft.Restier.AspNetCore.Versioning;
 using Microsoft.Restier.AspNetCore.Versioning.Middleware;
-using NSubstitute;
 using Xunit;
 
 namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Middleware
 {
 
+    /// <summary>
+    /// Unit-level coverage for the path-matching logic. Header-emission behavior (group isolation,
+    /// sunset, "do not overwrite") is exercised by integration tests in
+    /// <c>VersionHeadersIntegrationTests</c> because it depends on <c>HttpResponse.OnStarting</c>
+    /// callbacks firing, which only happens through a real <c>TestServer</c>.
+    /// </summary>
     public class RestierVersionHeadersMiddlewareTests
     {
 
         [Fact]
-        public async Task NoMatchingPrefix_DoesNotEmitHeaders()
+        public void TryMatch_NoDescriptors_ReturnsNull()
+        {
+            var registry = new RestierApiVersionRegistry();
+            RestierVersionHeadersMiddleware.TryMatch(registry, new PathString("/api/v1/x"))
+                .Should().BeNull();
+        }
+
+        [Fact]
+        public void TryMatch_NoPrefixMatch_ReturnsNull()
         {
             var registry = new RestierApiVersionRegistry();
             registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), false, "v1", null);
-            var middleware = BuildMiddleware(registry);
-            var context = NewContext(path: "/unrelated/path");
 
-            await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-            await SimulateResponseStarting(context);
-
-            context.Response.Headers.Should().NotContainKey("api-supported-versions");
-            context.Response.Headers.Should().NotContainKey("api-deprecated-versions");
-            context.Response.Headers.Should().NotContainKey("Sunset");
+            RestierVersionHeadersMiddleware.TryMatch(registry, new PathString("/unrelated/path"))
+                .Should().BeNull();
         }
 
         [Fact]
-        public async Task MatchingPrefix_EmitsSupportedAndDeprecatedVersionsForGroup()
-        {
-            var registry = new RestierApiVersionRegistry();
-            registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), isDeprecated: true, "v1", null);
-            registry.Add(new ApiVersion(2, 0), "api", "api/v2", typeof(SampleApi), isDeprecated: false, "v2", null);
-            var middleware = BuildMiddleware(registry);
-            var context = NewContext(path: "/api/v1/Customers");
-
-            await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-            await SimulateResponseStarting(context);
-
-            context.Response.Headers["api-supported-versions"].ToString()
-                .Should().Be("1.0, 2.0");
-            context.Response.Headers["api-deprecated-versions"].ToString()
-                .Should().Be("1.0");
-        }
-
-        [Fact]
-        public async Task SegmentBoundary_DoesNotMatchLookalike()
+        public void TryMatch_ExactPrefix_Matches()
         {
             var registry = new RestierApiVersionRegistry();
             registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), false, "v1", null);
-            var middleware = BuildMiddleware(registry);
-            var context = NewContext(path: "/api/v10/anything");
 
-            await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-            await SimulateResponseStarting(context);
-
-            context.Response.Headers.Should().NotContainKey("api-supported-versions");
+            RestierVersionHeadersMiddleware.TryMatch(registry, new PathString("/api/v1"))
+                .Should().NotBeNull();
         }
 
         [Fact]
-        public async Task PathBase_StrippedBeforeMatching()
+        public void TryMatch_PrefixWithTrailing_Matches()
         {
             var registry = new RestierApiVersionRegistry();
             registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), false, "v1", null);
-            var middleware = BuildMiddleware(registry);
-            var context = NewContext(path: "/api/v1/Customers");
-            context.Request.PathBase = new PathString("/odata-svc");
 
-            await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-            await SimulateResponseStarting(context);
-
-            context.Response.Headers.Should().ContainKey("api-supported-versions");
+            RestierVersionHeadersMiddleware.TryMatch(registry, new PathString("/api/v1/Customers"))
+                .Should().NotBeNull();
         }
 
         [Fact]
-        public async Task GroupIsolation_OrdersAndInventory_DoNotLeakIntoEachOther()
+        public void TryMatch_LookalikePrefix_DoesNotMatch()
         {
-            var registry = new RestierApiVersionRegistry();
-            registry.Add(new ApiVersion(1, 0), "orders", "orders/v1", typeof(SampleApi), false, "orders-v1", null);
-            registry.Add(new ApiVersion(2, 0), "orders", "orders/v2", typeof(SampleApi), false, "orders-v2", null);
-            registry.Add(new ApiVersion(1, 0), "inventory", "inventory/v1", typeof(SampleApi), false, "inventory-v1", null);
-            var middleware = BuildMiddleware(registry);
-
-            var ordersCtx = NewContext(path: "/orders/v1/Items");
-            await middleware.InvokeAsync(ordersCtx, _ => Task.CompletedTask);
-            await SimulateResponseStarting(ordersCtx);
-
-            ordersCtx.Response.Headers["api-supported-versions"].ToString().Should().Be("1.0, 2.0");
-
-            var inventoryCtx = NewContext(path: "/inventory/v1/Items");
-            await middleware.InvokeAsync(inventoryCtx, _ => Task.CompletedTask);
-            await SimulateResponseStarting(inventoryCtx);
-
-            inventoryCtx.Response.Headers["api-supported-versions"].ToString().Should().Be("1.0");
-        }
-
-        [Fact]
-        public async Task SunsetDate_OnlyEmittedWhenSet()
-        {
-            var sunset = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            var registry = new RestierApiVersionRegistry();
-            registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), true, "v1", sunset);
-            registry.Add(new ApiVersion(2, 0), "api", "api/v2", typeof(SampleApi), false, "v2", null);
-            var middleware = BuildMiddleware(registry);
-
-            var v1 = NewContext(path: "/api/v1/x");
-            await middleware.InvokeAsync(v1, _ => Task.CompletedTask);
-            await SimulateResponseStarting(v1);
-            v1.Response.Headers["Sunset"].ToString().Should().Be("Fri, 01 Jan 2027 00:00:00 GMT");
-
-            var v2 = NewContext(path: "/api/v2/x");
-            await middleware.InvokeAsync(v2, _ => Task.CompletedTask);
-            await SimulateResponseStarting(v2);
-            v2.Response.Headers.Should().NotContainKey("Sunset");
-        }
-
-        [Fact]
-        public async Task DoesNotOverwriteHeadersAlreadyPresent()
-        {
+            // Segment-boundary safe: /api/v10 must not match a registration for "api/v1".
             var registry = new RestierApiVersionRegistry();
             registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), false, "v1", null);
-            var middleware = BuildMiddleware(registry);
-            var context = NewContext(path: "/api/v1/x");
-            context.Response.Headers["api-supported-versions"] = "9.9";
 
-            await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-            await SimulateResponseStarting(context);
-
-            context.Response.Headers["api-supported-versions"].ToString().Should().Be("9.9");
+            RestierVersionHeadersMiddleware.TryMatch(registry, new PathString("/api/v10/anything"))
+                .Should().BeNull();
         }
 
-        private static RestierVersionHeadersMiddleware BuildMiddleware(IRestierApiVersionRegistry registry)
+        [Fact]
+        public void TryMatch_LongestPrefixWins()
         {
-            var odataOptions = Substitute.For<IOptions<ODataOptions>>();
-            odataOptions.Value.Returns(new ODataOptions());
-            return new RestierVersionHeadersMiddleware(registry, odataOptions);
-        }
+            // If both "api" (unversioned) and "api/v1" are registered, /api/v1/x must pick "api/v1".
+            var registry = new RestierApiVersionRegistry();
+            registry.Add(new ApiVersion(1, 0), "api", "api", typeof(SampleApi), false, "default", null);
+            registry.Add(new ApiVersion(1, 0), "api", "api/v1", typeof(SampleApi), false, "v1", null);
 
-        private static HttpContext NewContext(string path)
-        {
-            var ctx = new DefaultHttpContext();
-            ctx.Request.Path = new PathString(path);
-            return ctx;
-        }
-
-        private static async Task SimulateResponseStarting(HttpContext context)
-        {
-            // DefaultHttpContext doesn't fire OnStarting automatically;
-            // invoke the registered callbacks ourselves to mimic Kestrel.
-            // The middleware is expected to register one callback per request.
-            var feature = context.Features.Get<IHttpResponseFeature>();
-            await Task.CompletedTask;
-            // The DefaultHttpResponseFeature stores OnStarting callbacks privately. The simplest
-            // approach for unit tests is for the middleware to apply headers synchronously on the
-            // response. The middleware in this plan does that — see the implementation note.
+            var match = RestierVersionHeadersMiddleware.TryMatch(registry, new PathString("/api/v1/x"));
+            match.Should().NotBeNull();
+            match.RoutePrefix.Should().Be("api/v1");
         }
 
         private class SampleApi { }
@@ -2517,7 +2588,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Middleware
 }
 ```
 
-> **Implementation note for `SimulateResponseStarting`:** `DefaultHttpResponseFeature.OnStarting` callbacks aren't invoked by the in-memory test harness. The simpler design — chosen for testability — is to apply headers **synchronously** (before `next()` is awaited) on requests whose path matches a registered prefix. ASP.NET Core middleware run before any response writes, so headers set this way are emitted on the response. Because the registry is read once at middleware construction (singleton) and lookups are cheap, this is fine. The test helper `SimulateResponseStarting` is therefore a no-op in the implementation we ship; we keep it in the test file as a hook in case a future revision moves to `OnStarting`.
+> **Why no unit tests for header emission?** ASP.NET Core's `DefaultHttpResponseFeature.OnStarting` does not invoke registered callbacks unless the response is actually being written by the host. There is no public API to drive those callbacks from a unit test. Rather than implement the headers in a synchronously-applied way that contradicts the spec's "response-side, never overwrite" requirement, we restrict unit tests to the path-matching logic and verify header behavior through the integration tests in Task 17. Those tests use `TestServer`, which honors `OnStarting`.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -2551,44 +2622,60 @@ namespace Microsoft.Restier.AspNetCore.Versioning.Middleware
     /// response headers on requests whose path matches a registered Restier versioned route.
     /// Headers are scoped to the matched descriptor's <see cref="RestierApiVersionDescriptor.BasePrefix"/>
     /// group so unrelated APIs at other base prefixes do not leak versions into each other's headers.
+    /// Headers are applied via <see cref="HttpResponse.OnStarting(System.Func{object,Task},object)"/>
+    /// so they fire after the inner pipeline, just before the response begins.
     /// </summary>
     internal sealed class RestierVersionHeadersMiddleware
     {
 
+        private readonly RequestDelegate _next;
         private readonly IRestierApiVersionRegistry _registry;
         private readonly IOptions<ODataOptions> _odataOptions;
 
+        // Standard UseMiddleware<T> shape: RequestDelegate is the first ctor param;
+        // additional services are resolved per-request from the request scope.
         public RestierVersionHeadersMiddleware(
+            RequestDelegate next,
             IRestierApiVersionRegistry registry,
             IOptions<ODataOptions> odataOptions)
         {
+            _next = next ?? throw new ArgumentNullException(nameof(next));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _odataOptions = odataOptions ?? throw new ArgumentNullException(nameof(odataOptions));
         }
 
-        public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+        public async Task InvokeAsync(HttpContext context)
         {
             // Materialization invariant: ensure the registry has been populated.
             _ = _odataOptions.Value;
 
-            var matched = MatchDescriptor(context);
+            var matched = TryMatch(_registry, context.Request.Path);
             if (matched is not null)
             {
-                ApplyHeaders(context.Response, matched);
+                // OnStarting fires after the inner pipeline produces the response, just before
+                // headers are flushed. This honors the "do not overwrite already-set headers"
+                // contract because we run after downstream code has had its chance to set them.
+                context.Response.OnStarting(static state =>
+                {
+                    var (response, descriptor, registry) = ((HttpResponse, RestierApiVersionDescriptor, IRestierApiVersionRegistry))state;
+                    ApplyHeaders(response, descriptor, registry);
+                    return Task.CompletedTask;
+                }, (context.Response, matched, _registry));
             }
 
-            await next(context);
+            await _next(context);
         }
 
-        private RestierApiVersionDescriptor MatchDescriptor(HttpContext context)
+        /// <summary>
+        /// Longest-prefix-match against the registry. Uses <see cref="PathString.StartsWithSegments(PathString)"/>
+        /// for segment-boundary safety. <see cref="HttpRequest.Path"/> is already
+        /// <see cref="HttpRequest.PathBase"/>-relative when middleware see it, so we don't need to
+        /// strip <c>PathBase</c> ourselves.
+        /// </summary>
+        internal static RestierApiVersionDescriptor TryMatch(IRestierApiVersionRegistry registry, PathString path)
         {
-            var path = context.Request.Path;
-            // Note: PathBase has already been stripped from Path by ASP.NET Core routing
-            // before middleware see the request — Path is application-relative.
-            // The registry's RoutePrefix values are also application-relative (no leading slash).
-
             RestierApiVersionDescriptor longest = null;
-            foreach (var descriptor in _registry.Descriptors)
+            foreach (var descriptor in registry.Descriptors)
             {
                 var candidate = new PathString("/" + descriptor.RoutePrefix);
                 if (path.StartsWithSegments(candidate))
@@ -2603,9 +2690,9 @@ namespace Microsoft.Restier.AspNetCore.Versioning.Middleware
             return longest;
         }
 
-        private void ApplyHeaders(HttpResponse response, RestierApiVersionDescriptor matched)
+        private static void ApplyHeaders(HttpResponse response, RestierApiVersionDescriptor matched, IRestierApiVersionRegistry registry)
         {
-            var group = _registry.FindByBasePrefix(matched.BasePrefix);
+            var group = registry.FindByBasePrefix(matched.BasePrefix);
 
             if (!response.Headers.ContainsKey("api-supported-versions"))
             {
@@ -3018,8 +3105,135 @@ COMMIT
 
 **Files:**
 - Create: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/IntegrationTests/VersionHeadersIntegrationTests.cs`
+- Create: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Infrastructure/MultiGroupApiFixture.cs`
 
-- [ ] **Step 1: Write the failing tests**
+These tests exercise the parts of the headers middleware that depend on `OnStarting` actually firing — group isolation, `Sunset` header emission, the "do not overwrite" rule. They use `TestServer`, which fires `OnStarting` callbacks the same way Kestrel does.
+
+- [ ] **Step 1: Write the multi-group fixture**
+
+Path: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/Infrastructure/MultiGroupApiFixture.cs`
+
+```csharp
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Licensed under the MIT License.  See License.txt in the project root for license information.
+
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Asp.Versioning;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.OData;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.OData.Edm;
+using Microsoft.OData.ModelBuilder;
+using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.AspNetCore.Versioning;
+using Microsoft.Restier.Core;
+using Microsoft.Restier.Core.Model;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
+
+namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
+{
+
+    [ApiVersion("1.0")]
+    [ApiVersion("2.0", Deprecated = true)]
+    public class OrdersApi : ApiBase
+    {
+        public OrdersApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+            : base(model, queryHandler, submitHandler) { }
+        public IQueryable<SampleEntity> Orders => Enumerable.Empty<SampleEntity>().AsQueryable();
+    }
+
+    [ApiVersion("1.0")]
+    public class InventoryApi : ApiBase
+    {
+        public InventoryApi(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+            : base(model, queryHandler, submitHandler) { }
+        public IQueryable<SampleEntity> Stock => Enumerable.Empty<SampleEntity>().AsQueryable();
+    }
+
+    public class OrdersModelBuilder : IModelBuilder
+    {
+        public IModelBuilder Inner { get; set; }
+        public IEdmModel GetEdmModel()
+        {
+            var b = new ODataConventionModelBuilder();
+            b.EntitySet<SampleEntity>(nameof(OrdersApi.Orders));
+            return b.GetEdmModel();
+        }
+    }
+
+    public class InventoryModelBuilder : IModelBuilder
+    {
+        public IModelBuilder Inner { get; set; }
+        public IEdmModel GetEdmModel()
+        {
+            var b = new ODataConventionModelBuilder();
+            b.EntitySet<SampleEntity>(nameof(InventoryApi.Stock));
+            return b.GetEdmModel();
+        }
+    }
+
+    public static class MultiGroupApiFixture
+    {
+
+        public static async Task<IHost> BuildHostAsync(CancellationToken cancellationToken, DateTimeOffset? ordersV2Sunset = null)
+        {
+            var builder = Host.CreateDefaultBuilder()
+                .ConfigureWebHost(web => web
+                    .UseTestServer()
+                    .ConfigureServices(services =>
+                    {
+                        services.AddApiVersioning().AddApiExplorer();
+                        services.AddControllers().AddRestier(options =>
+                        {
+                            options.Select().Expand().Filter().OrderBy().Count();
+                        });
+                        services.AddRestierApiVersioning(b =>
+                        {
+                            b.AddVersion<OrdersApi>("orders", svc =>
+                                svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>());
+
+                            // Apply sunset on V2 specifically when configured.
+                            if (ordersV2Sunset is { } sunset)
+                            {
+                                b.AddVersion<OrdersApi>(
+                                    new ApiVersion(2, 0), deprecated: true, "orders",
+                                    svc => svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>(),
+                                    opts => opts.SunsetDate = sunset);
+                            }
+
+                            b.AddVersion<InventoryApi>("inventory", svc =>
+                                svc.AddSingleton<IChainedService<IModelBuilder>, InventoryModelBuilder>());
+                        });
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseRouting();
+                        app.UseRestierVersionHeaders();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapControllers();
+                            endpoints.MapRestier();
+                        });
+                    }));
+
+            return await builder.StartAsync(cancellationToken);
+        }
+
+    }
+
+}
+```
+
+> Note: The fixture's "if `ordersV2Sunset` then re-AddVersion" pattern is ugly but works because the imperative overload is independent of the attribute path. For a cleaner fixture, refactor `OrdersApi` into `OrdersApiV1` / `OrdersApiV2` like the main fixture; the form above keeps the test compact and exercises both overloads.
+
+- [ ] **Step 2: Write the failing tests**
 
 Path: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/IntegrationTests/VersionHeadersIntegrationTests.cs`
 
@@ -3027,6 +3241,7 @@ Path: `test/Microsoft.Restier.Tests.AspNetCore.Versioning/IntegrationTests/Versi
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -3079,10 +3294,42 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.IntegrationTests
             response.Headers.Contains("api-supported-versions").Should().BeFalse();
         }
 
+        [Fact]
+        public async Task GroupIsolation_OrdersHeadersDoNotIncludeInventoryVersions()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await MultiGroupApiFixture.BuildHostAsync(cancellationToken);
+            var client = host.GetTestClient();
+
+            var ordersResponse = await client.GetAsync("/orders/v1/Orders", cancellationToken);
+            ordersResponse.Headers.GetValues("api-supported-versions").Single().Should().Be("1.0, 2.0");
+
+            var inventoryResponse = await client.GetAsync("/inventory/v1/Stock", cancellationToken);
+            inventoryResponse.Headers.GetValues("api-supported-versions").Single().Should().Be("1.0");
+        }
+
+        [Fact]
+        public async Task SunsetHeader_OnlyEmittedForVersionWithSunsetConfigured()
+        {
+            var sunset = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await MultiGroupApiFixture.BuildHostAsync(cancellationToken, ordersV2Sunset: sunset);
+            var client = host.GetTestClient();
+
+            var v1Response = await client.GetAsync("/orders/v1/Orders", cancellationToken);
+            v1Response.Headers.Contains("Sunset").Should().BeFalse();
+
+            var v2Response = await client.GetAsync("/orders/v2/Orders", cancellationToken);
+            v2Response.Headers.GetValues("Sunset").Single()
+                .Should().Be("Fri, 01 Jan 2027 00:00:00 GMT");
+        }
+
     }
 
 }
 ```
+
+> Note: a "do not overwrite already-set headers" integration test would require a custom middleware that injects a header before `RestierController` runs. That's hard to wire cleanly through the existing pipeline. For now, the contract is enforced in code by the `if (!response.Headers.ContainsKey(...))` guards in `ApplyHeaders`. If you want stronger coverage, add a helper middleware that pre-sets `api-supported-versions = "9.9"` and assert the header survives.
 
 - [ ] **Step 2: Run the tests to verify they pass**
 

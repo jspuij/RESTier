@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
 using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.AspNetCore.Model;
 using Microsoft.Restier.AspNetCore.Versioning;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.DependencyInjection;
@@ -34,6 +35,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
         {
         }
 
+        [Resource]
         public IQueryable<SampleEntity> Items => Enumerable.Empty<SampleEntity>().AsQueryable();
     }
 
@@ -45,9 +47,11 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
         {
         }
 
+        [Resource]
         public IQueryable<SampleEntity> Items => Enumerable.Empty<SampleEntity>().AsQueryable();
 
         // V2-only entity set
+        [Resource]
         public IQueryable<SampleAuditLog> AuditLogs => Enumerable.Empty<SampleAuditLog>().AsQueryable();
     }
 
@@ -105,16 +109,26 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                             o.ApiVersionReader = new UrlSegmentApiVersionReader();
                         }).AddApiExplorer();
 
-                        services.AddControllers().AddRestier(options =>
-                        {
-                            options.Select().Expand().Filter().OrderBy().Count();
-                        });
+                        services.AddControllers()
+                            .AddRestier(options =>
+                            {
+                                options.Select().Expand().Filter().OrderBy().Count();
+                            })
+                            .AddApplicationPart(typeof(RestierController).Assembly);
 
                         services.AddRestierApiVersioning(b => b
                             .AddVersion<SampleApiV1>("api", svc =>
-                                svc.AddSingleton<IChainedService<IModelBuilder>, SampleV1ModelBuilder>())
+                            {
+                                svc.AddSingleton<IChainedService<IModelBuilder>, SampleV1ModelBuilder>();
+                                svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
+                                svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
+                            })
                             .AddVersion<SampleApiV2>("api", svc =>
-                                svc.AddSingleton<IChainedService<IModelBuilder>, SampleV2ModelBuilder>()));
+                            {
+                                svc.AddSingleton<IChainedService<IModelBuilder>, SampleV2ModelBuilder>();
+                                svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
+                                svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
+                            }));
                     })
                     .Configure(app =>
                     {

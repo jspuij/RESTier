@@ -94,6 +94,7 @@
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore.NSwag\Microsoft.Restier.AspNetCore.NSwag.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
+        <ProjectReference Include="..\Microsoft.Restier.AspNetCore.Versioning\Microsoft.Restier.AspNetCore.Versioning.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
         <ProjectReference Include="..\Microsoft.Restier.EntityFrameworkCore\Microsoft.Restier.EntityFrameworkCore.csproj" />
@@ -104,6 +105,7 @@
         <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore\Microsoft.Restier.AspNetCore.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore.NSwag\Microsoft.Restier.AspNetCore.NSwag.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore.Swagger\Microsoft.Restier.AspNetCore.Swagger.csproj" />
+        <_DocsSourceProject Include="..\Microsoft.Restier.AspNetCore.Versioning\Microsoft.Restier.AspNetCore.Versioning.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.Breakdance\Microsoft.Restier.Breakdance.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.EntityFramework\Microsoft.Restier.EntityFramework.csproj" />
         <_DocsSourceProject Include="..\Microsoft.Restier.EntityFrameworkCore\Microsoft.Restier.EntityFrameworkCore.csproj" />

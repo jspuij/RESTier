@@ -1,0 +1,6 @@
+---
+title: API Versioning
+description: Restier 2.0 adds optional URL-segment API versioning via Asp.Versioning.
+---
+
+The new opt-in package **`Microsoft.Restier.AspNetCore.Versioning`** integrates Restier with `Asp.Versioning` for URL-segment versioning. Register multiple `ApiBase` subclasses, each with its own `[ApiVersion]`, via `services.AddRestierApiVersioning(builder => builder.AddVersion<TApi>(...))`. Versioned `$metadata`, per-version OpenAPI documents (NSwag and Swagger), and standard version-discovery response headers (`api-supported-versions`, `api-deprecated-versions`, `Sunset`) are wired up automatically. See the [API Versioning guide](../guides/server/api-versioning) for full setup.

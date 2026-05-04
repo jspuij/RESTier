@@ -36,6 +36,7 @@
               "guides/server/openapi-annotations",
               "guides/server/testing",
               "guides/server/naming-conventions",
+              "guides/server/api-versioning",
               "guides/server/concurrency",
               "guides/server/performance"
             ]
@@ -74,7 +75,8 @@
           "release-notes/0-4-0-rc",
           "release-notes/0-4-0-beta",
           "release-notes/0-3-0-beta2",
-          "release-notes/0-3-0-beta1"
+          "release-notes/0-3-0-beta1",
+          "release-notes/api-versioning"
         ]
       },
       {
@@ -239,6 +241,18 @@
                           "api-reference/Microsoft/Restier/AspNetCore/Query/index",
                           "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionExpander",
                           "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionSourcer"
+                        ]
+                      },
+                      {
+                        "group": "Versioning",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/AspNetCore/Versioning/index",
+                          "api-reference/Microsoft/Restier/AspNetCore/Versioning/ApiVersionSegmentFormatters",
+                          "api-reference/Microsoft/Restier/AspNetCore/Versioning/IRestierApiVersioningBuilder",
+                          "api-reference/Microsoft/Restier/AspNetCore/Versioning/IRestierApiVersionRegistry",
+                          "api-reference/Microsoft/Restier/AspNetCore/Versioning/RestierApiVersionDescriptor",
+                          "api-reference/Microsoft/Restier/AspNetCore/Versioning/RestierVersioningOptions"
                         ]
                       }
                     ]

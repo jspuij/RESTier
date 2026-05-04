@@ -205,3 +205,5 @@ NSwag's in-process `IDocumentProcessor` / `IOperationProcessor` pipeline applies
 controllers document (because that one is registered with NSwag), but **not** to Restier-generated
 documents. Restier OpenAPI documents are served by RESTier's own middleware and customized via the
 `Action<OpenApiConvertSettings>` callback on `AddRestierNSwag()`.
+
+If you need to expose multiple versions of your API at different URL segments, see [API Versioning](api-versioning) — the NSwag integration is registry-aware and shows per-version dropdown entries automatically.

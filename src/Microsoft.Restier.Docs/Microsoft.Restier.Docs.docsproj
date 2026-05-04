@@ -38,6 +38,7 @@
                                     guides/server/openapi-annotations;
                                     guides/server/testing;
                                     guides/server/naming-conventions;
+                                    guides/server/api-versioning;
                                     guides/server/concurrency;
                                     guides/server/performance;
                                 </Pages>

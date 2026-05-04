@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.OData;
 using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.AspNetCore.Versioning;
 using System;
 using System.Linq;
 
@@ -29,20 +30,20 @@ namespace Microsoft.Restier.AspNetCore.NSwag
         /// <summary>
         /// Generates an <see cref="OpenApiDocument"/> for the specified Restier route.
         /// </summary>
-        /// <param name="documentName">The document name.</param>
+        /// <param name="documentName">The document name. May be a version group name (e.g., "v1") or a route prefix.</param>
         /// <param name="odataOptions">The OData options.</param>
         /// <param name="request">The current HTTP request, or null.</param>
         /// <param name="openApiSettings">Optional settings configurator.</param>
+        /// <param name="registry">Optional version registry. If non-null and non-empty, group-name lookup is tried first.</param>
         /// <returns>The generated document, or null if the route was not found.</returns>
         public static OpenApiDocument GenerateDocument(
             string documentName,
             ODataOptions odataOptions,
             HttpRequest request,
-            Action<OpenApiConvertSettings> openApiSettings)
+            Action<OpenApiConvertSettings> openApiSettings,
+            IRestierApiVersionRegistry registry = null)
         {
-            var routePrefix = string.Equals(documentName, DefaultDocumentName, StringComparison.OrdinalIgnoreCase)
-                ? string.Empty
-                : documentName;
+            var routePrefix = ResolveRoutePrefix(documentName, registry);
 
             if (!odataOptions.RouteComponents.TryGetValue(routePrefix, out var routeComponent))
             {
@@ -53,17 +54,13 @@ namespace Microsoft.Restier.AspNetCore.NSwag
             var routeServices = odataOptions.GetRouteServices(routePrefix);
             var odataValidationSettings = routeServices.GetService<ODataValidationSettings>();
 
-            // @robertmclaws: Start off by setting defaults, but allow the user to override it.
             var settings = new OpenApiConvertSettings { TopExample = odataValidationSettings?.MaxTop ?? 5 };
             openApiSettings?.Invoke(settings);
 
-            // @robertmclaws: The host defaults internally to localhost; isn't set automatically.
             if (request is not null)
             {
                 var pathParts = new[]
                 {
-                    // @robertmclaws: You're going to think the next line is an error and want to put the second slash in.
-                    //                Don't. The second slash will be added with the string.Join(). ;)
                     $"{request.Scheme}:/",
                     request.Host.Value,
                     request.PathBase.HasValue ? request.PathBase.Value.TrimStart('/') : null,
@@ -73,6 +70,28 @@ namespace Microsoft.Restier.AspNetCore.NSwag
             }
 
             return model.ConvertToOpenApi(settings);
+        }
+
+        /// <summary>
+        /// Resolves a route prefix from a document name. When the registry has descriptors,
+        /// the registry's group-name lookup wins for matching names; otherwise (or when no
+        /// match) the existing rule applies: <c>"default"</c> → empty prefix, anything else →
+        /// itself.
+        /// </summary>
+        private static string ResolveRoutePrefix(string documentName, IRestierApiVersionRegistry registry)
+        {
+            if (registry is { Descriptors.Count: > 0 })
+            {
+                var descriptor = registry.FindByGroupName(documentName);
+                if (descriptor is not null)
+                {
+                    return descriptor.RoutePrefix;
+                }
+            }
+
+            return string.Equals(documentName, DefaultDocumentName, StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : documentName;
         }
 
     }

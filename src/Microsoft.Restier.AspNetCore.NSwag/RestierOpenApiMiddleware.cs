@@ -3,9 +3,11 @@
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OData;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.OData;
+using Microsoft.Restier.AspNetCore.Versioning;
 using System;
 using System.Threading.Tasks;
 
@@ -26,14 +28,17 @@ namespace Microsoft.Restier.AspNetCore.NSwag
         private readonly RequestDelegate next;
         private readonly IOptions<ODataOptions> odataOptions;
         private readonly Action<OpenApiConvertSettings> openApiSettings;
+        private readonly IServiceProvider rootServices;
 
         public RestierOpenApiMiddleware(
             RequestDelegate next,
             IOptions<ODataOptions> odataOptions,
+            IServiceProvider rootServices,
             Action<OpenApiConvertSettings> openApiSettings = null)
         {
             this.next = next;
             this.odataOptions = odataOptions;
+            this.rootServices = rootServices;
             this.openApiSettings = openApiSettings;
         }
 
@@ -53,11 +58,18 @@ namespace Microsoft.Restier.AspNetCore.NSwag
                 var documentName = path.Substring(PathPrefix.Length, path.Length - PathPrefix.Length - PathSuffix.Length);
                 if (!string.IsNullOrEmpty(documentName))
                 {
+                    // Touching IOptions<ODataOptions>.Value already happens inside GenerateDocument
+                    // via the odataOptions.RouteComponents read; for the registry, ensure the
+                    // configurator has run by reading .Value first (materialization invariant).
+                    var options = odataOptions.Value;
+                    var registry = rootServices.GetService<IRestierApiVersionRegistry>();
+
                     var document = RestierOpenApiDocumentGenerator.GenerateDocument(
                         documentName,
-                        odataOptions.Value,
+                        options,
                         context.Request,
-                        openApiSettings);
+                        openApiSettings,
+                        registry);
 
                     if (document is not null)
                     {

@@ -17,6 +17,7 @@
   </Folder>
   <Folder Name="/src/Samples/">
     <Project Path="src/Microsoft.Restier.Samples.Northwind.AspNetCore/Microsoft.Restier.Samples.Northwind.AspNetCore.csproj" />
+    <Project Path="src/Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore/Microsoft.Restier.Samples.NorthwindVersioned.AspNetCore.csproj" />
     <Project Path="src/Microsoft.Restier.Samples.Postgres.AspNetCore/Microsoft.Restier.Samples.Postgres.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/src/Web/" Id="bf61c3f1-7c7e-4515-8b51-14b374a034f9">

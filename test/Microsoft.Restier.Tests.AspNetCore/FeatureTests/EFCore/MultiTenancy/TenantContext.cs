@@ -3,7 +3,7 @@
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-internal class TenantContext : ITenantContext
+public class TenantContext : ITenantContext
 {
     public string TenantId { get; set; }
 }

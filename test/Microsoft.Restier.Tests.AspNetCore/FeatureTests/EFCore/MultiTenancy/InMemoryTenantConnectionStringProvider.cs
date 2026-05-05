@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-internal sealed class InMemoryTenantConnectionStringProvider : IConnectionStringProvider
+public sealed class InMemoryTenantConnectionStringProvider : IConnectionStringProvider
 {
     private readonly Dictionary<string, string> map;
 

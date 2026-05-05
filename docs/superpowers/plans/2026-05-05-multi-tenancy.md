@@ -98,13 +98,15 @@ public class TenantDbContext : DbContext
 
 - [ ] **Step 3: Create `ITenantContext.cs`**
 
+These four scaffolding types (`ITenantContext`, `TenantContext`, `IConnectionStringProvider`, `InMemoryTenantConnectionStringProvider`) are all `internal` — they exist only to support the multi-tenancy scenario test in this assembly. In a real consumer's project these would be `public`, but here they have no external consumers.
+
 ```csharp
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-public interface ITenantContext
+internal interface ITenantContext
 {
     string TenantId { get; set; }
 }
@@ -118,7 +120,7 @@ public interface ITenantContext
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-public class TenantContext : ITenantContext
+internal class TenantContext : ITenantContext
 {
     public string TenantId { get; set; }
 }
@@ -132,7 +134,7 @@ public class TenantContext : ITenantContext
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-public interface IConnectionStringProvider
+internal interface IConnectionStringProvider
 {
     string GetConnectionString(string tenantId);
 

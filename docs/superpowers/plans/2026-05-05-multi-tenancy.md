@@ -496,13 +496,14 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         };
 
         // Route-level services: registered at the OData prefix "odata".
+        // Only IHttpContextAccessor needs route-DI registration — it's the entry
+        // point into the bridge below. ITenantContext and IConnectionStringProvider
+        // live in app DI and are reached via http.RequestServices (the app scope).
         AddRestierAction = options =>
         {
             options.AddRestierRoute<MultiTenantApi>("odata", services =>
             {
                 services.AddHttpContextAccessor();
-                services.AddSingleton<IConnectionStringProvider>(
-                    new InMemoryTenantConnectionStringProvider(TenantToDb));
 
                 services.AddEFCoreProviderServices<TenantDbContext>((sp, opt) =>
                 {
@@ -510,9 +511,13 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
                     // — RESTier materializes TenantDbContext to inspect its DbSets for EDM
                     // construction) and once per request. Guard against the null HttpContext
                     // by falling back to a placeholder DB name during model-build.
+                    //
+                    // Both ITenantContext and IConnectionStringProvider are resolved via
+                    // http.RequestServices (the app scope), NOT via sp (the route scope).
+                    // OData's per-route container does not fall back to app DI.
                     var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
                     var dbName = http != null
-                        ? sp.GetRequiredService<IConnectionStringProvider>()
+                        ? http.RequestServices.GetRequiredService<IConnectionStringProvider>()
                               .GetConnectionString(
                                   http.RequestServices.GetRequiredService<ITenantContext>().TenantId
                                   ?? "__model_build__")
@@ -927,8 +932,11 @@ services.AddControllers().AddRestier(options =>
 {
     options.AddRestierRoute<MultiTenantApi>("odata", routeServices =>
     {
+        // IHttpContextAccessor is the only service the route container needs to
+        // register itself — it's the entry point into the bridge below. ITenantContext
+        // and IConnectionStringProvider both live in app DI and are reached through
+        // http.RequestServices.
         routeServices.AddHttpContextAccessor();
-        routeServices.AddSingleton<IConnectionStringProvider, ConfigurationConnectionStringProvider>();
         routeServices.AddEFCoreProviderServices<TenantDbContext>((sp, opt) =>
         {
             // The options lambda runs TWICE: once at model-build time (HttpContext is
@@ -937,9 +945,9 @@ services.AddControllers().AddRestier(options =>
             // placeholder connection string that EDM reflection never opens.
             var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
             var conn = http != null
-                ? sp.GetRequiredService<IConnectionStringProvider>()
-                       .GetConnectionString(http.RequestServices.GetRequiredService<ITenantContext>().TenantId
-                                            ?? "__model_build__")
+                ? http.RequestServices.GetRequiredService<IConnectionStringProvider>()
+                      .GetConnectionString(http.RequestServices.GetRequiredService<ITenantContext>().TenantId
+                                           ?? "__model_build__")
                 : "Server=__model_build__;Database=__model_build__";
             opt.UseSqlServer(conn);
         });
@@ -947,7 +955,7 @@ services.AddControllers().AddRestier(options =>
 });
 ```
 
-The `(sp, opt)` lambda runs at two distinct times: once at startup (model-build) and once per request. `sp` is the route-scope provider; at request time the `IHttpContextAccessor` reaches the app-scope `ITenantContext` populated by the middleware. At startup `HttpContext` is null and the placeholder connection string is fed to EDM reflection — RESTier never opens it.
+The `(sp, opt)` lambda runs at two distinct times: once at startup (model-build) and once per request. `sp` is the route-scope provider — narrow on purpose, only `IHttpContextAccessor` needs to live there. At request time `IHttpContextAccessor.HttpContext.RequestServices` reaches the app scope where both `ITenantContext` (populated by the middleware) and `IConnectionStringProvider` live. At startup `HttpContext` is null and the placeholder connection string is fed to EDM reflection — RESTier never opens it.
 
 </Step>
 <Step title="Wire the middleware in the pipeline — BEFORE UseRouting">

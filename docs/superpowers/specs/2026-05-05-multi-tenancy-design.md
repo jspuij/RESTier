@@ -55,13 +55,13 @@ RestierController (per-route scoped DI, resolved via Request.GetRouteServices())
     ▼
 TenantDbContext  ◀── AddDbContext factory lambda
                        │
-                       ├── sp.GetRequiredService<IHttpContextAccessor>().HttpContext
-                       ├──   .RequestServices.GetRequiredService<ITenantContext>()  (app scope)
-                       ├── sp.GetRequiredService<IConnectionStringProvider>()       (route scope)
+                       ├── sp.GetRequiredService<IHttpContextAccessor>().HttpContext        (route scope → bridge)
+                       ├── http.RequestServices.GetRequiredService<ITenantContext>()         (app scope)
+                       ├── http.RequestServices.GetRequiredService<IConnectionStringProvider>() (app scope)
                        └── configures DbContextOptions (UseSqlServer, ...)
 ```
 
-The bridge is `IHttpContextAccessor`. `ITenantContext` is registered in the **app** service collection (scoped) and populated by middleware via the standard `HttpContext.RequestServices` provider. `IConnectionStringProvider` is registered in the **route** service collection (singleton). The `AddDbContext` factory has access to the route-scope `sp`, but reaches the app-scope `ITenantContext` via `IHttpContextAccessor.HttpContext.RequestServices`. This is a known bridge between OData per-route containers and the app request scope; without it, a service registered in app DI is invisible to anything resolved through `Request.GetRouteServices()`.
+The bridge is `IHttpContextAccessor`. Both `ITenantContext` (scoped) and `IConnectionStringProvider` (singleton) are registered in the **app** service collection and reached from the route-scope lambda via `IHttpContextAccessor.HttpContext.RequestServices`. The route container itself only registers `IHttpContextAccessor` — the minimum needed to enter the bridge. OData's per-route container does not fall back to app DI for general service resolution, so without the `HttpContext.RequestServices` hop a service registered in app DI would be invisible to anything resolved through `Request.GetRouteServices()`.
 
 ### Components (all in user code; no RESTier changes)
 
@@ -70,8 +70,8 @@ The bridge is `IHttpContextAccessor`. `ITenantContext` is registered in the **ap
 | `IHttpContextAccessor` | app + route | singleton | Standard ASP.NET Core accessor. Registered in the app via `AddHttpContextAccessor()`; also referenced from the route-services `AddDbContext` lambda. |
 | `ITenantContext` | **app** | scoped | Holds `string TenantId` for the current request. Populated by middleware (which runs in the app pipeline) and consumed indirectly by the route-scope `DbContext` factory through `IHttpContextAccessor`. |
 | `TenantContext` | app | scoped (impl of above) | Trivial concrete implementation: settable `TenantId`. |
-| `IConnectionStringProvider` | **app + route** | singleton | Two methods: `string GetConnectionString(string tenantId)` (throws on unknown) and `bool TryGetConnectionString(string tenantId, out string connectionString)` (non-throwing). The provider is registered in BOTH the app container (consumed by the middleware via constructor injection) and the route container (consumed by the AddDbContext factory via the route-scope sp). OData's per-route container does not fall back to app DI, so dual registration is structurally required. The seam users replace for Key Vault, a tenant-registry table, dynamic provisioning, etc. |
-| `ConfigurationConnectionStringProvider` | route | singleton (default impl) | Reads `IConfiguration["ConnectionStrings:Tenant_{tenantId}"]`. |
+| `IConnectionStringProvider` | **app** | singleton | Two methods: `string GetConnectionString(string tenantId)` (throws on unknown) and `bool TryGetConnectionString(string tenantId, out string connectionString)` (non-throwing). Single app-DI registration: the middleware reads it via constructor injection, and the route-scope `AddDbContext` factory reaches into app DI through `IHttpContextAccessor.HttpContext.RequestServices`. The seam users replace for Key Vault, a tenant-registry table, dynamic provisioning, etc. |
+| `ConfigurationConnectionStringProvider` | app | singleton (default impl) | Reads `IConfiguration["ConnectionStrings:Tenant_{tenantId}"]`. |
 | `TenantResolutionMiddleware` (3 flavors) | app pipeline | n/a | Path-segment / subdomain / header. **Must run before `UseRouting`** so RESTier's `{prefix}/{**odataPath}` pattern matches the rewritten path (path-segment flavor) or the unchanged path (subdomain/header flavors). All three populate `ITenantContext.TenantId`. All three call `IConnectionStringProvider.TryGetConnectionString` up-front and return `400 Bad Request` if the tenant is unknown — that is the canonical recipe and what the integration test asserts. |
 | `MultiTenantApi : EntityFrameworkApi<TenantDbContext>` | route | scoped | Single `ApiBase` subclass for all tenants; the EDM is shared. |
 | `TenantDbContext` | route | scoped | Standard EF Core `DbContext`; constructor takes `DbContextOptions<TenantDbContext>`. |
@@ -88,8 +88,8 @@ The bridge is `IHttpContextAccessor`. `ITenantContext` is registered in the **ap
 4. `UseEndpoints` invokes the matched endpoint. The Restier dynamic route transformer parses `Books` against the `odata` prefix and dispatches to `RestierController`.
 5. `RestierController.EnsureInitialized` resolves `MultiTenantApi` from `HttpContext.Request.GetRouteServices()` (the per-route scoped container).
 6. EF resolves `TenantDbContext`. The `AddDbContext` factory lambda runs in the route scope:
-   - resolves `IHttpContextAccessor` from the route `sp`; via `HttpContext.RequestServices` (the app scope), resolves `ITenantContext` and reads `"acme"`.
-   - resolves `IConnectionStringProvider` from the route `sp` and calls `GetConnectionString("acme")` → connection string. (The lookup already succeeded in step 2; in production the provider is expected to cache.)
+   - resolves `IHttpContextAccessor` from the route `sp` (the only app-DI service we expose to the route container).
+   - via `HttpContext.RequestServices` (the app scope), resolves `ITenantContext` (reads `"acme"`) and `IConnectionStringProvider` (calls `GetConnectionString("acme")`). The provider lookup already succeeded in step 2; in production the provider is expected to cache.
    - configures `DbContextOptions` (e.g. `opt.UseSqlServer(connStr)` or, in the test, `opt.UseInMemoryDatabase("tenant-acme-db")`).
 7. Query executes against tenant `acme`'s database.
 8. Response body's `@odata.context` reads `…/acme/odata/$metadata` because `PathBase` was preserved.
@@ -131,12 +131,11 @@ Placed under `ScenarioTests/EFCore/` (not `RegressionTests/`) because this is a 
 
 Subclass `RestierTestBase<MultiTenantApi>` directly (no abstract intermediate, since we're not parameterizing across multiple `TApi`/`TContext` pairs the way Issue671 does). The fixture wires three sets of services:
 
-- **App-level services** (configured via the host builder): `AddHttpContextAccessor()`, `AddScoped<ITenantContext, TenantContext>()`. These are the services the middleware reads/writes.
-- **Pipeline middleware** (also app-level): `app.UseMiddleware<PathSegmentTenantResolutionMiddleware>()` registered **before** `UseRouting`. The test invokes whatever pipeline-configuration hook `RestierTestBase` exposes (verify name during plan-writing — likely `ConfigureBuilderAction` or similar on `RestierBreakdanceTestBase`); if no such hook exists, fall back to an `IStartupFilter` registered in the **app** services (not the route services — middleware lives in the app pipeline).
+- **App-level services** (configured via the host builder): `AddHttpContextAccessor()`, `AddScoped<ITenantContext, TenantContext>()`, `AddSingleton<IConnectionStringProvider>(new InMemoryTenantConnectionStringProvider(...))`. The middleware reads `IConnectionStringProvider` from app DI via constructor injection and writes `ITenantContext.TenantId` from app DI via `httpContext.RequestServices.GetRequiredService<ITenantContext>()`.
+- **Pipeline middleware** (also app-level): `app.UseMiddleware<PathSegmentTenantResolutionMiddleware>()` registered **before** `UseRouting`. The test invokes the `ApplicationBuilderAction` hook on `RestierBreakdanceTestBase`, which is invoked at the very top of the pipeline.
 - **Route-level services** (via `AddRestierAction` → `AddRestierRoute<MultiTenantApi>("odata", services => ...)`):
-  - `services.AddSingleton<IHttpContextAccessor>(sp => sp.GetService<IHttpContextAccessor>() ?? new HttpContextAccessor())` — explicit registration so the route container can resolve it. (In practice `AddHttpContextAccessor` registered at the app level is also visible here because `IHttpContextAccessor` is a process-singleton, but registering it explicitly avoids relying on that.)
-  - `services.AddSingleton<IConnectionStringProvider>(new InMemoryTenantConnectionStringProvider())` — test impl.
-  - `services.AddDbContext<TenantDbContext>((sp, opt) => { /* bridge: IHttpContextAccessor → app ITenantContext → InMemory DB name */ })`.
+  - `services.AddHttpContextAccessor()` — required so the per-route container can resolve `IHttpContextAccessor` inside the `AddDbContext` factory; this is the only entry point into the bridge.
+  - `services.AddDbContext<TenantDbContext>((sp, opt) => { ... })` — factory bridges into app DI via `IHttpContextAccessor.HttpContext.RequestServices` to read both `ITenantContext` and `IConnectionStringProvider` (which live there, not in the route container).
   - The standard RESTier EF Core service registrations.
 
 ### Test impl of `IConnectionStringProvider`

@@ -54,13 +54,15 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         };
 
         // Route-level services: registered at the OData prefix "odata".
+        // Only IHttpContextAccessor needs route-DI registration — it's the entry
+        // point into the bridge, resolved from the route-scope sp inside the
+        // AddDbContext lambda. ITenantContext and IConnectionStringProvider both
+        // live in app DI and are reached via http.RequestServices (the app scope).
         AddRestierAction = options =>
         {
             options.AddRestierRoute<MultiTenantApi>("odata", services =>
             {
                 services.AddHttpContextAccessor();
-                services.AddSingleton<IConnectionStringProvider>(
-                    new InMemoryTenantConnectionStringProvider(TenantToDb));
 
                 services.AddEFCoreProviderServices<TenantDbContext>((sp, opt) =>
                 {
@@ -69,14 +71,13 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
                     // is null at that point) and once per request. The placeholder DB name
                     // is only ever used for EDM reflection — RESTier never opens it.
                     //
-                    // Note we resolve ITenantContext via http.RequestServices, NOT via sp.
-                    // sp is the route-level scoped provider; ITenantContext is registered
-                    // in app-level DI (so the middleware can populate it before routing).
-                    // sp.GetRequiredService<ITenantContext>() would throw — the route
-                    // container has no such registration. The bridge is intentional.
+                    // Both ITenantContext and IConnectionStringProvider are resolved via
+                    // http.RequestServices (the app scope), NOT via sp (the route scope).
+                    // OData's per-route container does not fall back to app DI, so anything
+                    // we want from app DI must come through IHttpContextAccessor's HttpContext.
                     var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
                     var dbName = http != null
-                        ? sp.GetRequiredService<IConnectionStringProvider>()
+                        ? http.RequestServices.GetRequiredService<IConnectionStringProvider>()
                               .GetConnectionString(
                                   http.RequestServices.GetRequiredService<ITenantContext>().TenantId
                                   ?? "__model_build__")

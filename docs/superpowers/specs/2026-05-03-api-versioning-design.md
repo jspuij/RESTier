@@ -175,6 +175,17 @@ public sealed class RestierVersioningOptions
     /// <c>Asp.Versioning.IPolicyManager</c> for policy-driven sunset.)
     /// </summary>
     public DateTimeOffset? SunsetDate { get; set; }
+
+    /// <summary>
+    /// Optional formatter that produces the OpenAPI document <c>GroupName</c> for this version.
+    /// When null (default), <see cref="SegmentFormatter"/> is used (so a v1 segment also produces
+    /// the "v1" group name). When you register multiple logical APIs at different
+    /// <c>basePrefix</c>es that share a version, set this on each call to disambiguate
+    /// (e.g., <c>opts.GroupNameFormatter = v =&gt; $"orders-v{v.MajorVersion}"</c>); the
+    /// configurator throws <see cref="InvalidOperationException"/> if two descriptors would
+    /// have the same GroupName.
+    /// </summary>
+    public Func<ApiVersion, string> GroupNameFormatter { get; set; }
 }
 
 public static class ApiVersionSegmentFormatters
@@ -227,7 +238,9 @@ public sealed class RestierApiVersionDescriptor
 
 `BasePrefix` is the logical API key. Two routes registered with the same `basePrefix` belong to the same logical API; headers reported on one are reported across the whole group.
 
-`BasePrefix` is taken verbatim from the `basePrefix` argument the user passes to `AddVersion`, regardless of whether `RestierVersioningOptions.ExplicitRoutePrefix` is set. The `basePrefix` argument is the user's explicit declaration of the logical API key, so trusting it (rather than deriving from `ExplicitRoutePrefix`) keeps the rule unambiguous. Implementation and tests both follow this convention.
+`BasePrefix` is taken from the `basePrefix` argument the user passes to `AddVersion`, regardless of whether `RestierVersioningOptions.ExplicitRoutePrefix` is set. The configurator **normalizes** it by trimming a trailing `/` so `AddVersion(..., "api")` and `AddVersion(..., "api/")` produce the same `BasePrefix` and group together for header reporting. The user's explicit declaration of the logical API key is what matters; the trailing-slash normalization keeps it unambiguous.
+
+`GroupName` defaults to `RestierVersioningOptions.SegmentFormatter(version)` (e.g., `"v1"` for the major-only formatter). It can be overridden per-version via `RestierVersioningOptions.GroupNameFormatter`. The configurator detects collisions: if two descriptors would share a `GroupName`, it throws `InvalidOperationException` with guidance pointing to `GroupNameFormatter`. Multi-API setups that share a version segment (e.g., `orders/v1` and `inventory/v1`) MUST disambiguate via `GroupNameFormatter` (e.g., `v => $"orders-v{v.MajorVersion}"`).
 
 The **concrete implementation** and a strongly-typed view live in **`Microsoft.Restier.AspNetCore.Versioning`** (which references `Asp.Versioning.Mvc` / `Asp.Versioning.Mvc.ApiExplorer`, NOT `Asp.Versioning.OData` — see Tech Stack note below):
 
@@ -425,7 +438,8 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 |----------|----------|
 | `services.AddRestierApiVersioning` not called but versioning expected | Versioned routes simply aren't registered (the `IConfigureOptions<ODataOptions>` is absent). Documentation makes this prerequisite explicit. |
 | `[ApiVersion]` missing on attribute-driven path | `InvalidOperationException` when the `IConfigureOptions<ODataOptions>` runs (i.e., on first request / first `IOptions<ODataOptions>.Value` access), with the type name and a one-line fix (the imperative overload). Throws are surfaced as InvalidOperationException at startup-equivalent time, not as runtime 500s on user requests, because the options-configurator pipeline propagates these to the host startup path on first materialization. |
-| Same `(ApiVersion, basePrefix)` registered twice | `InvalidOperationException` listing both API types. (`basePrefix` is captured on `RestierApiVersionDescriptor.BasePrefix`; the configurator's dedup check compares against existing descriptors.) |
+| Same `(ApiVersion, basePrefix)` registered twice | `InvalidOperationException` listing both API types. (`basePrefix` is captured on `RestierApiVersionDescriptor.BasePrefix`; the configurator's dedup check compares against existing descriptors.) `basePrefix` is normalized — `"api"` and `"api/"` are treated as the same. |
+| Two descriptors would share a `GroupName` (e.g., `orders/v1` + `inventory/v1` both default to `"v1"`) | `InvalidOperationException` naming both descriptors and pointing to `RestierVersioningOptions.GroupNameFormatter` as the resolution. |
 | Different versions colliding on the composed prefix (custom formatter collision) | `InvalidOperationException` naming both versions and the colliding prefix. |
 | `[ApiVersion]` declares state conflicting with imperative override | Imperative call wins. Documented in XML doc. |
 | Multiple versions on one `ApiBase` | Each becomes an independent route registration; descriptors are independent but share `ApiType`. |
@@ -433,7 +447,7 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 | Versioning package present, no versioned routes | Empty registry; NSwag/Swagger glue falls back to existing prefix-based behavior (per the "registry effectively absent" rule — null OR empty triggers fallback); headers middleware no-ops. |
 | Versioning package absent, NSwag present | Existing prefix-based behavior preserved. |
 | Mixed versioned and unversioned Restier routes in the same app | UI helpers emit one entry per registry descriptor (by `GroupName`) plus one entry per `GetRestierRoutePrefixes()` prefix not represented in the registry. Both versioned and unversioned routes appear in the dropdown. |
-| Two logical APIs at different `basePrefix`es (e.g., `orders` and `inventory`) each with multiple versions | Headers middleware reports `api-supported-versions` / `api-deprecated-versions` for the matched logical API only — `/orders/v1` returns Orders' versions; `/inventory/v1` returns Inventory's. No cross-leak. |
+| Two logical APIs at different `basePrefix`es (e.g., `orders` and `inventory`) each with multiple versions | Headers middleware reports `api-supported-versions` / `api-deprecated-versions` for the matched logical API only — `/orders/v1` returns Orders' versions; `/inventory/v1` returns Inventory's. No cross-leak. **OpenAPI docs** require disambiguated `GroupNameFormatter` per call (e.g., `orders-v1`/`inventory-v1`); without it the configurator throws (see GroupName-collision row above). |
 | Batching at `/api/v1/$batch` | Works automatically: each versioned route gets its own `RestierBatchHandler { PrefixName = "api/v1" }` from the existing `AddRestierRoute`. |
 | Sunset date in the past | `Sunset` header still emitted; no automatic 410. Future enhancement. |
 | `UseRestierVersionHeaders` not registered | No exception; versioning routes simply don't carry the headers. |
@@ -449,7 +463,7 @@ Asp.Versioning's `ReportApiVersions = true` reports headers via MVC's response f
 - `ApiVersionSegmentFormatters` — `Major`, `MajorMinor`, custom delegate produce expected segments for representative versions (`1.0`, `2.1`, `1-Beta`).
 - `RestierApiVersioningServiceCollectionExtensions` / `RestierApiVersioningBuilder` — registers the registry, builder, `IConfigureOptions<ODataOptions>`, and `IApiVersionDescriptionProvider` adapter; multiple `AddRestierApiVersioning` calls are idempotent for service registrations and append for version registrations. **Test:** call `AddRestierApiVersioning` twice with one version each; build the host; assert the registry contains both versions and that exactly one `RestierApiVersioningBuilder` `ServiceDescriptor` exists in the collection. Inverse test: with `TryAddSingleton` semantics naively used for the builder, the second-call version would be lost — guard against regressions.
 - `RestierApiVersionDescriptionProvider` — when resolved before any request, reading `Descriptions` populates the registry (via `IOptions<ODataOptions>.Value`) and returns the expected entries. Test: build a host, resolve the provider, read descriptions without making any HTTP request, assert `v1`/`v2` are present.
-- `RestierApiVersioningOptionsConfigurator` — when invoked against a real `ODataOptions`, composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicates; honors `ExplicitRoutePrefix`; imperative overload bypasses attribute reader.
+- `RestierApiVersioningOptionsConfigurator` — when invoked against a real `ODataOptions`, composes correct prefix; calls underlying `AddRestierRoute`; populates registry; rejects duplicate `(ApiVersion, BasePrefix)` pairs; rejects duplicate `GroupName`s with guidance; **normalizes basePrefix** (trims trailing `/`); honors `ExplicitRoutePrefix`; honors `GroupNameFormatter` overrides; imperative overload bypasses attribute reader.
 - `RestierApiVersionDescriptionProvider` — surfaces registry entries with correct group names and deprecated flags.
 - `RestierVersionHeadersMiddleware` — adds expected headers for matched prefix; no-ops for unmatched paths; emits `Sunset` only when set; doesn't duplicate headers already present; **boundary cases**: `/api/v10/...` does NOT match `api/v1`; `/api/v1` (exact) matches; `/api/v1/$metadata` matches; `PathBase` is stripped before matching. **Group isolation:** with two logical APIs registered (`orders/v1`, `orders/v2`, `inventory/v1`), a request to `/orders/v1` reports only `orders` versions in `api-supported-versions`; a request to `/inventory/v1` reports only `inventory`'s. Verified by direct middleware test.
 
@@ -478,7 +492,7 @@ Breakdance-style in-memory host with two versioned APIs:
 ### Existing test projects
 
 - `Microsoft.Restier.Tests.AspNetCore` — one regression test confirming `MapRestier` still works without versioning (no behavior change on the unversioned path).
-- `Microsoft.Restier.Tests.AspNetCore.NSwag` and `…Swagger` — tests for the registry-aware paths in **all three** integration points (document generator, middleware, and UI helpers `UseRestierReDoc` / `UseRestierNSwagUI`); registry-absent fallback for each; **registry-empty fallback** (registry registered but contains zero descriptors → existing prefix-based behavior); **mixed routes** (versioned + unversioned in the same app → UI dropdown contains both registry group names AND any `GetRestierRoutePrefixes()` entries not represented by registry descriptors).
+- `Microsoft.Restier.Tests.AspNetCore.NSwag` and `…Swagger` — tests for the registry-aware paths in **all three** integration points (document generator, middleware, and UI helpers `UseRestierReDoc` / `UseRestierNSwagUI`); registry-absent fallback for each; **registry-empty fallback** (registry registered but contains zero descriptors → existing prefix-based behavior); **mixed routes** (versioned + unversioned in the same app → UI dropdown contains both registry group names AND any `GetRestierRoutePrefixes()` entries not represented by registry descriptors); **multi-group docs** (two logical APIs at different `basePrefix`es with disambiguated `GroupNameFormatter` → both docs independently reachable at `/openapi/{groupName}/openapi.json`).
 
 ### Sample-based smoke (manual, documented)
 

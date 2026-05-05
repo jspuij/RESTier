@@ -582,6 +582,17 @@ namespace Microsoft.Restier.AspNetCore.Versioning
         /// </remarks>
         public DateTimeOffset? SunsetDate { get; set; }
 
+        /// <summary>
+        /// Optional formatter that produces the OpenAPI document <c>GroupName</c> for this version.
+        /// When null (default), <see cref="SegmentFormatter"/> is used (so a v1 segment also
+        /// produces the "v1" group name). When you register multiple logical APIs at different
+        /// <c>basePrefix</c>es that share a version, set this on each call to disambiguate
+        /// (e.g., <c>opts.GroupNameFormatter = v =&gt; $"orders-v{v.MajorVersion}"</c>); the
+        /// configurator throws <see cref="InvalidOperationException"/> if two descriptors would
+        /// have the same GroupName.
+        /// </summary>
+        public Func<ApiVersion, string> GroupNameFormatter { get; set; }
+
     }
 
 }
@@ -1634,6 +1645,53 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Internal
             options.RouteComponents.Where(kvp => kvp.Key == "api/v1").Should().HaveCount(1);
         }
 
+        [Fact]
+        public void Configure_NormalizesBasePrefix_TrailingSlashStrippedFromRouteAndDescriptor()
+        {
+            var (configurator, registry, options) = BuildSubject(b =>
+                b.AddVersion<SampleApi>(new ApiVersion(1, 0), false, "api/", svc =>
+                    svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>()));
+
+            configurator.Configure(options);
+
+            options.RouteComponents.Should().ContainKey("api/v1");
+            registry.Descriptors[0].RoutePrefix.Should().Be("api/v1");
+            registry.Descriptors[0].BasePrefix.Should().Be("api",
+                "trailing slash on basePrefix must be normalized so it groups with non-slashed registrations");
+        }
+
+        [Fact]
+        public void Configure_ExplicitGroupNameFormatter_OverridesDefault()
+        {
+            var (configurator, registry, options) = BuildSubject(b =>
+                b.AddVersion<SampleApi>(
+                    new ApiVersion(1, 0), false, "api",
+                    svc => svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>(),
+                    opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}"));
+
+            configurator.Configure(options);
+
+            registry.Descriptors[0].GroupName.Should().Be("orders-v1");
+        }
+
+        [Fact]
+        public void Configure_GroupNameCollisionAcrossBasePrefixes_Throws()
+        {
+            var (configurator, _, options) = BuildSubject(b =>
+            {
+                b.AddVersion<SampleApi>(new ApiVersion(1, 0), false, "orders", svc =>
+                    svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>());
+                b.AddVersion<OtherApi>(new ApiVersion(1, 0), false, "inventory", svc =>
+                    svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>());
+            });
+
+            Action act = () => configurator.Configure(options);
+
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage("*v1*orders*inventory*GroupNameFormatter*",
+                    "the configurator must reject duplicate group names with guidance");
+        }
+
         private static (RestierApiVersioningOptionsConfigurator configurator, RestierApiVersionRegistry registry, ODataOptions options) BuildSubject(
             Action<IRestierApiVersioningBuilder> configure)
         {
@@ -1756,25 +1814,48 @@ namespace Microsoft.Restier.AspNetCore.Versioning.Internal
             var versioningOptions = new RestierVersioningOptions();
             pending.ApplyVersioningOptions?.Invoke(versioningOptions);
 
-            var groupName = versioningOptions.SegmentFormatter(pending.ApiVersion);
-            var routePrefix = versioningOptions.ExplicitRoutePrefix
-                ?? ComposePrefix(pending.BasePrefix, groupName);
+            // Normalize basePrefix once: trim trailing '/' so AddVersion("api") and
+            // AddVersion("api/") group together.
+            var normalizedBasePrefix = (pending.BasePrefix ?? string.Empty).TrimEnd('/');
 
-            // Duplicate detection: same (ApiVersion, BasePrefix) is rejected.
-            var collision = _registry.Descriptors.FirstOrDefault(d =>
+            // Route segment is always SegmentFormatter; GroupName is independent (default falls
+            // back to SegmentFormatter, but RestierVersioningOptions.GroupNameFormatter overrides).
+            var routeSegment = versioningOptions.SegmentFormatter(pending.ApiVersion);
+            var groupName = versioningOptions.GroupNameFormatter?.Invoke(pending.ApiVersion)
+                ?? routeSegment;
+            var routePrefix = versioningOptions.ExplicitRoutePrefix
+                ?? ComposePrefix(normalizedBasePrefix, routeSegment);
+
+            // Duplicate detection: same (ApiVersion, normalized BasePrefix) is rejected.
+            var versionCollision = _registry.Descriptors.FirstOrDefault(d =>
                 string.Equals(d.Version, pending.ApiVersion.ToString(), StringComparison.Ordinal)
-                && string.Equals(d.BasePrefix, pending.BasePrefix, StringComparison.Ordinal));
-            if (collision is not null)
+                && string.Equals(d.BasePrefix, normalizedBasePrefix, StringComparison.Ordinal));
+            if (versionCollision is not null)
             {
                 throw new InvalidOperationException(
                     $"A Restier API version is already registered with version {pending.ApiVersion} at base prefix " +
-                    $"\"{pending.BasePrefix}\" for type {collision.ApiType.FullName}; " +
+                    $"\"{normalizedBasePrefix}\" for type {versionCollision.ApiType.FullName}; " +
                     $"refused to register conflicting type {pending.ApiType.FullName}.");
+            }
+
+            // GroupName collision: two descriptors at different basePrefixes would produce the
+            // same GroupName (e.g., orders/v1 and inventory/v1 both default to "v1"). Throw with
+            // guidance to RestierVersioningOptions.GroupNameFormatter.
+            var groupNameCollision = _registry.Descriptors.FirstOrDefault(d =>
+                string.Equals(d.GroupName, groupName, StringComparison.OrdinalIgnoreCase));
+            if (groupNameCollision is not null)
+            {
+                throw new InvalidOperationException(
+                    $"OpenAPI document GroupName \"{groupName}\" is already registered for base prefix " +
+                    $"\"{groupNameCollision.BasePrefix}\" (type {groupNameCollision.ApiType.FullName}); " +
+                    $"the new registration for base prefix \"{normalizedBasePrefix}\" (type {pending.ApiType.FullName}) " +
+                    $"would collide. Set RestierVersioningOptions.GroupNameFormatter on each call to disambiguate, " +
+                    $"e.g. opts.GroupNameFormatter = v => $\"{normalizedBasePrefix}-v{{v.MajorVersion}}\".");
             }
 
             _registry.Add(
                 pending.ApiVersion,
-                pending.BasePrefix,
+                normalizedBasePrefix,
                 routePrefix,
                 pending.ApiType,
                 pending.IsDeprecated,
@@ -1823,7 +1904,7 @@ namespace Microsoft.Restier.AspNetCore.Versioning.Internal
 dotnet test test/Microsoft.Restier.Tests.AspNetCore.Versioning/Microsoft.Restier.Tests.AspNetCore.Versioning.csproj --filter "FullyQualifiedName~RestierApiVersioningOptionsConfigurator"
 ```
 
-Expected: 7 passed.
+Expected: 10 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -3196,8 +3277,12 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                         });
                         services.AddRestierApiVersioning(b =>
                         {
-                            b.AddVersion<OrdersApi>("orders", svc =>
-                                svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>());
+                            // GroupNameFormatter disambiguates "v1" between the two logical APIs
+                            // (orders-v1, orders-v2, inventory-v1). Without it the configurator
+                            // throws on GroupName collision.
+                            b.AddVersion<OrdersApi>("orders",
+                                svc => svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>(),
+                                opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}");
 
                             // Apply sunset on V2 specifically when configured.
                             if (ordersV2Sunset is { } sunset)
@@ -3205,11 +3290,16 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                                 b.AddVersion<OrdersApi>(
                                     new ApiVersion(2, 0), deprecated: true, "orders",
                                     svc => svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>(),
-                                    opts => opts.SunsetDate = sunset);
+                                    opts =>
+                                    {
+                                        opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}";
+                                        opts.SunsetDate = sunset;
+                                    });
                             }
 
-                            b.AddVersion<InventoryApi>("inventory", svc =>
-                                svc.AddSingleton<IChainedService<IModelBuilder>, InventoryModelBuilder>());
+                            b.AddVersion<InventoryApi>("inventory",
+                                svc => svc.AddSingleton<IChainedService<IModelBuilder>, InventoryModelBuilder>(),
+                                opts => opts.GroupNameFormatter = v => $"inventory-v{v.MajorVersion}");
                         });
                     })
                     .Configure(app =>
@@ -3963,6 +4053,26 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.IntegrationTests
             response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
 
+        [Fact]
+        public async Task OpenApi_MultiGroupDocs_AreIndependentlyReachable()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await BuildMultiGroupHostAsync(cancellationToken);
+            var client = host.GetTestClient();
+
+            var ordersV1 = await client.GetStringAsync("/openapi/orders-v1/openapi.json", cancellationToken);
+            var ordersRoot = JsonDocument.Parse(ordersV1).RootElement;
+            ordersRoot.GetProperty("paths").EnumerateObject()
+                .Should().Contain(p => p.Name.Contains("/Orders"),
+                    "orders-v1 must serve the OrdersApi schema");
+
+            var inventoryV1 = await client.GetStringAsync("/openapi/inventory-v1/openapi.json", cancellationToken);
+            var inventoryRoot = JsonDocument.Parse(inventoryV1).RootElement;
+            inventoryRoot.GetProperty("paths").EnumerateObject()
+                .Should().Contain(p => p.Name.Contains("/Stock"),
+                    "inventory-v1 must serve the InventoryApi schema");
+        }
+
         private static async Task<IHost> BuildAsync(CancellationToken cancellationToken)
         {
             var builder = Host.CreateDefaultBuilder()
@@ -4032,6 +4142,58 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.IntegrationTests
             return await builder.StartAsync(cancellationToken);
         }
 
+        // Multi-group host: two logical APIs (Orders + Inventory) at different basePrefixes
+        // with disambiguated GroupNameFormatter so OpenAPI docs don't collide on "v1".
+        private static async Task<IHost> BuildMultiGroupHostAsync(CancellationToken cancellationToken)
+        {
+            var builder = Host.CreateDefaultBuilder()
+                .ConfigureWebHost(web => web
+                    .UseTestServer()
+                    .ConfigureServices(services =>
+                    {
+                        services.AddApiVersioning().AddApiExplorer();
+                        services.AddControllers()
+                            .AddRestier(options =>
+                            {
+                                options.Select().Expand().Filter().OrderBy().Count();
+                            })
+                            .AddApplicationPart(typeof(RestierController).Assembly);
+                        services.AddRestierApiVersioning(b => b
+                            .AddVersion<OrdersApi>("orders",
+                                svc =>
+                                {
+                                    svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>();
+                                    svc.AddSingleton<Microsoft.Restier.Core.Submit.IChangeSetInitializer, Microsoft.Restier.Core.Submit.DefaultChangeSetInitializer>();
+                                    svc.AddSingleton<Microsoft.Restier.Core.Submit.ISubmitExecutor, Microsoft.Restier.Core.Submit.DefaultSubmitExecutor>();
+                                },
+                                opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}")
+                            .AddVersion<InventoryApi>("inventory",
+                                svc =>
+                                {
+                                    svc.AddSingleton<IChainedService<IModelBuilder>, InventoryModelBuilder>();
+                                    svc.AddSingleton<Microsoft.Restier.Core.Submit.IChangeSetInitializer, Microsoft.Restier.Core.Submit.DefaultChangeSetInitializer>();
+                                    svc.AddSingleton<Microsoft.Restier.Core.Submit.ISubmitExecutor, Microsoft.Restier.Core.Submit.DefaultSubmitExecutor>();
+                                },
+                                opts => opts.GroupNameFormatter = v => $"inventory-v{v.MajorVersion}"));
+                        services.AddRestierNSwag();
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseRouting();
+                        app.UseRestierVersionHeaders();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapControllers();
+                            endpoints.MapRestier();
+                        });
+                        app.UseRestierOpenApi();
+                        app.UseRestierReDoc();
+                        app.UseRestierNSwagUI();
+                    }));
+
+            return await builder.StartAsync(cancellationToken);
+        }
+
     }
 
 }
@@ -4043,7 +4205,7 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.IntegrationTests
 dotnet test test/Microsoft.Restier.Tests.AspNetCore.Versioning/Microsoft.Restier.Tests.AspNetCore.Versioning.csproj --filter "FullyQualifiedName~NSwagIntegration"
 ```
 
-Expected: 3 passed.
+Expected: 4 passed.
 
 - [ ] **Step 4: Commit**
 

@@ -14,6 +14,19 @@
 
 **NSwag API note:** This plan uses NSwag 14.x method names: `UseSwaggerUi(...)` with `SwaggerUiSettings`, `UseReDoc(...)` with `ReDocSettings`, `SwaggerUiRoute` for multi-doc dropdowns. If `dotnet build` reports an unknown method on `IApplicationBuilder`, NSwag may still expose the older `UseSwaggerUi3(...)` / `SwaggerUi3Settings` / `SwaggerUi3Route` names — try those before changing the package version.
 
+**xUnit v3 + `TreatWarningsAsErrors` note:** xUnit v3's `xUnit1051` analyzer is enabled in this repo and warnings-as-errors is on. Every `client.GetAsync(...)`, `Content.ReadAsStringAsync()`, and `host.StartAsync()` call MUST receive a `CancellationToken` argument. The pattern used in the `IApplicationBuilderExtensionsTests` from Task 9 onward:
+
+```csharp
+var cancellationToken = TestContext.Current.CancellationToken;
+using var host = await BuildHostAsync(routes: ..., cancellationToken);
+var response = await client.GetAsync("/openapi/...", cancellationToken);
+var body = await response.Content.ReadAsStringAsync(cancellationToken);
+```
+
+`BuildHostAsync` from Task 9 is `BuildHostAsync((string prefix, Type apiType)[] routes, CancellationToken cancellationToken)`. Tasks 10 and 11 extend the helper signature; preserve the cancellationToken parameter.
+
+**`ApiBase` constructor signature note:** `Microsoft.Restier.Core.ApiBase` has the constructor `protected ApiBase(IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)`. The `TestApi` test fixture in `test/Microsoft.Restier.Tests.AspNetCore.NSwag/Infrastructure/TestApiBase.cs` uses this signature (Task 9 establishes it). When extending the test infrastructure in later tasks, mirror this signature — do not pass `IServiceProvider` directly.
+
 **Project conventions you must follow** (from `Directory.Build.props` and `CLAUDE.md`):
 
 - Allman braces; prefer `var`; curly braces even for single-line blocks.
@@ -246,7 +259,7 @@ Write `test/Microsoft.Restier.Tests.AspNetCore.NSwag/Extensions/IServiceCollecti
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using AwesomeAssertions;
+using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -406,7 +419,7 @@ Write `test/Microsoft.Restier.Tests.AspNetCore.NSwag/RestierControllerApiExplore
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using AwesomeAssertions;
+using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
@@ -852,7 +865,7 @@ Write `test/Microsoft.Restier.Tests.AspNetCore.NSwag/Extensions/IApplicationBuil
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using AwesomeAssertions;
+using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.OData;
@@ -1473,7 +1486,7 @@ Write `test/Microsoft.Restier.Tests.AspNetCore.NSwag/IntegrationTests/CombinedAp
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using AwesomeAssertions;
+using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;

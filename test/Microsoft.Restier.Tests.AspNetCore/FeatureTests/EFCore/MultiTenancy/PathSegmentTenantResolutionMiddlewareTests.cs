@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -14,21 +15,40 @@ namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
 public class PathSegmentTenantResolutionMiddlewareTests
 {
-    private static (HttpContext ctx, ITenantContext tenant, bool nextCalled) BuildContext(string path)
+    private static (HttpContext ctx, ITenantContext tenant, IDisposable cleanup) BuildContext(string path)
     {
         var services = new ServiceCollection();
         services.AddScoped<ITenantContext, TenantContext>();
         var sp = services.BuildServiceProvider();
+        var scope = sp.CreateScope();
 
         var ctx = new DefaultHttpContext
         {
-            RequestServices = sp.CreateScope().ServiceProvider,
+            RequestServices = scope.ServiceProvider,
         };
         ctx.Request.Path = path;
         ctx.Response.Body = new MemoryStream();
 
         var tenant = ctx.RequestServices.GetRequiredService<ITenantContext>();
-        return (ctx, tenant, false);
+        return (ctx, tenant, new ScopeAndProvider(scope, sp));
+    }
+
+    private sealed class ScopeAndProvider : IDisposable
+    {
+        private readonly IServiceScope scope;
+        private readonly ServiceProvider provider;
+
+        public ScopeAndProvider(IServiceScope scope, ServiceProvider provider)
+        {
+            this.scope = scope;
+            this.provider = provider;
+        }
+
+        public void Dispose()
+        {
+            scope.Dispose();
+            provider.Dispose();
+        }
     }
 
     private static IConnectionStringProvider MakeProvider()
@@ -43,7 +63,8 @@ public class PathSegmentTenantResolutionMiddlewareTests
     [Fact]
     public async Task KnownTenant_StripsSegmentAndPopulatesContext()
     {
-        var (ctx, tenant, _) = BuildContext("/acme/odata/Books");
+        var (ctx, tenant, cleanup) = BuildContext("/acme/odata/Books");
+        using var _ = cleanup;
         var provider = MakeProvider();
         var nextCalled = false;
         RequestDelegate next = c => { nextCalled = true; return Task.CompletedTask; };
@@ -61,7 +82,8 @@ public class PathSegmentTenantResolutionMiddlewareTests
     [Fact]
     public async Task UnknownTenant_ShortCircuitsWith400()
     {
-        var (ctx, tenant, _) = BuildContext("/unknown/odata/Books");
+        var (ctx, tenant, cleanup) = BuildContext("/unknown/odata/Books");
+        using var _ = cleanup;
         var provider = MakeProvider();
         var nextCalled = false;
         RequestDelegate next = c => { nextCalled = true; return Task.CompletedTask; };
@@ -79,7 +101,8 @@ public class PathSegmentTenantResolutionMiddlewareTests
     [Fact]
     public async Task EmptyPath_ShortCircuitsWith400()
     {
-        var (ctx, _, _) = BuildContext("/");
+        var (ctx, _, cleanup) = BuildContext("/");
+        using var _ = cleanup;
         var provider = MakeProvider();
         var nextCalled = false;
         RequestDelegate next = c => { nextCalled = true; return Task.CompletedTask; };
@@ -97,7 +120,8 @@ public class PathSegmentTenantResolutionMiddlewareTests
         // Tenant-only request like /acme/ — the rewritten path is just "/", which RESTier
         // would treat as the service document. The middleware should still strip the
         // tenant and populate context.
-        var (ctx, tenant, _) = BuildContext("/acme");
+        var (ctx, tenant, cleanup) = BuildContext("/acme");
+        using var _ = cleanup;
         var provider = MakeProvider();
         var nextCalled = false;
         RequestDelegate next = c => { nextCalled = true; return Task.CompletedTask; };

@@ -3,7 +3,7 @@
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-public interface IConnectionStringProvider
+internal interface IConnectionStringProvider
 {
     string GetConnectionString(string tenantId);
 

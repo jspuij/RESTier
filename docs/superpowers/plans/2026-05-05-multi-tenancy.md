@@ -506,11 +506,18 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
 
                 services.AddEFCoreProviderServices<TenantDbContext>((sp, opt) =>
                 {
+                    // The lambda runs TWICE: once at model-build time (HttpContext is null
+                    // — RESTier materializes TenantDbContext to inspect its DbSets for EDM
+                    // construction) and once per request. Guard against the null HttpContext
+                    // by falling back to a placeholder DB name during model-build.
                     var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
-                    var tenant = http.RequestServices.GetRequiredService<ITenantContext>();
-                    var connStr = sp.GetRequiredService<IConnectionStringProvider>()
-                                    .GetConnectionString(tenant.TenantId);
-                    opt.UseInMemoryDatabase(connStr);
+                    var dbName = http != null
+                        ? sp.GetRequiredService<IConnectionStringProvider>()
+                              .GetConnectionString(
+                                  http.RequestServices.GetRequiredService<ITenantContext>().TenantId
+                                  ?? "__model_build__")
+                        : "__model_build__";
+                    opt.UseInMemoryDatabase(dbName);
                 });
             });
         };
@@ -912,7 +919,8 @@ public class PathSegmentTenantResolutionMiddleware
 ```csharp
 public class MultiTenantApi : EntityFrameworkApi<TenantDbContext>
 {
-    public MultiTenantApi(IServiceProvider sp) : base(sp) { }
+    public MultiTenantApi(TenantDbContext dbContext, IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+        : base(dbContext, model, queryHandler, submitHandler) { }
 }
 
 services.AddControllers().AddRestier(options =>
@@ -923,17 +931,23 @@ services.AddControllers().AddRestier(options =>
         routeServices.AddSingleton<IConnectionStringProvider, ConfigurationConnectionStringProvider>();
         routeServices.AddEFCoreProviderServices<TenantDbContext>((sp, opt) =>
         {
-            var http   = sp.GetRequiredService<IHttpContextAccessor>().HttpContext!;
-            var tenant = http.RequestServices.GetRequiredService<ITenantContext>();
-            var conn   = sp.GetRequiredService<IConnectionStringProvider>()
-                           .GetConnectionString(tenant.TenantId);
+            // The options lambda runs TWICE: once at model-build time (HttpContext is
+            // null — RESTier instantiates TenantDbContext to inspect its DbSets for EDM
+            // construction) and once per request. Guard the null HttpContext with a
+            // placeholder connection string that EDM reflection never opens.
+            var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
+            var conn = http != null
+                ? sp.GetRequiredService<IConnectionStringProvider>()
+                       .GetConnectionString(http.RequestServices.GetRequiredService<ITenantContext>().TenantId
+                                            ?? "__model_build__")
+                : "Server=__model_build__;Database=__model_build__";
             opt.UseSqlServer(conn);
         });
     });
 });
 ```
 
-The `(sp, opt)` lambda runs **per request**. `sp` is the route-scope provider; the `IHttpContextAccessor` reaches the app-scope `ITenantContext` populated by the middleware.
+The `(sp, opt)` lambda runs at two distinct times: once at startup (model-build) and once per request. `sp` is the route-scope provider; at request time the `IHttpContextAccessor` reaches the app-scope `ITenantContext` populated by the middleware. At startup `HttpContext` is null and the placeholder connection string is fed to EDM reflection — RESTier never opens it.
 
 </Step>
 <Step title="Wire the middleware in the pipeline — BEFORE UseRouting">

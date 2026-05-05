@@ -166,4 +166,16 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         content.Should().Contain("/acme/odata/$metadata#Books",
             because: "if PathBase is preserved, generated context URLs include the tenant segment so OData clients can follow links back");
     }
+
+    [Fact]
+    public async Task UnknownTenant_Returns400()
+    {
+        var response = await ExecuteTestRequest(
+            HttpMethod.Get,
+            routePrefix: "unknown/odata",
+            resource: "/Books");
+        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

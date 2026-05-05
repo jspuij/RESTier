@@ -41,50 +41,58 @@ HTTP request
     │
     ▼
 ASP.NET Core pipeline
-    UseRouting
-    UseMiddleware<TenantResolutionMiddleware>   ──▶ writes ITenantContext.TenantId
+    UseMiddleware<TenantResolutionMiddleware>   ◀── runs BEFORE UseRouting
+        ├── extracts tenant from URL
+        ├── validates via IConnectionStringProvider.TryGetConnectionString
+        ├── writes app-scoped ITenantContext.TenantId
+        └── (path-segment flavor only) moves stripped segment to Request.PathBase
+    UseRouting                                  ◀── now matches `odata/{**odataPath}`
     UseEndpoints
         │
         ▼
-RestierController (per-route scoped DI)
+RestierController (per-route scoped DI, resolved via Request.GetRouteServices())
     │
     ▼
 TenantDbContext  ◀── AddDbContext factory lambda
                        │
-                       ├── reads ITenantContext.TenantId  (scoped)
-                       ├── calls IConnectionStringProvider (singleton)
+                       ├── sp.GetRequiredService<IHttpContextAccessor>().HttpContext
+                       ├──   .RequestServices.GetRequiredService<ITenantContext>()  (app scope)
+                       ├── sp.GetRequiredService<IConnectionStringProvider>()       (route scope)
                        └── configures DbContextOptions (UseSqlServer, ...)
 ```
 
+The bridge is `IHttpContextAccessor`. `ITenantContext` is registered in the **app** service collection (scoped) and populated by middleware via the standard `HttpContext.RequestServices` provider. `IConnectionStringProvider` is registered in the **route** service collection (singleton). The `AddDbContext` factory has access to the route-scope `sp`, but reaches the app-scope `ITenantContext` via `IHttpContextAccessor.HttpContext.RequestServices`. This is a known bridge between OData per-route containers and the app request scope; without it, a service registered in app DI is invisible to anything resolved through `Request.GetRouteServices()`.
+
 ### Components (all in user code; no RESTier changes)
 
-| Component | Lifetime | Responsibility |
-|---|---|---|
-| `ITenantContext` | scoped | Holds `string TenantId` for the current request. Populated by middleware, consumed by the `DbContext` factory. |
-| `TenantContext` | scoped (impl of above) | Trivial concrete implementation: settable `TenantId`. |
-| `IConnectionStringProvider` | singleton | Two methods: `string GetConnectionString(string tenantId)` (throws on unknown) and `bool TryGetConnectionString(string tenantId, out string connectionString)` (non-throwing, used by middleware for up-front validation). The seam users replace for Key Vault, a tenant-registry table, dynamic provisioning, etc. |
-| `ConfigurationConnectionStringProvider` | singleton (default impl) | Reads `IConfiguration["ConnectionStrings:Tenant_{tenantId}"]`. Throws on unknown tenant. |
-| `TenantResolutionMiddleware` (3 flavors) | n/a | Path-segment / subdomain / header. All three populate `ITenantContext.TenantId` on the way in. The path-segment flavor additionally moves the stripped segment to `Request.PathBase`. The test-suite implementation also consults `IConnectionStringProvider` (via a `TryGet`-style call) and returns `400 Bad Request` for unknown tenants instead of letting the provider throw later in the pipeline; in production users may prefer to let the provider throw and surface as `500` or to map `404` themselves. |
-| `MultiTenantApi : EntityFrameworkApi<TenantDbContext>` | scoped | Single `ApiBase` subclass for all tenants; the EDM is shared. |
-| `TenantDbContext` | scoped | Standard EF Core `DbContext`; constructor takes `DbContextOptions<TenantDbContext>`. |
+| Component | Container | Lifetime | Responsibility |
+|---|---|---|---|
+| `IHttpContextAccessor` | app + route | singleton | Standard ASP.NET Core accessor. Registered in the app via `AddHttpContextAccessor()`; also referenced from the route-services `AddDbContext` lambda. |
+| `ITenantContext` | **app** | scoped | Holds `string TenantId` for the current request. Populated by middleware (which runs in the app pipeline) and consumed indirectly by the route-scope `DbContext` factory through `IHttpContextAccessor`. |
+| `TenantContext` | app | scoped (impl of above) | Trivial concrete implementation: settable `TenantId`. |
+| `IConnectionStringProvider` | **route** | singleton | Two methods: `string GetConnectionString(string tenantId)` (throws on unknown) and `bool TryGetConnectionString(string tenantId, out string connectionString)` (non-throwing). Both middleware (via the app provider) and the `AddDbContext` factory (via the route provider) need it; the spec registers it once in route services and exposes it to middleware indirectly via `IHttpContextAccessor.HttpContext.Request.GetRouteServices()`. The seam users replace for Key Vault, a tenant-registry table, dynamic provisioning, etc. |
+| `ConfigurationConnectionStringProvider` | route | singleton (default impl) | Reads `IConfiguration["ConnectionStrings:Tenant_{tenantId}"]`. |
+| `TenantResolutionMiddleware` (3 flavors) | app pipeline | n/a | Path-segment / subdomain / header. **Must run before `UseRouting`** so RESTier's `{prefix}/{**odataPath}` pattern matches the rewritten path (path-segment flavor) or the unchanged path (subdomain/header flavors). All three populate `ITenantContext.TenantId`. All three call `IConnectionStringProvider.TryGetConnectionString` up-front and return `400 Bad Request` if the tenant is unknown — that is the canonical recipe and what the integration test asserts. |
+| `MultiTenantApi : EntityFrameworkApi<TenantDbContext>` | route | scoped | Single `ApiBase` subclass for all tenants; the EDM is shared. |
+| `TenantDbContext` | route | scoped | Standard EF Core `DbContext`; constructor takes `DbContextOptions<TenantDbContext>`. |
 
 ### Data flow (path-segment example)
 
 1. `GET /acme/odata/Books` arrives.
-2. `UseRouting` runs (no Restier route matches yet — Restier routes are registered at prefix `odata`, not `{tenant}/odata`).
-3. `TenantResolutionMiddleware` (path-segment flavor):
+2. `TenantResolutionMiddleware` (path-segment flavor) runs **before** `UseRouting`:
    - splits the path; first segment is `acme`.
-   - `httpContext.RequestServices.GetRequiredService<ITenantContext>().TenantId = "acme";`
-   - `httpContext.Request.PathBase = httpContext.Request.PathBase.Add("/acme");`
-   - `httpContext.Request.Path = "/odata/Books";`
-4. The pipeline continues. The Restier dynamic route transformer matches `odata/Books`, dispatches to `RestierController`.
-5. `RestierController` resolves `MultiTenantApi` from the per-route scoped container.
-6. EF resolves `TenantDbContext`. The `AddDbContext` factory lambda runs:
-   - reads `sp.GetRequiredService<ITenantContext>().TenantId` → `"acme"`
-   - calls `sp.GetRequiredService<IConnectionStringProvider>().GetConnectionString("acme")` → connection string
+   - calls `IConnectionStringProvider.TryGetConnectionString("acme", out _)` (resolved from the route services via `httpContext.Request.GetRouteServices()`); if it returns `false`, short-circuits with `400 Bad Request` and the pipeline stops here.
+   - resolves `ITenantContext` from `httpContext.RequestServices` (app scope) and sets `TenantId = "acme"`.
+   - rewrites the request: `httpContext.Request.PathBase = httpContext.Request.PathBase.Add("/acme");` and `httpContext.Request.Path = "/odata/Books";`.
+3. `UseRouting` runs against the rewritten path. The endpoint registered by `MapRestier` for prefix `odata` (pattern `odata/{**odataPath}`) matches.
+4. `UseEndpoints` invokes the matched endpoint. The Restier dynamic route transformer parses `Books` against the `odata` prefix and dispatches to `RestierController`.
+5. `RestierController.EnsureInitialized` resolves `MultiTenantApi` from `HttpContext.Request.GetRouteServices()` (the per-route scoped container).
+6. EF resolves `TenantDbContext`. The `AddDbContext` factory lambda runs in the route scope:
+   - resolves `IHttpContextAccessor` from the route `sp`; via `HttpContext.RequestServices` (the app scope), resolves `ITenantContext` and reads `"acme"`.
+   - resolves `IConnectionStringProvider` from the route `sp` and calls `GetConnectionString("acme")` → connection string. (The lookup already succeeded in step 2; in production the provider is expected to cache.)
    - configures `DbContextOptions` (e.g. `opt.UseSqlServer(connStr)` or, in the test, `opt.UseInMemoryDatabase("tenant-acme-db")`).
 7. Query executes against tenant `acme`'s database.
-8. Response body's `@odata.context` reads `/acme/odata/$metadata` because `PathBase` was preserved.
+8. Response body's `@odata.context` reads `…/acme/odata/$metadata` because `PathBase` was preserved.
 
 ### Subdomain and header flavors
 
@@ -97,12 +105,19 @@ In neither flavor is `PathBase` touched, because the URL path itself is already 
 
 ## Failure modes
 
-| Failure | Where it surfaces | Behavior |
+The canonical recipe validates up-front in middleware, so most failure cases short-circuit before reaching RESTier.
+
+| Failure | Where it surfaces | Canonical behavior |
 |---|---|---|
-| Tenant segment missing from path (path-segment mode) | middleware | response is `400 Bad Request` with body explaining the tenant segment is required |
-| Unknown tenant id (no connection string configured) | `ConfigurationConnectionStringProvider.GetConnectionString` | throws `InvalidOperationException`; ASP.NET Core surfaces as `500`. The doc page recommends users wrap this in a custom provider that returns `404` for unknown tenants if they prefer that semantics. |
-| Middleware not registered | endpoint runs with `ITenantContext.TenantId == null` | `IConnectionStringProvider.GetConnectionString(null)` throws. The doc page includes a startup-time sanity check (`services.AddOptions<...>().Validate(...)`) as a defensive recipe but doesn't enforce it. |
-| `AddDbContextPool` used instead of `AddDbContext` | first request after pool warm-up | wrong tenant's connection string is reused. Documented as an explicit incompatibility. |
+| Tenant segment missing from path (path-segment mode) | middleware | `400 Bad Request` with body explaining the tenant segment is required. |
+| Unknown tenant (`TryGetConnectionString` returns false) | middleware, after URL extraction | `400 Bad Request`. Test 5 asserts this. |
+| Middleware not registered | the endpoint runs with `ITenantContext.TenantId == null` | `IConnectionStringProvider.GetConnectionString(null)` throws → ASP.NET Core surfaces as `500`. The docs include a startup-time sanity check recipe (e.g., a smoke-test endpoint or a hosted service that asserts the middleware is wired) but the spec does not mandate one. |
+| `AddDbContextPool` used instead of `AddDbContext` | first request after pool warm-up | wrong tenant's connection string is silently reused. **Incompatible**; called out explicitly in the limitations section of the docs. |
+
+**Alternatives the docs page describes (not the canonical default):**
+
+- **Skip middleware-side validation, let the provider throw → 500.** Slightly less code but worse UX (500 implies a server bug, not a bad client request). Shown for completeness.
+- **Map unknown tenant to 404 instead of 400.** Reasonable if tenants are an addressable resource and you want consistency with a "tenant not found" REST semantic. One-line change to the middleware.
 
 ## Testing
 
@@ -114,10 +129,15 @@ Placed under `ScenarioTests/EFCore/` (not `RegressionTests/`) because this is a 
 
 ### Test fixture
 
-Subclass `RestierTestBase<MultiTenantApi>` directly (no abstract intermediate, since we're not parameterizing across multiple TApi/TContext pairs the way Issue671 does). Configure via:
+Subclass `RestierTestBase<MultiTenantApi>` directly (no abstract intermediate, since we're not parameterizing across multiple `TApi`/`TContext` pairs the way Issue671 does). The fixture wires three sets of services:
 
-- `AddRestierAction` — registers the route at prefix `"odata"` and wires `ITenantContext` (scoped), `IConnectionStringProvider` (singleton, test impl), and `AddDbContext<TenantDbContext>` with `UseInMemoryDatabase(connStr)`.
-- A pipeline hook to install `PathSegmentTenantResolutionMiddleware`. The mechanism is `RestierTestBase`'s pipeline-configuration hook (`ConfigureBuilderAction` or equivalent — to be confirmed during plan-writing by inspecting `RestierBreakdanceTestBase`). If no such hook exists, the fallback is registering an `IStartupFilter` in the route services. Either way the test prelude is a one-liner.
+- **App-level services** (configured via the host builder): `AddHttpContextAccessor()`, `AddScoped<ITenantContext, TenantContext>()`. These are the services the middleware reads/writes.
+- **Pipeline middleware** (also app-level): `app.UseMiddleware<PathSegmentTenantResolutionMiddleware>()` registered **before** `UseRouting`. The test invokes whatever pipeline-configuration hook `RestierTestBase` exposes (verify name during plan-writing — likely `ConfigureBuilderAction` or similar on `RestierBreakdanceTestBase`); if no such hook exists, fall back to an `IStartupFilter` registered in the **app** services (not the route services — middleware lives in the app pipeline).
+- **Route-level services** (via `AddRestierAction` → `AddRestierRoute<MultiTenantApi>("odata", services => ...)`):
+  - `services.AddSingleton<IHttpContextAccessor>(sp => sp.GetService<IHttpContextAccessor>() ?? new HttpContextAccessor())` — explicit registration so the route container can resolve it. (In practice `AddHttpContextAccessor` registered at the app level is also visible here because `IHttpContextAccessor` is a process-singleton, but registering it explicitly avoids relying on that.)
+  - `services.AddSingleton<IConnectionStringProvider>(new InMemoryTenantConnectionStringProvider())` — test impl.
+  - `services.AddDbContext<TenantDbContext>((sp, opt) => { /* bridge: IHttpContextAccessor → app ITenantContext → InMemory DB name */ })`.
+  - The standard RESTier EF Core service registrations.
 
 ### Test impl of `IConnectionStringProvider`
 
@@ -203,14 +223,38 @@ Scope: shared schema, DB-per-tenant. For shared-DB-with-tenant-column see
 
 ## Setup
   <Steps>
-    Step 1: Define ITenantContext + scoped impl.
+    Step 1: Define ITenantContext + scoped impl. Register at the APP level
+            (builder.Services.AddScoped<ITenantContext, TenantContext>()).
+            Also call builder.Services.AddHttpContextAccessor().
     Step 2: Define IConnectionStringProvider + the IConfiguration-backed default impl.
+            Registered later as a singleton in the ROUTE services (Step 4).
     Step 3: Define TenantResolutionMiddleware (path-segment flavor; subdomain/header
-            shown in next section).
-    Step 4: Register MultiTenantApi via AddRestierRoute, with the AddDbContext
-            factory lambda.
-    Step 5: Wire middleware in the pipeline (UseRouting → UseMiddleware → UseEndpoints).
+            shown in the next section). Up-front validation via TryGetConnectionString;
+            return 400 on unknown tenant. The path-segment flavor moves the stripped
+            segment to Request.PathBase before mutating Request.Path.
+    Step 4: Register MultiTenantApi via AddRestierRoute("odata", services => ...).
+            Inside that lambda: register IConnectionStringProvider, register
+            IHttpContextAccessor (for the route container), and call
+            AddDbContext<TenantDbContext>((sp, opt) => ...) with the bridge:
+                var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext!;
+                var tenant = http.RequestServices.GetRequiredService<ITenantContext>();
+                opt.UseSqlServer(connStringProvider.GetConnectionString(tenant.TenantId));
+    Step 5: Wire middleware in the pipeline — CRITICAL: BEFORE UseRouting, not after.
+                app.UseMiddleware<TenantResolutionMiddleware>();   // first
+                app.UseRouting();
+                app.UseEndpoints(e => { e.MapControllers(); e.MapRestier(); });
+            With the path-segment flavor, RESTier's odata/{**odataPath} pattern
+            relies on the rewritten path that the middleware produces, so ordering
+            is not optional.
   </Steps>
+
+  <Warning>
+    Middleware ordering: the tenant-resolution middleware must run BEFORE
+    UseRouting. RESTier registers its endpoint at pattern {prefix}/{**odataPath};
+    in path-segment mode the request URL doesn't match that pattern until after
+    the tenant segment is stripped, so endpoint matching has to happen on the
+    rewritten path, not the original.
+  </Warning>
 
 ## Tenant resolution strategies
   <Tabs>
@@ -235,8 +279,10 @@ Scope: shared schema, DB-per-tenant. For shared-DB-with-tenant-column see
 ## Hardening: shared-database alternative
   When DB-per-tenant isn't the right fit (lots of small tenants, shared compute, no
   per-tenant compliance boundary), the alternative is shared-DB with a tenant_id
-  column on every entity, plus an OnFiltering<EntitySet> interceptor that AND's
-  e => e.TenantId == currentTenant.
+  column on every entity, plus per-entity-set RESTier filter methods named per the
+  convention OnFilter{EntitySetName} (e.g., OnFilterBooks) that AND in
+  e => e.TenantId == currentTenant. The current tenant is read from the
+  ITenantContext injected into the ApiBase subclass via constructor DI.
   Code sketch (~15 lines).
   Explicit framing: this is a DIFFERENT strategy, not an addition to the one above.
   Pick one.
@@ -297,6 +343,8 @@ No changes to `src/Microsoft.Restier.Core`, `src/Microsoft.Restier.AspNetCore`, 
 
 ## Notes for the plan writer
 
-1. **Pipeline-middleware hook in `RestierTestBase` — needs verification.** Inspect `RestierBreakdanceTestBase` (in `Microsoft.Restier.Breakdance`) to confirm whether `ConfigureBuilderAction` or a similarly-named hook accepts `IApplicationBuilder` configuration, so the test can call `app.UseMiddleware<PathSegmentTenantResolutionMiddleware>()`. If no such hook exists, fall back to an `IStartupFilter` registered in the per-route services — both paths are one-liners and do not affect the rest of the design.
-2. **Failure-mode semantics — already settled.** Test asserts `400` for unknown tenant; the docs additionally describe the `500` (let provider throw) and `404` (custom-mapped) alternatives.
-3. **File layout — already settled.** Support types live in `ScenarioTests/EFCore/MultiTenancy/`, mirroring how `Library` and `Marvel` scenarios are organized in `Microsoft.Restier.Tests.Shared`.
+1. **Pipeline-middleware hook in `RestierTestBase` — needs verification.** Inspect `RestierBreakdanceTestBase` (in `Microsoft.Restier.Breakdance`) to find a hook that accepts `IApplicationBuilder` configuration so the test can install `PathSegmentTenantResolutionMiddleware` **before** `UseRouting` (an `IStartupFilter` registered in the **app** services, not the route services, is the safe fallback).
+2. **`IHttpContextAccessor` visibility across containers — verify at plan-writing time.** Inspect how `Microsoft.AspNetCore.OData`'s `AddRouteComponents` builds its per-route `IServiceProvider`. If process-singletons registered at the app level (like `IHttpContextAccessor` from `AddHttpContextAccessor()`) are visible to the route container, the explicit re-registration in route services is belt-and-braces and harmless. If not, the explicit registration is required. Either way the spec is correct as written; this note confirms which of the two cases applies.
+3. **Failure-mode semantics — settled.** Canonical recipe: middleware up-front validates via `TryGetConnectionString` and returns 400 on unknown tenant. Test 5 asserts 400. The docs describe 500 (let provider throw) and 404 (map manually) as variants.
+4. **File layout — settled.** Support types live in `ScenarioTests/EFCore/MultiTenancy/`, mirroring how `Library` and `Marvel` scenarios are organized in `Microsoft.Restier.Tests.Shared`.
+5. **CLAUDE.md inaccuracy worth fixing separately.** `CLAUDE.md` claims convention names like `OnFiltering{EntitySet}()`. The actual factory (`src/Microsoft.Restier.Core/Conventions/ConventionBasedMethodNameFactory.cs:78,159`) produces `OnFilter{EntitySetName}` (no `-ing`/`-ed` suffix on Filter, entity-set name not entity-type name). Out of scope for this spec but worth flagging in a follow-up doc fix.

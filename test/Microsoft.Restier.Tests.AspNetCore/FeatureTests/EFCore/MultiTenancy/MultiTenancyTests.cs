@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using CloudNimble.Breakdance.AspNetCore;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -13,7 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.EntityFrameworkCore;
-using CloudNimble.Breakdance.AspNetCore;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Xunit;
@@ -141,7 +141,7 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
             acceptHeader: WebApiConstants.DefaultAcceptHeader,
             payload: new { Id = Guid.NewGuid(), Title = newBookTitle });
         _ = await TraceListener.LogAndReturnMessageContentAsync(postResponse);
-        postResponse.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.OK);
+        postResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var getGlobex = await ExecuteTestRequest(
             HttpMethod.Get,

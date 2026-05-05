@@ -29,4 +29,27 @@ public class BatchTests : BatchTests<LibraryApi, LibraryContext>
 
         await context.SaveChangesAsync();
     }
+
+    protected override async Task CleanupBatchBindAsync()
+    {
+        var context = await RestierTestHelpers.GetTestableInjectedService<LibraryApi, LibraryContext>(
+            serviceCollection: ConfigureServices);
+
+        // Restore the orphan Book ("Sea of Rust") to its seed state by clearing any FK left
+        // behind by a prior test run, then drop the test publisher if it survived.
+        var orphanBookId = new Guid("2d760f15-974d-4556-8cdf-d610128b537e");
+        var orphan = context.Books.FirstOrDefault(b => b.Id == orphanBookId);
+        if (orphan is not null && orphan.PublisherId is not null)
+        {
+            orphan.PublisherId = null;
+            await context.SaveChangesAsync();
+        }
+
+        var publisher = context.Publishers.FirstOrDefault(p => p.Id == "BatchBindPub");
+        if (publisher is not null)
+        {
+            context.Publishers.Remove(publisher);
+            await context.SaveChangesAsync();
+        }
+    }
 }

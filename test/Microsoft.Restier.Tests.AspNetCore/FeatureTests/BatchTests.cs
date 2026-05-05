@@ -25,6 +25,8 @@ public abstract class BatchTests<TApi, TContext> : RestierTestBase<TApi> where T
 
     protected abstract Task CleanupBatchBooksAsync();
 
+    protected abstract Task CleanupBatchBindAsync();
+
     [Fact]
     public async Task BatchTests_AddMultipleEntries()
     {
@@ -130,6 +132,47 @@ public abstract class BatchTests<TApi, TContext> : RestierTestBase<TApi> where T
         response.IsSuccessStatusCode.Should().BeTrue();
         content.Should().Contain("Publisher1");
         content.Should().Contain("The Cat in the Hat");
+    }
+
+    [Fact]
+    public async Task BatchTests_CollectionBindToExistingBook()
+    {
+        // Regression coverage for OData/RESTier#663: a $batch changeset containing a POST whose
+        // body uses the OData 4.0 collection-valued @odata.bind syntax (an array of entity URLs)
+        // must link the referenced existing entities to the newly-created parent. This is the
+        // many-to-many shape from the issue payload, modelled here as Publisher 1->* Book.
+        await CleanupBatchBindAsync();
+
+        try
+        {
+            var client = await GetHttpClientAsync();
+            using var request = new HttpRequestMessage(HttpMethod.Post, "$batch")
+            {
+                Content = new StringContent(CollectionBindBatchRequest, Encoding.UTF8),
+            };
+            request.Content.Headers.ContentType = MediaTypeWithQualityHeaderValue.Parse("multipart/mixed;boundary=batch_3f83a52d-e1bc-4dca-b1f0-c14b35cce0df");
+
+            var batchResponse = await client.SendAsync(request, Xunit.TestContext.Current.CancellationToken);
+            var batchBody = await TraceListener.LogAndReturnMessageContentAsync(batchResponse);
+            batchResponse.IsSuccessStatusCode.Should().BeTrue(
+                because: $"the batched POST with Books@odata.bind should succeed. Body: {batchBody}");
+
+            var response = await RestierTestHelpers.ExecuteTestRequest<TApi>(
+                HttpMethod.Get,
+                resource: "/Publishers('BatchBindPub')?$expand=Books",
+                serviceCollection: ConfigureServices);
+            var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+            response.IsSuccessStatusCode.Should().BeTrue();
+            content.Should().Contain("Sea of Rust",
+                because: "the existing Book referenced via the Books@odata.bind array should now be linked to the new Publisher");
+            content.Should().Contain("2d760f15-974d-4556-8cdf-d610128b537e",
+                because: "the expanded Books collection on the new Publisher should include the bound Book by id");
+        }
+        finally
+        {
+            await CleanupBatchBindAsync();
+        }
     }
 
     private async Task<HttpClient> GetHttpClientAsync()
@@ -238,6 +281,26 @@ OData-Version: 4.0
 
     private const string JsonBatchResponse = @"{""responses"":[{""id"":""1"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""PublisherId"":null,""IsActive"":true,""Category"":null}},{""id"":""2"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""PublisherId"":null,""IsActive"":true,""Category"":null}}]}";
 
+
+    private const string CollectionBindBatchRequest =
+@"--batch_3f83a52d-e1bc-4dca-b1f0-c14b35cce0df
+Content-Type: multipart/mixed;boundary=changeset_d7b30121-ab21-4cf6-9d2e-1f44ad57a96e
+
+--changeset_d7b30121-ab21-4cf6-9d2e-1f44ad57a96e
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 1
+
+POST http://localhost/api/tests/Publishers HTTP/1.1
+Content-ID: 1
+Prefer: return=representation
+OData-Version: 4.0
+Content-Type: application/json;odata.metadata=minimal;odata.streaming=true;IEEE754Compatible=false;charset=utf-8
+
+{""@odata.type"":""#Microsoft.Restier.Tests.Shared.Scenarios.Library.Publisher"",""Id"":""BatchBindPub"",""Addr"":{""Street"":""1 Test St"",""Zip"":""00001""},""Books@odata.bind"":[""http://localhost/api/tests/Books(2d760f15-974d-4556-8cdf-d610128b537e)""]}
+--changeset_d7b30121-ab21-4cf6-9d2e-1f44ad57a96e--
+--batch_3f83a52d-e1bc-4dca-b1f0-c14b35cce0df--
+";
 
     private const string SelectPlusFunctionBatchRequest = @"
         {

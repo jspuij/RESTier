@@ -1084,20 +1084,31 @@ DB-per-tenant gives you blast-radius isolation but is heavyweight. The opposite 
 ```csharp
 public class SharedDbApi : EntityFrameworkApi<SharedDbContext>
 {
-    private readonly ITenantContext tenant;
+    private readonly IHttpContextAccessor http;
 
-    public SharedDbApi(IServiceProvider sp, ITenantContext tenant) : base(sp)
+    public SharedDbApi(
+        SharedDbContext dbContext,
+        IEdmModel model,
+        IQueryHandler queryHandler,
+        ISubmitHandler submitHandler,
+        IHttpContextAccessor http)
+        : base(dbContext, model, queryHandler, submitHandler)
     {
-        this.tenant = tenant;
+        this.http = http;
     }
 
+    private string CurrentTenantId
+        => http.HttpContext!.RequestServices.GetRequiredService<ITenantContext>().TenantId;
+
     protected internal IQueryable<Book> OnFilterBooks(IQueryable<Book> query)
-        => query.Where(b => b.TenantId == tenant.TenantId);
+        => query.Where(b => b.TenantId == CurrentTenantId);
 
     protected internal IQueryable<Customer> OnFilterCustomers(IQueryable<Customer> query)
-        => query.Where(c => c.TenantId == tenant.TenantId);
+        => query.Where(c => c.TenantId == CurrentTenantId);
 }
 ```
+
+The `IHttpContextAccessor` injection (rather than direct `ITenantContext`) is the same bridge pattern from Step 4: `ITenantContext` lives in app DI but is read inside RESTier's route container, so we resolve it through `HttpContext.RequestServices`. Filter methods always run in a request context, so the `HttpContext!` non-null assertion is safe — unlike the `AddDbContext` factory which also runs at model-build time.
 
 This is a **different multi-tenancy strategy**, not an addition to the one above. Pick one. DB-per-tenant gives stronger isolation but heavier ops; shared-DB is lighter but requires defense-in-depth (foreign-key constraints, audit logging) to compensate.
 

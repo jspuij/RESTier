@@ -37,6 +37,7 @@
               "guides/server/testing",
               "guides/server/naming-conventions",
               "guides/server/api-versioning",
+              "guides/server/multi-tenancy",
               "guides/server/concurrency",
               "guides/server/performance"
             ]

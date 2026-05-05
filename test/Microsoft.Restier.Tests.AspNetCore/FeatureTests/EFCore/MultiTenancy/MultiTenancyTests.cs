@@ -152,4 +152,18 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         getGlobex.StatusCode.Should().Be(HttpStatusCode.OK);
         globexContent.Should().NotContain(newBookTitle, because: "the new book was POSTed to acme; it must not be visible to globex");
     }
+
+    [Fact]
+    public async Task OdataContextUrlPreservesTenantPrefix()
+    {
+        var response = await ExecuteTestRequest(
+            HttpMethod.Get,
+            routePrefix: "acme/odata",
+            resource: "/Books");
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("/acme/odata/$metadata#Books",
+            because: "if PathBase is preserved, generated context URLs include the tenant segment so OData clients can follow links back");
+    }
 }

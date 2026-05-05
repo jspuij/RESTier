@@ -134,6 +134,53 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Internal
             options.RouteComponents.Where(kvp => kvp.Key == "api/v1").Should().HaveCount(1);
         }
 
+        [Fact]
+        public void Configure_NormalizesBasePrefix_TrailingSlashStrippedFromRouteAndDescriptor()
+        {
+            var (configurator, registry, options) = BuildSubject(b =>
+                b.AddVersion<SampleApi>(new ApiVersion(1, 0), false, "api/", svc =>
+                    svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>()));
+
+            configurator.Configure(options);
+
+            options.RouteComponents.Should().ContainKey("api/v1");
+            registry.Descriptors[0].RoutePrefix.Should().Be("api/v1");
+            registry.Descriptors[0].BasePrefix.Should().Be("api",
+                "trailing slash on basePrefix must be normalized so it groups with non-slashed registrations");
+        }
+
+        [Fact]
+        public void Configure_ExplicitGroupNameFormatter_OverridesDefault()
+        {
+            var (configurator, registry, options) = BuildSubject(b =>
+                b.AddVersion<SampleApi>(
+                    new ApiVersion(1, 0), false, "api",
+                    svc => svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>(),
+                    opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}"));
+
+            configurator.Configure(options);
+
+            registry.Descriptors[0].GroupName.Should().Be("orders-v1");
+        }
+
+        [Fact]
+        public void Configure_GroupNameCollisionAcrossBasePrefixes_Throws()
+        {
+            var (configurator, _, options) = BuildSubject(b =>
+            {
+                b.AddVersion<SampleApi>(new ApiVersion(1, 0), false, "orders", svc =>
+                    svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>());
+                b.AddVersion<OtherApi>(new ApiVersion(1, 0), false, "inventory", svc =>
+                    svc.AddSingleton<IChainedService<IModelBuilder>, SampleModelBuilder>());
+            });
+
+            Action act = () => configurator.Configure(options);
+
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage("*v1*orders*inventory*GroupNameFormatter*",
+                    "the configurator must reject duplicate group names with guidance");
+        }
+
         private static (RestierApiVersioningOptionsConfigurator configurator, RestierApiVersionRegistry registry, ODataOptions options) BuildSubject(
             Action<IRestierApiVersioningBuilder> configure)
         {

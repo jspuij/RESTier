@@ -19,6 +19,7 @@ using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.AspNetCore.Versioning;
 using Microsoft.Restier.Core.DependencyInjection;
 using Microsoft.Restier.Core.Model;
+using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure;
 using Xunit;
 
@@ -74,6 +75,77 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.IntegrationTests
             // so NSwag must serve "/openapi/default/openapi.json" exactly as before.
             var response = await client.GetAsync("/openapi/default/openapi.json", cancellationToken);
             response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        [Fact]
+        public async Task OpenApi_MultiGroupDocs_AreIndependentlyReachable()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var host = await BuildMultiGroupHostAsync(cancellationToken);
+            var client = host.GetTestClient();
+
+            var ordersV1 = await client.GetStringAsync("/openapi/orders-v1/openapi.json", cancellationToken);
+            var ordersRoot = JsonDocument.Parse(ordersV1).RootElement;
+            ordersRoot.GetProperty("paths").EnumerateObject()
+                .Should().Contain(p => p.Name.Contains("/Orders"),
+                    "orders-v1 must serve the OrdersApi schema");
+
+            var inventoryV1 = await client.GetStringAsync("/openapi/inventory-v1/openapi.json", cancellationToken);
+            var inventoryRoot = JsonDocument.Parse(inventoryV1).RootElement;
+            inventoryRoot.GetProperty("paths").EnumerateObject()
+                .Should().Contain(p => p.Name.Contains("/Stock"),
+                    "inventory-v1 must serve the InventoryApi schema");
+        }
+
+        private static async Task<IHost> BuildMultiGroupHostAsync(CancellationToken cancellationToken)
+        {
+            var builder = Host.CreateDefaultBuilder()
+                .ConfigureWebHost(web => web
+                    .UseTestServer()
+                    .ConfigureServices(services =>
+                    {
+                        services.AddApiVersioning().AddApiExplorer();
+                        services.AddControllers()
+                            .AddRestier(options =>
+                            {
+                                options.Select().Expand().Filter().OrderBy().Count();
+                            })
+                            .AddApplicationPart(typeof(RestierController).Assembly);
+                        services.AddRestierApiVersioning(b =>
+                        {
+                            b.AddVersion<OrdersApi>("orders", svc =>
+                            {
+                                svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>();
+                                svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
+                                svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
+                            },
+                            opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}");
+
+                            b.AddVersion<InventoryApi>("inventory", svc =>
+                            {
+                                svc.AddSingleton<IChainedService<IModelBuilder>, InventoryModelBuilder>();
+                                svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
+                                svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
+                            },
+                            opts => opts.GroupNameFormatter = v => $"inventory-v{v.MajorVersion}");
+                        });
+                        services.AddRestierNSwag();
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseRouting();
+                        app.UseRestierVersionHeaders();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapControllers();
+                            endpoints.MapRestier();
+                        });
+                        app.UseRestierOpenApi();
+                        app.UseRestierReDoc();
+                        app.UseRestierNSwagUI();
+                    }));
+
+            return await builder.StartAsync(cancellationToken);
         }
 
         private static async Task<IHost> BuildAsync(CancellationToken cancellationToken)

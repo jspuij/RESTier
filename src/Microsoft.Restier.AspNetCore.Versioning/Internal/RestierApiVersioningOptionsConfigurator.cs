@@ -59,25 +59,44 @@ namespace Microsoft.Restier.AspNetCore.Versioning.Internal
             var versioningOptions = new RestierVersioningOptions();
             pending.ApplyVersioningOptions?.Invoke(versioningOptions);
 
-            var groupName = versioningOptions.SegmentFormatter(pending.ApiVersion);
+            // P2 fix: normalize basePrefix by trimming trailing slash so "api" and "api/" are equivalent.
+            var normalizedBasePrefix = (pending.BasePrefix ?? string.Empty).TrimEnd('/');
+
+            var groupName = versioningOptions.GroupNameFormatter?.Invoke(pending.ApiVersion)
+                ?? versioningOptions.SegmentFormatter(pending.ApiVersion);
             var routePrefix = versioningOptions.ExplicitRoutePrefix
-                ?? ComposePrefix(pending.BasePrefix, groupName);
+                ?? ComposePrefix(normalizedBasePrefix, versioningOptions.SegmentFormatter(pending.ApiVersion));
 
             // Duplicate detection: same (ApiVersion, BasePrefix) is rejected.
             var collision = _registry.Descriptors.FirstOrDefault(d =>
                 string.Equals(d.Version, pending.ApiVersion.ToString(), StringComparison.Ordinal)
-                && string.Equals(d.BasePrefix, pending.BasePrefix, StringComparison.Ordinal));
+                && string.Equals(d.BasePrefix, normalizedBasePrefix, StringComparison.Ordinal));
             if (collision is not null)
             {
                 throw new InvalidOperationException(
                     $"A Restier API version is already registered with version {pending.ApiVersion} at base prefix " +
-                    $"\"{pending.BasePrefix}\" for type {collision.ApiType.FullName}; " +
+                    $"\"{normalizedBasePrefix}\" for type {collision.ApiType.FullName}; " +
                     $"refused to register conflicting type {pending.ApiType.FullName}.");
+            }
+
+            // P1 fix: detect GroupName collision across different basePrefixes.
+            var groupNameCollision = _registry.Descriptors.FirstOrDefault(d =>
+                string.Equals(d.GroupName, groupName, StringComparison.Ordinal)
+                && !string.Equals(d.BasePrefix, normalizedBasePrefix, StringComparison.Ordinal));
+            if (groupNameCollision is not null)
+            {
+                throw new InvalidOperationException(
+                    $"A Restier API descriptor with GroupName \"{groupName}\" is already registered for base prefix " +
+                    $"\"{groupNameCollision.BasePrefix}\" (type {groupNameCollision.ApiType.FullName}). " +
+                    $"The new registration at base prefix \"{normalizedBasePrefix}\" (type {pending.ApiType.FullName}) " +
+                    $"would create a duplicate OpenAPI document group name. " +
+                    $"Set {nameof(RestierVersioningOptions)}.{nameof(RestierVersioningOptions.GroupNameFormatter)} " +
+                    $"on each AddVersion call to produce distinct group names.");
             }
 
             _registry.Add(
                 pending.ApiVersion,
-                pending.BasePrefix,
+                normalizedBasePrefix,
                 routePrefix,
                 pending.ApiType,
                 pending.IsDeprecated,

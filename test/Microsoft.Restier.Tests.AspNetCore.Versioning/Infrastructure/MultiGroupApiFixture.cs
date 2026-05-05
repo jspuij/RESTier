@@ -104,7 +104,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                                         svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>();
                                         svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
                                         svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
-                                    });
+                                    },
+                                    opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}");
 
                                 b.AddVersion<OrdersApi>(
                                     new ApiVersion(2, 0), deprecated: true, "orders",
@@ -114,7 +115,11 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                                         svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
                                         svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
                                     },
-                                    opts => opts.SunsetDate = sunset);
+                                    opts =>
+                                    {
+                                        opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}";
+                                        opts.SunsetDate = sunset;
+                                    });
                             }
                             else
                             {
@@ -124,7 +129,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                                     svc.AddSingleton<IChainedService<IModelBuilder>, OrdersModelBuilder>();
                                     svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
                                     svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
-                                });
+                                },
+                                opts => opts.GroupNameFormatter = v => $"orders-v{v.MajorVersion}");
                             }
 
                             b.AddVersion<InventoryApi>("inventory", svc =>
@@ -132,7 +138,8 @@ namespace Microsoft.Restier.Tests.AspNetCore.Versioning.Infrastructure
                                 svc.AddSingleton<IChainedService<IModelBuilder>, InventoryModelBuilder>();
                                 svc.AddSingleton<IChangeSetInitializer, DefaultChangeSetInitializer>();
                                 svc.AddSingleton<ISubmitExecutor, DefaultSubmitExecutor>();
-                            });
+                            },
+                            opts => opts.GroupNameFormatter = v => $"inventory-v{v.MajorVersion}");
                         });
                     })
                     .Configure(app =>

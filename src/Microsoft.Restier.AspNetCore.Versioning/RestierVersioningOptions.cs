@@ -36,6 +36,17 @@ namespace Microsoft.Restier.AspNetCore.Versioning
         /// </remarks>
         public DateTimeOffset? SunsetDate { get; set; }
 
+        /// <summary>
+        /// Optional formatter that produces the OpenAPI document <c>GroupName</c> for this version.
+        /// When null (default), <see cref="SegmentFormatter"/> is used (so a v1 segment also produces
+        /// the "v1" group name).
+        /// When you register multiple logical APIs at different <c>basePrefix</c>es that share a
+        /// version, set this on each call to disambiguate (e.g.,
+        /// <c>opts.GroupNameFormatter = v =&gt; $"orders-v{v.MajorVersion}"</c>); the configurator
+        /// throws <see cref="InvalidOperationException"/> if two descriptors would have the same GroupName.
+        /// </summary>
+        public Func<ApiVersion, string> GroupNameFormatter { get; set; }
+
     }
 
 }

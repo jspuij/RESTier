@@ -39,7 +39,10 @@ public class TenantContext : ITenantContext { public string TenantId { get; set;
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddSingleton<IConnectionStringProvider, ConfigurationConnectionStringProvider>();
 ```
+
+The provider is registered in **app DI** so the middleware can read it via constructor injection (ASP.NET Core resolves `app.UseMiddleware<T>()` constructor parameters from the app container). It's also registered in **route DI** later (Step 4) so the per-route `AddDbContext` factory can resolve it via the route-scope `sp`. Both registrations are required because OData's per-route container does not fall back to app DI for service resolution.
 
 </Step>
 <Step title="Define IConnectionStringProvider and a default impl">

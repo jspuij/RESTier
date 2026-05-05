@@ -176,18 +176,23 @@ internal sealed class InMemoryTenantConnectionStringProvider : IConnectionString
 
 - [ ] **Step 7: Create `MultiTenantApi.cs`**
 
+Use the 4-parameter constructor pattern that other `EntityFrameworkApi<T>` subclasses in this codebase follow (`NorthwindApiV1`, `LibraryWithViewsApi`, `RestierTestContextApi`, etc.) — not the `IServiceProvider` overload.
+
 ```csharp
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
-using System;
+using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.Query;
+using Microsoft.Restier.Core.Submit;
 using Microsoft.Restier.EntityFrameworkCore;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
 public class MultiTenantApi : EntityFrameworkApi<TenantDbContext>
 {
-    public MultiTenantApi(IServiceProvider serviceProvider) : base(serviceProvider)
+    public MultiTenantApi(TenantDbContext dbContext, IEdmModel model, IQueryHandler queryHandler, ISubmitHandler submitHandler)
+        : base(dbContext, model, queryHandler, submitHandler)
     {
     }
 }

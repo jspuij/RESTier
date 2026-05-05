@@ -88,6 +88,7 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         TestSetup();
 
         SeedTenant(AcmeDb, "AcmeBook");
+        SeedTenant(GlobexDb, "GlobexBook");
     }
 
     private static void SeedTenant(string dbName, string title)
@@ -112,5 +113,19 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         content.Should().Contain("AcmeBook");
         content.Should().NotContain("GlobexBook");
+    }
+
+    [Fact]
+    public async Task Globex_GetsGlobexData()
+    {
+        var response = await ExecuteTestRequest(
+            HttpMethod.Get,
+            routePrefix: "globex/odata",
+            resource: "/Books");
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("GlobexBook");
+        content.Should().NotContain("AcmeBook");
     }
 }

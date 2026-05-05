@@ -318,6 +318,10 @@ public class SharedDbApi : EntityFrameworkApi<SharedDbContext>
 }
 ```
 
+<Note>
+The method suffix is the **entity set name** (typically the plural `DbSet<T>` property name on your `DbContext`), not the entity type name. `OnFilterBooks` matches a `DbSet<Book> Books` property; a method named `OnFilterBook` would be silently ignored — RESTier traces a warning to debug output but does not surface an error. Verify the spelling matches the entity-set name in your EDM `$metadata`.
+</Note>
+
 The `IHttpContextAccessor` injection (rather than direct `ITenantContext`) is the same bridge pattern from Step 4: `ITenantContext` lives in app DI but is read inside RESTier's route container, so we resolve it through `HttpContext.RequestServices`. Filter methods always run in a request context, so the `HttpContext!` non-null assertion is safe — unlike the `AddDbContext` factory which also runs at model-build time.
 
 This is a **different multi-tenancy strategy**, not an addition to the one above. Pick one. DB-per-tenant gives stronger isolation but heavier ops; shared-DB is lighter but requires defense-in-depth (foreign-key constraints, audit logging) to compensate.

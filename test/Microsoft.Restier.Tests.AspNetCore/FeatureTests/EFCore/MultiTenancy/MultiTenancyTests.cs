@@ -24,6 +24,10 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
     private static readonly string AcmeDb = $"tenant-acme-{Guid.NewGuid():N}";
     private static readonly string GlobexDb = $"tenant-globex-{Guid.NewGuid():N}";
 
+    // TenantToDb is captured by value when the InMemoryTenantConnectionStringProvider
+    // is constructed in the test-class constructor. Adding entries here AFTER the
+    // constructor runs has no effect on the provider's lookup table. All tenants
+    // must be declared in this dictionary before any test method runs.
     private static readonly Dictionary<string, string> TenantToDb = new(StringComparer.OrdinalIgnoreCase)
     {
         ["acme"] = AcmeDb,
@@ -59,6 +63,16 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
 
                 services.AddEFCoreProviderServices<TenantDbContext>((sp, opt) =>
                 {
+                    // The lambda runs TWICE: once at model-build time (RESTier instantiates
+                    // TenantDbContext to inspect its DbSets for EDM construction; HttpContext
+                    // is null at that point) and once per request. The placeholder DB name
+                    // is only ever used for EDM reflection — RESTier never opens it.
+                    //
+                    // Note we resolve ITenantContext via http.RequestServices, NOT via sp.
+                    // sp is the route-level scoped provider; ITenantContext is registered
+                    // in app-level DI (so the middleware can populate it before routing).
+                    // sp.GetRequiredService<ITenantContext>() would throw — the route
+                    // container has no such registration. The bridge is intentional.
                     var http = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
                     var dbName = http != null
                         ? sp.GetRequiredService<IConnectionStringProvider>()

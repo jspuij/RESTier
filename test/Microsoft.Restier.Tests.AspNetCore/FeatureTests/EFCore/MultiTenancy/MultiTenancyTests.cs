@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.EntityFrameworkCore;
+using CloudNimble.Breakdance.AspNetCore;
 using Microsoft.Restier.Tests.Shared;
 using Microsoft.Restier.Tests.Shared.Extensions;
 using Xunit;
@@ -127,5 +128,28 @@ public class MultiTenancyTests : RestierTestBase<MultiTenantApi>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         content.Should().Contain("GlobexBook");
         content.Should().NotContain("AcmeBook");
+    }
+
+    [Fact]
+    public async Task CrossTenantIsolation_PostToAcme_DoesNotLeakToGlobex()
+    {
+        var newBookTitle = $"NewAcmeBook-{Guid.NewGuid():N}";
+        var postResponse = await ExecuteTestRequest(
+            HttpMethod.Post,
+            routePrefix: "acme/odata",
+            resource: "/Books",
+            acceptHeader: WebApiConstants.DefaultAcceptHeader,
+            payload: new { Id = Guid.NewGuid(), Title = newBookTitle });
+        _ = await TraceListener.LogAndReturnMessageContentAsync(postResponse);
+        postResponse.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.OK);
+
+        var getGlobex = await ExecuteTestRequest(
+            HttpMethod.Get,
+            routePrefix: "globex/odata",
+            resource: "/Books");
+        var globexContent = await TraceListener.LogAndReturnMessageContentAsync(getGlobex);
+
+        getGlobex.StatusCode.Should().Be(HttpStatusCode.OK);
+        globexContent.Should().NotContain(newBookTitle, because: "the new book was POSTed to acme; it must not be visible to globex");
     }
 }

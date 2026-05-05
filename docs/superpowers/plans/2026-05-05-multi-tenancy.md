@@ -98,7 +98,7 @@ public class TenantDbContext : DbContext
 
 - [ ] **Step 3: Create `ITenantContext.cs`**
 
-These four scaffolding types (`ITenantContext`, `TenantContext`, `IConnectionStringProvider`, `InMemoryTenantConnectionStringProvider`) are all `internal` — they exist only to support the multi-tenancy scenario test in this assembly. In a real consumer's project these would be `public`, but here they have no external consumers.
+These four scaffolding types (`ITenantContext`, `TenantContext`, `IConnectionStringProvider`, `InMemoryTenantConnectionStringProvider`) are `public`. They MUST be public because Task 2's `PathSegmentTenantResolutionMiddleware` is `public` (required for ASP.NET Core's `app.UseMiddleware<T>()` to discover the type via reflection from the test host) and a public class cannot expose internal types in its public constructor signature without a `CS0051` inconsistent-accessibility error.
 
 ```csharp
 // Copyright (c) Microsoft Corporation.  All rights reserved.
@@ -106,7 +106,7 @@ These four scaffolding types (`ITenantContext`, `TenantContext`, `IConnectionStr
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-internal interface ITenantContext
+public interface ITenantContext
 {
     string TenantId { get; set; }
 }
@@ -120,7 +120,7 @@ internal interface ITenantContext
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-internal class TenantContext : ITenantContext
+public class TenantContext : ITenantContext
 {
     public string TenantId { get; set; }
 }
@@ -134,7 +134,7 @@ internal class TenantContext : ITenantContext
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-internal interface IConnectionStringProvider
+public interface IConnectionStringProvider
 {
     string GetConnectionString(string tenantId);
 
@@ -153,7 +153,7 @@ using System.Collections.Generic;
 
 namespace Microsoft.Restier.Tests.AspNetCore.FeatureTests.EFCore.MultiTenancy;
 
-internal sealed class InMemoryTenantConnectionStringProvider : IConnectionStringProvider
+public sealed class InMemoryTenantConnectionStringProvider : IConnectionStringProvider
 {
     private readonly Dictionary<string, string> map;
 

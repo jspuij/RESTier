@@ -20,7 +20,7 @@ This is the first of three planned specs. Server-side spatial filtering (`geo.di
 | EF6 type disambiguation | Default to `Edm.Geography` / `Edm.Geometry` (abstract base); optional `[Spatial(typeof(GeographyPoint))]` attribute for precision | Zero-config story works out of the box; opt-in precision when schema strictness matters. |
 | EF Core type disambiguation | `[Spatial]` attribute → relational column type lookup → **fail-fast model-build error** if neither is conclusive | Default-to-Geography would silently mismap PostGIS columns (Npgsql defaults to `geometry`). Strict validation matches Restier's existing model-build checks (e.g. owned-type-on-DbSet). |
 | Package layout | Two new optional packages: `Microsoft.Restier.EntityFramework.Spatial` and `Microsoft.Restier.EntityFrameworkCore.Spatial` | Mirrors the `Microsoft.Restier.AspNetCore.Swagger` precedent. NetTopologySuite (~3 MB plus transitive deps) is opt-in instead of forced on every Restier-EFCore consumer. |
-| WKT bridge | Microsoft.Spatial's `WellKnownTextSqlFormatter` paired with `DbGeography.AsTextZM`/`FromText(wkt, srid)` and NTS's `WKTReader`/`WKTWriter` configured for ZM ordinates | Plain WKT loses SRID and Z/M. The amended bridge round-trips SRID and Z/M explicitly through both directions. Replaces the buggy hand-built WKT in the current `GeographyConverter`. |
+| WKT bridge | Microsoft.Spatial's `WellKnownTextSqlFormatter` (SQL Server WKT variant) paired with `DbSpatialServices.Default.AsTextIncludingElevationAndMeasure` + `DbGeography.FromText(wkt, srid)` for EF6, and NTS's `WKTReader`/`WKTWriter` configured for `Ordinates.XYZM` for EF Core | Plain WKT loses SRID and Z/M. The amended bridge round-trips SRID and Z/M explicitly through both directions. Replaces the buggy hand-built WKT in the current `GeographyConverter`. |
 | `ISpatialTypeConverter` access | Constructor-injected into the model convention, payload value converter, and `EFChangeSetInitializer` | Avoids any static facade or ambient-state lookup. Forces `EFChangeSetInitializer` to become **scoped** (was singleton). |
 | Filter-binder behavior | Spec A explicitly does **not** ship `geo.*` translation. Tests assert the limitation. | Round-trip and filtering are separable concerns. Spec B picks up filtering on top of A's foundation. |
 
@@ -75,6 +75,7 @@ public interface ISpatialModelMetadataProvider
 {
     bool IsSpatialStorageType(Type clrType);
     SpatialGenus? InferGenus(Type entityClrType, PropertyInfo property); // Geography/Geometry/null
+    IReadOnlyList<Type> IgnoredStorageTypes { get; } // passed to ODataConventionModelBuilder.Ignore(...)
 }
 ```
 
@@ -86,22 +87,23 @@ public interface ISpatialModelMetadataProvider
 
 The convention plugs into `EFModelBuilder<TDbContext>` (the shared partial class in `src/Microsoft.Restier.EntityFramework.Shared/Model/EFModelBuilder.cs`). It runs in two phases around the existing `ODataConventionModelBuilder.GetEdmModel()` call:
 
-**Phase 1 — pre-model-build.** For each entity type registered with `ODataConventionModelBuilder`:
-1. Walk the entity's reflection-discovered properties.
-2. For each property whose CLR type is a spatial storage type (per `ISpatialModelMetadataProvider.IsSpatialStorageType`), call `entityTypeConfiguration.Ignore(propertyInfo)`. This prevents the convention builder from tripping over the unrecognized type or treating it as a complex type.
-3. Capture the (entity, property) pair plus the resolved Microsoft.Spatial primitive type for phase 2. Resolution rules:
+**Phase 1 — pre-model-build.** Before `builder.GetEdmModel()` is called:
+1. Walk every entity type's reflection-discovered properties. For each property whose CLR type is a spatial storage type (per `ISpatialModelMetadataProvider.IsSpatialStorageType`), capture the `(entityType, propertyInfo, resolvedEdmType)` triple for phase 2. Resolution rules for `resolvedEdmType`:
    - `[Spatial]` attribute present → use its `EdmType`.
    - Else, ask `ISpatialModelMetadataProvider.InferGenus(entityType, propertyInfo)`:
      - **EF6 provider**: returns Geography for `DbGeography`, Geometry for `DbGeometry`. The CLR type alone determines genus.
      - **EFCore provider**: looks up the EFCore mutable model — `IEntityType.FindProperty(propertyInfo).GetColumnType()`. SQL Server NTS plugin returns `"geography"` / `"geometry"`; Npgsql returns prefixes like `geography(...)` / `geometry(...)`. Returns the matching `SpatialGenus` or `null` if the column type is unset/unrecognized.
    - Genus + concrete CLR subclass → specific `Edm.GeographyPoint` / `Edm.GeometryPolygon` / etc. For EF6 (no concrete CLR subclass) the abstract base `Edm.Geography` / `Edm.Geometry` is used unless `[Spatial]` overrode.
    - **If the genus cannot be determined** (EFCore property with no `[Spatial]` and no recognizable column type) → throw `EdmModelValidationException` with the entity and property name, suggesting `[Spatial(typeof(GeographyPoint))]` (or equivalent). Mirrors the existing owned-type-on-DbSet validation in `EFModelBuilder.EntityFrameworkCoreGetEntities`.
+2. Call `builder.Ignore(...)` once with the union of every storage type the metadata provider reports — `DbGeography`, `DbGeometry` for EF6; the abstract `Geometry` plus every concrete NTS subclass (`Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, `MultiPolygon`, `GeometryCollection`) for EFCore. `ISpatialModelMetadataProvider.IgnoredStorageTypes` returns the list per flavor. Type-level `Ignore` causes the convention builder to skip any property of that type during structural-property discovery — exactly the side door we need so it doesn't try to treat them as unmapped complex types. Users with a non-spatial use of any ignored type can opt out by registering the property explicitly via the typed `Property<T>` API; in practice none of these CLR types have non-spatial uses.
 
-**Phase 2 — post-model-build.** After `GetEdmModel()` returns:
-1. For each (entity type, property, resolved Microsoft.Spatial type) captured in phase 1:
-   - Locate the matching `EdmEntityType` in the returned `EdmModel`.
-   - Add an `EdmStructuralProperty` with the original property name and the resolved Microsoft.Spatial primitive `EdmPrimitiveTypeKind`.
-2. The reflection-based property accessor used by AspNetCoreOData's serializer at runtime keys on property name, so it finds the storage-typed CLR property and returns its raw value. The read-path hook (next section) handles the type substitution before serialization.
+**Phase 2 — post-model-build.** After `builder.GetEdmModel()` returns the `EdmModel`:
+1. For each captured `(entityType, propertyInfo, resolvedEdmType)`:
+   - Compute the EDM property name. If `EFModelBuilder`'s `RestierNamingConvention` is `LowerCamelCase` or `LowerCamelCaseWithEnumMembers`, lower-camelCase the original CLR name; otherwise use it verbatim. (Mirrors what `ODataConventionModelBuilder` does internally when `EnableLowerCamelCase` is set.)
+   - Locate the matching `EdmEntityType` in the model.
+   - Call `entityType.AddStructuralProperty(edmName, primitiveTypeKind, isNullable: true)`, capturing the new `EdmStructuralProperty`.
+   - Call `model.SetAnnotationValue(edmStructuralProperty, new ClrPropertyInfoAnnotation(propertyInfo))`. This is what every other Restier path keys on (`EdmClrPropertyMapper.GetClrPropertyName`, used by `RestierResourceDeserializer`, `RestierQueryBuilder`, `RestierController`, `DeepUpdateClassifier`, `DeepOperationExtractor`); without it the spatial properties would lose CLR-name mapping under camelCase and bypass Restier's deserialization path.
+2. The reflection-based property accessor used by AspNetCoreOData's serializer at runtime keys on the *original* CLR property name (resolved from the annotation), so it finds the storage-typed CLR property and returns its raw value. The read-path hook (next section) handles the type substitution before serialization.
 
 `EdmHelpers.GetPrimitiveTypeKind` is also extended in this spec to recognize Microsoft.Spatial CLR types, but that extension is for Restier's own type-reference helpers (operations, function returns) — it is **not** the substitution mechanism for entity properties. The substitution happens only in the model-builder convention above.
 
@@ -114,7 +116,7 @@ public class RestierPayloadValueConverter : ODataPayloadValueConverter
 {
     private readonly ISpatialTypeConverter[] spatialConverters;
 
-    public RestierPayloadValueConverter(IEnumerable<ISpatialTypeConverter> spatialConverters)
+    public RestierPayloadValueConverter(IEnumerable<ISpatialTypeConverter> spatialConverters = null)
     {
         this.spatialConverters = spatialConverters?.ToArray() ?? Array.Empty<ISpatialTypeConverter>();
     }
@@ -142,7 +144,7 @@ public class RestierPayloadValueConverter : ODataPayloadValueConverter
 
 Microsoft.Spatial values that arrive at the converter (because the user declared a Microsoft.Spatial-typed property directly) flow through unchanged via `base`.
 
-The existing `RestierPayloadValueConverter` registration in the AspNetCore pipeline already runs in the route service container, so `IEnumerable<ISpatialTypeConverter>` resolves cleanly when the user has called `services.AddRestierSpatial()`. The empty-array fallback means no spatial dependency on consumers who don't use spatial.
+The default-null parameter keeps the existing parameterless construction working — `DefaultRestierSerializerProvider` (`src/Microsoft.Restier.AspNetCore/Formatter/Serialization/DefaultRestierSerializerProvider.cs:49`) and the `RestierPayloadValueConverterTests` fixture both keep compiling without modification. The DI path uses the `IEnumerable<ISpatialTypeConverter>` resolution so `services.AddRestierSpatial()` flows the converters through.
 
 ### Write-path hook
 
@@ -202,8 +204,8 @@ src/Microsoft.Restier.EntityFrameworkCore.Spatial/
 
 Both converters use the same SRID- and Z/M-preserving WKT round-trip:
 
-- **`ToEdm`** (EF6): `DbGeography.AsTextZM()` returns WKT with Z and M ordinates; `value.CoordinateSystemId` returns the SRID. Look up the matching `Microsoft.Spatial.CoordinateSystem` (cache by SRID), call `WellKnownTextSqlFormatter.Create(allowOnlyTwoDimensions: false).Read<TGeo>(reader)` against a reader fed the WKT, then re-stamp the resulting `Microsoft.Spatial` value with the looked-up coordinate system.
-- **`ToStorage`** (EF6): `WellKnownTextSqlFormatter` writes WKT with Z and M; `DbGeography.FromText(wkt, srid)` consumes both.
+- **`ToEdm`** (EF6): `DbSpatialServices.Default.AsTextIncludingElevationAndMeasure(value)` returns SQL Server-variant WKT with Z and M ordinates (the `.AsText()` instance method does not — it is 2D only). `value.CoordinateSystemId` returns the SRID. Look up the matching `Microsoft.Spatial.CoordinateSystem` (cache by SRID), call `WellKnownTextSqlFormatter.Create(allowOnlyTwoDimensions: false).Read<TGeo>(reader)` against a reader fed the WKT, then re-stamp the resulting `Microsoft.Spatial` value with the looked-up coordinate system. `DbSpatialServices.Default` resolves to the configured provider's spatial services via `DbConfiguration.DependencyResolver`.
+- **`ToStorage`** (EF6): `WellKnownTextSqlFormatter` writes SQL Server-variant WKT with Z and M (e.g. `POINT(lon lat z m)`); `DbGeography.FromText(wkt, srid)` and `DbGeometry.FromText(wkt, srid)` accept that form.
 - **`ToEdm`** (EFCore): the converter uses `WKTWriter` configured with `Ordinates.XYZM` to produce WKT. `geometry.SRID` carries the SRID into the looked-up `Microsoft.Spatial.CoordinateSystem`.
 - **`ToStorage`** (EFCore): `WellKnownTextSqlFormatter` writes WKT with Z and M; `WKTReader.Read(wkt)` consumes it; `result.SRID = srid` re-stamps the SRID on the NTS instance.
 
@@ -284,6 +286,8 @@ In `Microsoft.Restier.Tests.EntityFrameworkCore` (and EF6 equivalent):
 - EFCore property typed as `Point` with `HasColumnType("geometry(Point,4326)")` (Npgsql-style) configured → EDM declares `Edm.GeometryPoint`.
 - EFCore property typed as `Point` with no column-type configuration and no `[Spatial]` → `EdmModelValidationException` with the entity and property name in the message.
 - `[Spatial(typeof(GeometryPoint))]` overrides any column-type inference.
+- **CamelCase + CLR annotation**: spatial property in a model built with `RestierNamingConvention.LowerCamelCase` → EDM property name is `headquartersLocation`; `EdmClrPropertyMapper.GetClrPropertyName(edmProperty, model)` returns `HeadquartersLocation` (proves `ClrPropertyInfoAnnotation` is attached).
+- **PascalCase (default)**: spatial property in a default-naming model → EDM property name is `HeadquartersLocation` verbatim and the annotation still resolves the original CLR name.
 
 ### Integration tests
 

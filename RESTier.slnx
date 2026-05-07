@@ -28,10 +28,11 @@
     <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/docs/">
-    <Project Path="src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj" Type="Common C#" />
+    <Project Path="src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj" Type="C#" />
   </Folder>
   <Folder Name="/test/" Id="67e76b39-b345-4061-b1a8-31b95b6f83a8">
     <Project Path="test/Microsoft.Restier.Tests.Core/Microsoft.Restier.Tests.Core.csproj" />
+    <Project Path="test/Microsoft.Restier.Tests.EntityFramework.Spatial/Microsoft.Restier.Tests.EntityFramework.Spatial.csproj" />
     <Project Path="test/Microsoft.Restier.Tests.Shared/Microsoft.Restier.Tests.Shared.csproj" />
   </Folder>
   <Folder Name="/test/EntityFramework/" Id="b45d57df-5e57-4cf8-9ff8-86a03f39bb09">

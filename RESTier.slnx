@@ -9,6 +9,7 @@
   <Folder Name="/src/" Id="02ea681e-c7d8-13c7-8484-4ac65e1b71e8">
     <Project Path="src/Microsoft.Restier.Breakdance/Microsoft.Restier.Breakdance.csproj" />
     <Project Path="src/Microsoft.Restier.Core/Microsoft.Restier.Core.csproj" />
+    <Project Path="src/Microsoft.Restier.EntityFramework.Spatial/Microsoft.Restier.EntityFramework.Spatial.csproj" />
   </Folder>
   <Folder Name="/src/EntityFramework/" Id="a290b16b-6f9e-4703-8c01-135831ad90df">
     <Project Path="src/Microsoft.Restier.EntityFramework.Shared/Microsoft.Restier.EntityFramework.Shared.shproj" Id="83ad7aa8-9ed8-4b9f-966a-73ce9cae51c6" />
@@ -27,7 +28,7 @@
     <Project Path="src/Microsoft.Restier.AspNetCore/Microsoft.Restier.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/docs/">
-    <Project Path="src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj" Type="9A19103F-16F7-4668-BE54-9A1E7A4F7556" />
+    <Project Path="src/Microsoft.Restier.Docs/Microsoft.Restier.Docs.docsproj" Type="Common C#" />
   </Folder>
   <Folder Name="/test/" Id="67e76b39-b345-4061-b1a8-31b95b6f83a8">
     <Project Path="test/Microsoft.Restier.Tests.Core/Microsoft.Restier.Tests.Core.csproj" />

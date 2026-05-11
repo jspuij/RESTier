@@ -84,5 +84,96 @@ namespace Microsoft.Restier.Tests.EntityFramework.Spatial
             roundTrip.SpatialEquals(original).Should().BeTrue();
             roundTrip.CoordinateSystemId.Should().Be(original.CoordinateSystemId);
         }
+
+        [Fact(Skip = "Requires Microsoft.SqlServer.Types native assembly (Windows / SQL Server only).",
+              SkipUnless = nameof(SqlServerTypesAvailable))]
+        public void Round_trips_LineString()
+        {
+            var original = DbGeography.FromText("LINESTRING(0 0, 1 1, 2 2)", 4326);
+
+            var edm = (GeographyLineString)_converter.ToEdm(original, typeof(GeographyLineString));
+            var roundTrip = (DbGeography)_converter.ToStorage(typeof(DbGeography), edm);
+
+            roundTrip.SpatialEquals(original).Should().BeTrue();
+        }
+
+        [Fact(Skip = "Requires Microsoft.SqlServer.Types native assembly (Windows / SQL Server only).",
+              SkipUnless = nameof(SqlServerTypesAvailable))]
+        public void Round_trips_Polygon()
+        {
+            var original = DbGeography.FromText("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))", 4326);
+
+            var edm = (GeographyPolygon)_converter.ToEdm(original, typeof(GeographyPolygon));
+            var roundTrip = (DbGeography)_converter.ToStorage(typeof(DbGeography), edm);
+
+            roundTrip.SpatialEquals(original).Should().BeTrue();
+        }
+
+        [Theory(Skip = "Requires Microsoft.SqlServer.Types native assembly (Windows / SQL Server only).",
+                SkipUnless = nameof(SqlServerTypesAvailable))]
+        [InlineData(4326)]
+        [InlineData(4269)]
+        public void Preserves_Geography_SRID(int srid)
+        {
+            var original = DbGeography.FromText("POINT(1 2)", srid);
+
+            var edm = (GeographyPoint)_converter.ToEdm(original, typeof(GeographyPoint));
+            edm.CoordinateSystem.EpsgId.Should().Be(srid);
+
+            var roundTrip = (DbGeography)_converter.ToStorage(typeof(DbGeography), edm);
+            roundTrip.CoordinateSystemId.Should().Be(srid);
+        }
+
+        [Fact(Skip = "Requires Microsoft.SqlServer.Types native assembly (Windows / SQL Server only).",
+              SkipUnless = nameof(SqlServerTypesAvailable))]
+        public void Preserves_Z_coordinate()
+        {
+            var original = DbGeography.FromText("POINT(1 2 3)", 4326);
+
+            var edm = (GeographyPoint)_converter.ToEdm(original, typeof(GeographyPoint));
+            edm.Z.Should().BeApproximately(3.0, 0.0001);
+
+            var roundTrip = (DbGeography)_converter.ToStorage(typeof(DbGeography), edm);
+            roundTrip.Elevation.Should().BeApproximately(3.0, 0.0001);
+        }
+
+        [Fact(Skip = "Requires Microsoft.SqlServer.Types native assembly (Windows / SQL Server only).",
+              SkipUnless = nameof(SqlServerTypesAvailable))]
+        public void Round_trips_DbGeometry_Point_with_planar_SRID()
+        {
+            var original = DbGeometry.FromText("POINT(123456.78 654321.09)", 3857);
+
+            var edm = (GeometryPoint)_converter.ToEdm(original, typeof(GeometryPoint));
+            edm.X.Should().BeApproximately(123456.78, 0.01);
+            edm.CoordinateSystem.EpsgId.Should().Be(3857);
+
+            var roundTrip = (DbGeometry)_converter.ToStorage(typeof(DbGeometry), edm);
+            roundTrip.CoordinateSystemId.Should().Be(3857);
+        }
+
+        [Fact]
+        public void Null_storage_value_returns_null()
+        {
+            _converter.ToEdm(null, typeof(GeographyPoint)).Should().BeNull();
+            _converter.ToStorage(typeof(DbGeography), null).Should().BeNull();
+        }
+
+        [Fact]
+        public void ToStorage_with_unsupported_storage_type_throws()
+        {
+            var p = GeographyPoint.Create(CoordinateSystem.Geography(4326), 0, 0, null, null);
+
+            var act = () => _converter.ToStorage(typeof(string), p);
+
+            act.Should().Throw<NotSupportedException>();
+        }
+
+        [Fact]
+        public void ToEdm_with_unsupported_storage_value_throws()
+        {
+            var act = () => _converter.ToEdm("not a spatial value", typeof(GeographyPoint));
+
+            act.Should().Throw<NotSupportedException>();
+        }
     }
 }

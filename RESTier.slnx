@@ -38,6 +38,7 @@
   </Folder>
   <Folder Name="/test/EntityFramework/" Id="b45d57df-5e57-4cf8-9ff8-86a03f39bb09">
     <Project Path="test/Microsoft.Restier.Tests.EntityFramework/Microsoft.Restier.Tests.EntityFramework.csproj" />
+    <Project Path="test/Microsoft.Restier.Tests.EntityFrameworkCore.Spatial/Microsoft.Restier.Tests.EntityFrameworkCore.Spatial.csproj" />
     <Project Path="test/Microsoft.Restier.Tests.EntityFrameworkCore/Microsoft.Restier.Tests.EntityFrameworkCore.csproj" />
     <Project Path="test/Microsoft.Restier.Tests.Shared.EntityFramework/Microsoft.Restier.Tests.Shared.EntityFramework.csproj" />
     <Project Path="test/Microsoft.Restier.Tests.Shared.EntityFrameworkCore/Microsoft.Restier.Tests.Shared.EntityFrameworkCore.csproj" />

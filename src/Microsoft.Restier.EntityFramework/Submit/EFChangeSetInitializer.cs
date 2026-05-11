@@ -17,7 +17,6 @@ using Microsoft.OData.Edm;
 using Microsoft.Restier.Core;
 using Microsoft.Restier.Core.Query;
 using Microsoft.Restier.Core.Submit;
-using Microsoft.Spatial;
 
 namespace Microsoft.Restier.EntityFramework
 {
@@ -26,6 +25,26 @@ namespace Microsoft.Restier.EntityFramework
     /// </summary>
     public class EFChangeSetInitializer : DefaultChangeSetInitializer
     {
+        private readonly Microsoft.Restier.Core.Spatial.ISpatialTypeConverter[] spatialConverters;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EFChangeSetInitializer"/> class.
+        /// </summary>
+        public EFChangeSetInitializer()
+            : this(null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EFChangeSetInitializer"/> class
+        /// with the specified spatial type converters.
+        /// </summary>
+        /// <param name="spatialConverters">The registered spatial type converters, or null for none.</param>
+        public EFChangeSetInitializer(System.Collections.Generic.IEnumerable<Microsoft.Restier.Core.Spatial.ISpatialTypeConverter> spatialConverters)
+        {
+            this.spatialConverters = spatialConverters?.ToArray() ?? System.Array.Empty<Microsoft.Restier.Core.Spatial.ISpatialTypeConverter>();
+        }
+
         /// <summary>
         /// Asynchronously prepare the <see cref="ChangeSet"/>.
         /// </summary>
@@ -234,16 +253,16 @@ namespace Microsoft.Restier.EntityFramework
                 return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
 
-            if (type == typeof(DbGeography))
+            if (value is not null
+                && (typeof(DbGeography).IsAssignableFrom(type)
+                    || typeof(DbGeometry).IsAssignableFrom(type)))
             {
-                if (value is GeographyPoint point)
+                for (var i = 0; i < spatialConverters.Length; i++)
                 {
-                    return point.ToDbGeography();
-                }
-
-                if (value is GeographyLineString s)
-                {
-                    return s.ToDbGeography();
+                    if (spatialConverters[i].CanConvert(type))
+                    {
+                        return spatialConverters[i].ToStorage(type, value);
+                    }
                 }
             }
 

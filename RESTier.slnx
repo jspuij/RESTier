@@ -10,6 +10,7 @@
     <Project Path="src/Microsoft.Restier.Breakdance/Microsoft.Restier.Breakdance.csproj" />
     <Project Path="src/Microsoft.Restier.Core/Microsoft.Restier.Core.csproj" />
     <Project Path="src/Microsoft.Restier.EntityFramework.Spatial/Microsoft.Restier.EntityFramework.Spatial.csproj" />
+    <Project Path="src/Microsoft.Restier.EntityFrameworkCore.Spatial/Microsoft.Restier.EntityFrameworkCore.Spatial.csproj" />
   </Folder>
   <Folder Name="/src/EntityFramework/" Id="a290b16b-6f9e-4703-8c01-135831ad90df">
     <Project Path="src/Microsoft.Restier.EntityFramework.Shared/Microsoft.Restier.EntityFramework.Shared.shproj" Id="83ad7aa8-9ed8-4b9f-966a-73ce9cae51c6" />

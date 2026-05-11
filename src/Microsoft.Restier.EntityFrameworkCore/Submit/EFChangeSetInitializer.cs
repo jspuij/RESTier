@@ -27,6 +27,25 @@ namespace Microsoft.Restier.EntityFrameworkCore
     public class EFChangeSetInitializer : DefaultChangeSetInitializer
     {
         private static readonly MethodInfo HandleMethod = typeof(EFChangeSetInitializer).GetMethod("HandleEntitySet", BindingFlags.Instance | BindingFlags.NonPublic);
+        private readonly Microsoft.Restier.Core.Spatial.ISpatialTypeConverter[] spatialConverters;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EFChangeSetInitializer"/> class.
+        /// </summary>
+        public EFChangeSetInitializer()
+            : this(null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EFChangeSetInitializer"/> class
+        /// with the specified spatial type converters.
+        /// </summary>
+        /// <param name="spatialConverters">The registered spatial type converters, or null for none.</param>
+        public EFChangeSetInitializer(System.Collections.Generic.IEnumerable<Microsoft.Restier.Core.Spatial.ISpatialTypeConverter> spatialConverters)
+        {
+            this.spatialConverters = spatialConverters?.ToArray() ?? System.Array.Empty<Microsoft.Restier.Core.Spatial.ISpatialTypeConverter>();
+        }
 
         /// <summary>
         /// Asynchronously prepare the <see cref="ChangeSet"/>.
@@ -223,7 +242,34 @@ namespace Microsoft.Restier.EntityFrameworkCore
                 return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
 
+            if (value is not null && IsNtsGeometryType(type))
+            {
+                for (var i = 0; i < spatialConverters.Length; i++)
+                {
+                    if (spatialConverters[i].CanConvert(type))
+                    {
+                        return spatialConverters[i].ToStorage(type, value);
+                    }
+                }
+            }
+
             return value;
+        }
+
+        private static bool IsNtsGeometryType(Type type)
+        {
+            var t = type;
+            while (t is not null && t != typeof(object))
+            {
+                if (t.FullName == "NetTopologySuite.Geometries.Geometry")
+                {
+                    return true;
+                }
+
+                t = t.BaseType;
+            }
+
+            return false;
         }
 
         private static async Task<object> FindResource(SubmitContext context, DataModificationItem item, CancellationToken cancellationToken)

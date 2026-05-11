@@ -26,9 +26,27 @@ namespace Microsoft.Restier.Tests.EntityFrameworkCore.Spatial
             public NetTopologySuite.Geometries.Point IndoorOrigin { get; set; }
         }
 
+        private class BadAttribute
+        {
+            public int Id { get; set; }
+
+            [Spatial(typeof(string))]
+            public NetTopologySuite.Geometries.Point Location { get; set; }
+        }
+
+        private class GenusMismatch
+        {
+            public int Id { get; set; }
+
+            [Spatial(typeof(GeometryPoint))]
+            public NetTopologySuite.Geometries.Point Location { get; set; }
+        }
+
         private class CityContext : DbContext
         {
             public DbSet<City> Cities { get; set; }
+
+            public DbSet<GenusMismatch> Mismatches { get; set; }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder.UseInMemoryDatabase("convention-tests");
@@ -38,6 +56,10 @@ namespace Microsoft.Restier.Tests.EntityFrameworkCore.Spatial
                 b.Entity<City>(e =>
                 {
                     e.Property(x => x.HeadquartersLocation).HasColumnType("geography");
+                });
+                b.Entity<GenusMismatch>(e =>
+                {
+                    e.Property(x => x.Location).HasColumnType("geography");
                 });
             }
         }
@@ -142,6 +164,33 @@ namespace Microsoft.Restier.Tests.EntityFrameworkCore.Spatial
 
             var clrName = Microsoft.Restier.AspNetCore.EdmClrPropertyMapper.GetClrPropertyName(prop, model);
             clrName.Should().Be(nameof(City.HeadquartersLocation));
+        }
+
+        [Fact]
+        public void Spatial_attribute_with_non_Microsoft_Spatial_type_throws()
+        {
+            var convention = new SpatialModelConvention(new ISpatialModelMetadataProvider[] { new NtsSpatialModelMetadataProvider() });
+            var builder = new ODataConventionModelBuilder { Namespace = "Test" };
+            builder.EntitySet<BadAttribute>("Bads");
+
+            var act = () => convention.CapturePhase(builder, new[] { typeof(BadAttribute) }, providerContext: null);
+
+            act.Should().Throw<Microsoft.Restier.Core.EdmModelValidationException>()
+                .WithMessage("*not a Microsoft.Spatial primitive type*");
+        }
+
+        [Fact]
+        public void Spatial_attribute_genus_mismatch_throws()
+        {
+            using var ctx = new CityContext();
+            var convention = new SpatialModelConvention(new ISpatialModelMetadataProvider[] { new NtsSpatialModelMetadataProvider() });
+            var builder = new ODataConventionModelBuilder { Namespace = "Test" };
+            builder.EntitySet<GenusMismatch>("Mismatches");
+
+            var act = () => convention.CapturePhase(builder, new[] { typeof(GenusMismatch) }, ctx);
+
+            act.Should().Throw<Microsoft.Restier.Core.EdmModelValidationException>()
+                .WithMessage("*genus*");
         }
     }
 }

@@ -3,6 +3,7 @@
 
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
+using Microsoft.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -258,6 +259,23 @@ namespace Microsoft.Restier.AspNetCore.Model
             {
                 return null;
             }
+
+            if (type == typeof(GeographyPoint)) { return EdmPrimitiveTypeKind.GeographyPoint; }
+            if (type == typeof(GeographyLineString)) { return EdmPrimitiveTypeKind.GeographyLineString; }
+            if (type == typeof(GeographyPolygon)) { return EdmPrimitiveTypeKind.GeographyPolygon; }
+            if (type == typeof(GeographyMultiPoint)) { return EdmPrimitiveTypeKind.GeographyMultiPoint; }
+            if (type == typeof(GeographyMultiLineString)) { return EdmPrimitiveTypeKind.GeographyMultiLineString; }
+            if (type == typeof(GeographyMultiPolygon)) { return EdmPrimitiveTypeKind.GeographyMultiPolygon; }
+            if (type == typeof(GeographyCollection)) { return EdmPrimitiveTypeKind.GeographyCollection; }
+            if (type == typeof(Geography)) { return EdmPrimitiveTypeKind.Geography; }
+            if (type == typeof(GeometryPoint)) { return EdmPrimitiveTypeKind.GeometryPoint; }
+            if (type == typeof(GeometryLineString)) { return EdmPrimitiveTypeKind.GeometryLineString; }
+            if (type == typeof(GeometryPolygon)) { return EdmPrimitiveTypeKind.GeometryPolygon; }
+            if (type == typeof(GeometryMultiPoint)) { return EdmPrimitiveTypeKind.GeometryMultiPoint; }
+            if (type == typeof(GeometryMultiLineString)) { return EdmPrimitiveTypeKind.GeometryMultiLineString; }
+            if (type == typeof(GeometryMultiPolygon)) { return EdmPrimitiveTypeKind.GeometryMultiPolygon; }
+            if (type == typeof(GeometryCollection)) { return EdmPrimitiveTypeKind.GeometryCollection; }
+            if (type == typeof(Geometry)) { return EdmPrimitiveTypeKind.Geometry; }
 
             throw new NotSupportedException(string.Format(
                 CultureInfo.InvariantCulture, Resources.NotSupportedType, type.FullName));

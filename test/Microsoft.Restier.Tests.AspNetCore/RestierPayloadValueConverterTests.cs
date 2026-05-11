@@ -6,6 +6,7 @@ using FluentAssertions;
 using Microsoft.OData;
 using Microsoft.OData.Edm;
 using Microsoft.Restier.AspNetCore;
+using Microsoft.Restier.Core.Spatial;
 using NSubstitute;
 using Xunit;
 
@@ -139,5 +140,35 @@ public class RestierPayloadValueConverterTests
 
         // Assert
         converter.Received(1).ConvertToPayloadValue(unsupportedValue, edmTypeReference);
+    }
+
+    [Fact]
+    public void Spatial_branch_dispatches_to_registered_ISpatialTypeConverter()
+    {
+        var fakeStorageValue = new object();
+        var fakeEdmValue = Microsoft.Spatial.GeographyPoint.Create(
+            Microsoft.Spatial.CoordinateSystem.Geography(4326), 0, 0, null, null);
+
+        var converter = Substitute.For<ISpatialTypeConverter>();
+        converter.CanConvert(typeof(object)).Returns(true);
+        converter.ToEdm(fakeStorageValue, typeof(Microsoft.Spatial.GeographyPoint)).Returns(fakeEdmValue);
+
+        var sut = new RestierPayloadValueConverter(new[] { converter });
+
+        var edmRef = new EdmPrimitiveTypeReference(
+            EdmCoreModel.Instance.GetPrimitiveType(EdmPrimitiveTypeKind.GeographyPoint),
+            isNullable: true);
+
+        var result = sut.ConvertToPayloadValue(fakeStorageValue, edmRef);
+
+        result.Should().BeSameAs(fakeEdmValue);
+        converter.Received().ToEdm(fakeStorageValue, typeof(Microsoft.Spatial.GeographyPoint));
+    }
+
+    [Fact]
+    public void Parameterless_construction_still_works()
+    {
+        var sut = new RestierPayloadValueConverter();
+        sut.Should().NotBeNull();
     }
 }

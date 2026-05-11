@@ -1,9 +1,12 @@
-﻿// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Microsoft Corporation.  All rights reserved.
 // Licensed under the MIT License.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.OData;
 using Microsoft.OData.Edm;
+using Microsoft.Restier.Core.Spatial;
 
 namespace Microsoft.Restier.AspNetCore
 {
@@ -12,6 +15,25 @@ namespace Microsoft.Restier.AspNetCore
     /// </summary>
     public class RestierPayloadValueConverter : ODataPayloadValueConverter
     {
+        private readonly ISpatialTypeConverter[] spatialConverters;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RestierPayloadValueConverter"/> class.
+        /// </summary>
+        public RestierPayloadValueConverter()
+            : this(null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RestierPayloadValueConverter"/> class.
+        /// </summary>
+        /// <param name="spatialConverters">The spatial type converters to use, resolved via DI.</param>
+        public RestierPayloadValueConverter(IEnumerable<ISpatialTypeConverter> spatialConverters)
+        {
+            this.spatialConverters = spatialConverters?.ToArray() ?? Array.Empty<ISpatialTypeConverter>();
+        }
+
         /// <summary>
         /// Converts the given primitive value defined in a type definition from the payload object.
         /// </summary>
@@ -20,6 +42,22 @@ namespace Microsoft.Restier.AspNetCore
         /// <returns>The converted payload value of the underlying type.</returns>
         public override object ConvertToPayloadValue(object value, IEdmTypeReference edmTypeReference)
         {
+            if (edmTypeReference is not null && IsSpatialEdmType(edmTypeReference) && value is not null)
+            {
+                var storageType = value.GetType();
+                for (var i = 0; i < spatialConverters.Length; i++)
+                {
+                    if (spatialConverters[i].CanConvert(storageType))
+                    {
+                        var targetClrType = MapEdmSpatialKindToClr(edmTypeReference.PrimitiveKind());
+                        if (targetClrType is not null)
+                        {
+                            return spatialConverters[i].ToEdm(value, targetClrType);
+                        }
+                    }
+                }
+            }
+
             if (edmTypeReference is not null)
             {
                 // System.DateTime is shared by *Edm.Date and Edm.DateTimeOffset.
@@ -78,5 +116,47 @@ namespace Microsoft.Restier.AspNetCore
 
             return base.ConvertToPayloadValue(value, edmTypeReference);
         }
+
+        private static bool IsSpatialEdmType(IEdmTypeReference reference)
+        {
+            var kind = reference.PrimitiveKind();
+            return kind == EdmPrimitiveTypeKind.Geography
+                || kind == EdmPrimitiveTypeKind.GeographyPoint
+                || kind == EdmPrimitiveTypeKind.GeographyLineString
+                || kind == EdmPrimitiveTypeKind.GeographyPolygon
+                || kind == EdmPrimitiveTypeKind.GeographyMultiPoint
+                || kind == EdmPrimitiveTypeKind.GeographyMultiLineString
+                || kind == EdmPrimitiveTypeKind.GeographyMultiPolygon
+                || kind == EdmPrimitiveTypeKind.GeographyCollection
+                || kind == EdmPrimitiveTypeKind.Geometry
+                || kind == EdmPrimitiveTypeKind.GeometryPoint
+                || kind == EdmPrimitiveTypeKind.GeometryLineString
+                || kind == EdmPrimitiveTypeKind.GeometryPolygon
+                || kind == EdmPrimitiveTypeKind.GeometryMultiPoint
+                || kind == EdmPrimitiveTypeKind.GeometryMultiLineString
+                || kind == EdmPrimitiveTypeKind.GeometryMultiPolygon
+                || kind == EdmPrimitiveTypeKind.GeometryCollection;
+        }
+
+        private static Type MapEdmSpatialKindToClr(EdmPrimitiveTypeKind kind) => kind switch
+        {
+            EdmPrimitiveTypeKind.Geography => typeof(Microsoft.Spatial.Geography),
+            EdmPrimitiveTypeKind.GeographyPoint => typeof(Microsoft.Spatial.GeographyPoint),
+            EdmPrimitiveTypeKind.GeographyLineString => typeof(Microsoft.Spatial.GeographyLineString),
+            EdmPrimitiveTypeKind.GeographyPolygon => typeof(Microsoft.Spatial.GeographyPolygon),
+            EdmPrimitiveTypeKind.GeographyMultiPoint => typeof(Microsoft.Spatial.GeographyMultiPoint),
+            EdmPrimitiveTypeKind.GeographyMultiLineString => typeof(Microsoft.Spatial.GeographyMultiLineString),
+            EdmPrimitiveTypeKind.GeographyMultiPolygon => typeof(Microsoft.Spatial.GeographyMultiPolygon),
+            EdmPrimitiveTypeKind.GeographyCollection => typeof(Microsoft.Spatial.GeographyCollection),
+            EdmPrimitiveTypeKind.Geometry => typeof(Microsoft.Spatial.Geometry),
+            EdmPrimitiveTypeKind.GeometryPoint => typeof(Microsoft.Spatial.GeometryPoint),
+            EdmPrimitiveTypeKind.GeometryLineString => typeof(Microsoft.Spatial.GeometryLineString),
+            EdmPrimitiveTypeKind.GeometryPolygon => typeof(Microsoft.Spatial.GeometryPolygon),
+            EdmPrimitiveTypeKind.GeometryMultiPoint => typeof(Microsoft.Spatial.GeometryMultiPoint),
+            EdmPrimitiveTypeKind.GeometryMultiLineString => typeof(Microsoft.Spatial.GeometryMultiLineString),
+            EdmPrimitiveTypeKind.GeometryMultiPolygon => typeof(Microsoft.Spatial.GeometryMultiPolygon),
+            EdmPrimitiveTypeKind.GeometryCollection => typeof(Microsoft.Spatial.GeometryCollection),
+            _ => null,
+        };
     }
 }

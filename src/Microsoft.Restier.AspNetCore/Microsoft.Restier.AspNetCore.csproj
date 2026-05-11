@@ -50,5 +50,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Microsoft.Restier.Tests.AspNetCore, $(StrongNamePublicKey)" />
+    <InternalsVisibleTo Include="Microsoft.Restier.Tests.EntityFrameworkCore.Spatial, $(StrongNamePublicKey)" />
   </ItemGroup>
 </Project>

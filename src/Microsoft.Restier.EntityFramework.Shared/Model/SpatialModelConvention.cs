@@ -194,6 +194,163 @@ namespace Microsoft.Restier.EntityFramework.Shared.Model
             };
         }
 
+        /// <summary>
+        /// Phase 2: after <c>builder.GetEdmModel()</c>, add the structural properties for the captured spatial
+        /// properties to the corresponding <see cref="IEdmEntityType"/>s, applying the active naming convention
+        /// and attaching <see cref="ClrPropertyInfoAnnotation"/> so Restier's CLR-name resolver works.
+        /// </summary>
+        /// <param name="model">The EDM model returned by <c>ODataConventionModelBuilder.GetEdmModel</c>.</param>
+        /// <param name="captures">The captures produced by <see cref="CapturePhase"/>.</param>
+        /// <param name="namingConvention">The active Restier naming convention.</param>
+        public void AugmentPhase(
+            EdmModel model,
+            IReadOnlyList<Capture> captures,
+            RestierNamingConvention namingConvention)
+        {
+            if (model is null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+
+            if (captures is null || captures.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var c in captures)
+            {
+                var entityEdmType = FindEntityType(model, c.EntityClrType);
+                if (entityEdmType is null)
+                {
+                    continue;
+                }
+
+                var edmName = ApplyNamingConvention(c.PropertyInfo.Name, namingConvention);
+                var primitiveKind = MapEdmTypeToPrimitiveKind(c.ResolvedEdmType);
+                var primitiveType = EdmCoreModel.Instance.GetPrimitive(primitiveKind, isNullable: true);
+
+                var added = entityEdmType.AddStructuralProperty(edmName, primitiveType);
+
+                model.SetAnnotationValue(added, new ClrPropertyInfoAnnotation(c.PropertyInfo));
+            }
+        }
+
+        private static EdmEntityType FindEntityType(EdmModel model, Type clrType)
+        {
+            foreach (var schemaElement in model.SchemaElements)
+            {
+                if (schemaElement is EdmEntityType edmEntity && string.Equals(edmEntity.Name, clrType.Name, StringComparison.Ordinal))
+                {
+                    return edmEntity;
+                }
+            }
+
+            return null;
+        }
+
+        private static string ApplyNamingConvention(string clrName, RestierNamingConvention naming)
+        {
+            if (naming == RestierNamingConvention.LowerCamelCase
+                || naming == RestierNamingConvention.LowerCamelCaseWithEnumMembers)
+            {
+                if (string.IsNullOrEmpty(clrName))
+                {
+                    return clrName;
+                }
+
+                return char.ToLowerInvariant(clrName[0]) + clrName.Substring(1);
+            }
+
+            return clrName;
+        }
+
+        private static EdmPrimitiveTypeKind MapEdmTypeToPrimitiveKind(Type microsoftSpatialType)
+        {
+            if (microsoftSpatialType == typeof(GeographyPoint))
+            {
+                return EdmPrimitiveTypeKind.GeographyPoint;
+            }
+
+            if (microsoftSpatialType == typeof(GeographyLineString))
+            {
+                return EdmPrimitiveTypeKind.GeographyLineString;
+            }
+
+            if (microsoftSpatialType == typeof(GeographyPolygon))
+            {
+                return EdmPrimitiveTypeKind.GeographyPolygon;
+            }
+
+            if (microsoftSpatialType == typeof(GeographyMultiPoint))
+            {
+                return EdmPrimitiveTypeKind.GeographyMultiPoint;
+            }
+
+            if (microsoftSpatialType == typeof(GeographyMultiLineString))
+            {
+                return EdmPrimitiveTypeKind.GeographyMultiLineString;
+            }
+
+            if (microsoftSpatialType == typeof(GeographyMultiPolygon))
+            {
+                return EdmPrimitiveTypeKind.GeographyMultiPolygon;
+            }
+
+            if (microsoftSpatialType == typeof(GeographyCollection))
+            {
+                return EdmPrimitiveTypeKind.GeographyCollection;
+            }
+
+            if (microsoftSpatialType == typeof(Geography))
+            {
+                return EdmPrimitiveTypeKind.Geography;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryPoint))
+            {
+                return EdmPrimitiveTypeKind.GeometryPoint;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryLineString))
+            {
+                return EdmPrimitiveTypeKind.GeometryLineString;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryPolygon))
+            {
+                return EdmPrimitiveTypeKind.GeometryPolygon;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryMultiPoint))
+            {
+                return EdmPrimitiveTypeKind.GeometryMultiPoint;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryMultiLineString))
+            {
+                return EdmPrimitiveTypeKind.GeometryMultiLineString;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryMultiPolygon))
+            {
+                return EdmPrimitiveTypeKind.GeometryMultiPolygon;
+            }
+
+            if (microsoftSpatialType == typeof(GeometryCollection))
+            {
+                return EdmPrimitiveTypeKind.GeometryCollection;
+            }
+
+            if (microsoftSpatialType == typeof(Geometry))
+            {
+                return EdmPrimitiveTypeKind.Geometry;
+            }
+
+            throw new ArgumentException(
+                $"Type '{microsoftSpatialType.FullName}' is not a recognized Microsoft.Spatial EDM primitive type.",
+                nameof(microsoftSpatialType));
+        }
+
         private void ValidateSpatialAttribute(
             Type entityClrType,
             PropertyInfo prop,

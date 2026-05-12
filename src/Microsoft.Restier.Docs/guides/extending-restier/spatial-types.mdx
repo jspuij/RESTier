@@ -1,0 +1,87 @@
+---
+title: "Spatial Types"
+description: "How to expose Microsoft.Spatial-typed properties via Restier on top of EF6 DbGeography/DbGeometry or EF Core NetTopologySuite columns."
+icon: "globe"
+sidebarTitle: "Spatial Types"
+---
+
+import { Tabs, Tab } from "@mintlify/components";
+
+Restier publishes spatial columns as OData `Edm.Geography*` / `Edm.Geometry*` primitives while letting your entity properties stay typed in the storage library. Microsoft.Spatial round-trips through a payload-value-converter on read and a change-set-initializer hook on write. SRID and Z/M coordinates are preserved.
+
+## Install the package
+
+<Tabs>
+  <Tab title="EF6">
+    ```bash
+    dotnet add package Microsoft.Restier.EntityFramework.Spatial
+    ```
+  </Tab>
+  <Tab title="EF Core">
+    ```bash
+    dotnet add package Microsoft.Restier.EntityFrameworkCore.Spatial
+    ```
+  </Tab>
+</Tabs>
+
+Register the converter and metadata provider with the route services:
+
+```csharp
+services
+    .AddRestierEntityFrameworkProviderServices<MyDbContext>(...)
+    .AddRestierSpatial();
+```
+
+## Declare your entity properties
+
+<Tabs>
+  <Tab title="EF6">
+    ```csharp
+    public class City
+    {
+        public int Id { get; set; }
+
+        public DbGeography HeadquartersLocation { get; set; }       // -> Edm.Geography (abstract base)
+
+        [Spatial(typeof(GeographyPolygon))]
+        public DbGeography ServiceArea { get; set; }                 // -> Edm.GeographyPolygon
+
+        public DbGeometry FloorPlan { get; set; }                    // -> Edm.Geometry
+    }
+    ```
+  </Tab>
+  <Tab title="EF Core">
+    ```csharp
+    public class City
+    {
+        public int Id { get; set; }
+
+        public Point HeadquartersLocation { get; set; }              // -> Edm.GeographyPoint (with HasColumnType("geography"))
+        public Polygon ServiceArea { get; set; }                      // -> Edm.GeographyPolygon
+
+        [Spatial(typeof(GeometryPoint))]
+        public Point IndoorOrigin { get; set; }                       // -> Edm.GeometryPoint (attribute override)
+    }
+    ```
+
+    For EF Core, the genus is inferred from the relational column type:
+    ```csharp
+    modelBuilder.Entity<City>(e =>
+    {
+        e.Property(x => x.HeadquartersLocation).HasColumnType("geography");
+        e.Property(x => x.ServiceArea).HasColumnType("geography");
+    });
+    ```
+
+    Without `HasColumnType` and without `[Spatial]`, model-build fails with `EdmModelValidationException` — annotate with `[Spatial]` to disambiguate.
+  </Tab>
+</Tabs>
+
+## What's not yet supported
+
+- Server-side `geo.distance` / `geo.length` / `geo.intersects` translation. Use `$filter` with these operators returns an error today; a future spec will deliver translation.
+- Non-EPSG `CoordinateSystem` values throw `InvalidOperationException` on write. Default-SRID configuration is planned for a future spec.
+
+## How it works
+
+Round-trip flows through Microsoft.Spatial's `WellKnownTextSqlFormatter` (SQL Server extended WKT with `SRID=N;` prefix) and the storage-library WKT APIs (`DbGeography.FromText` / NTS `WKTReader`). SRID and Z/M ordinates survive both directions.

@@ -48,6 +48,7 @@
                                 <Pages>
                                     guides/extending-restier/in-memory-provider;
                                     guides/extending-restier/temporal-types;
+                                    guides/extending-restier/spatial-types;
                                 </Pages>
                             </Group>
                             <Group Name="Clients" Icon="laptop-code">

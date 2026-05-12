@@ -47,7 +47,8 @@
             "icon": "puzzle",
             "pages": [
               "guides/extending-restier/in-memory-provider",
-              "guides/extending-restier/temporal-types"
+              "guides/extending-restier/temporal-types",
+              "guides/extending-restier/spatial-types"
             ]
           },
           {
@@ -449,15 +450,6 @@
                     ]
                   }
                 ]
-              },
-              {
-                "group": "Spatial",
-                "icon": "folder-tree",
-                "pages": [
-                  "api-reference/Microsoft/Spatial/index",
-                  "api-reference/Microsoft/Spatial/GeographyLineString",
-                  "api-reference/Microsoft/Spatial/GeographyPoint"
-                ]
               }
             ]
           },
@@ -467,27 +459,7 @@
             "pages": [
               "api-reference/System/index",
               "api-reference/System/IServiceProvider",
-              "api-reference/System/Type",
-              {
-                "group": "Data",
-                "icon": "folder-tree",
-                "pages": [
-                  {
-                    "group": "Entity",
-                    "icon": "folder-tree",
-                    "pages": [
-                      {
-                        "group": "Spatial",
-                        "icon": "folder-tree",
-                        "pages": [
-                          "api-reference/System/Data/Entity/Spatial/index",
-                          "api-reference/System/Data/Entity/Spatial/DbGeography"
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
+              "api-reference/System/Type"
             ]
           }
         ]

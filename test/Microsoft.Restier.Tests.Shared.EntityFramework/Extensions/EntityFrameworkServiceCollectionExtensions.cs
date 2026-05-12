@@ -16,6 +16,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Restier.EntityFrameworkCore;
+using Microsoft.Restier.EntityFrameworkCore.Spatial;
 using Microsoft.Restier.Tests.Shared.EntityFrameworkCore;
 using Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore;
 using Microsoft.Restier.Tests.Shared.Scenarios.Marvel.EFCore;
@@ -74,7 +75,9 @@ namespace Microsoft.Extensions.DependencyInjection
                 builder["Database"] = $"{builder["Database"]}_{Environment.Version.Major}";
             }
 
-            return services.AddEF6ProviderServices<TDbContext>(builder.ConnectionString);
+            services.AddEF6ProviderServices<TDbContext>(builder.ConnectionString);
+            Microsoft.Restier.EntityFramework.Spatial.ServiceCollectionExtensions.AddRestierSpatial(services);
+            return services;
         }
 
 #endif
@@ -129,7 +132,8 @@ namespace Microsoft.Extensions.DependencyInjection
             }
 
             services.AddEFCoreProviderServices<TDbContext>(options =>
-                options.UseSqlServer(builder.ConnectionString));
+                options.UseSqlServer(builder.ConnectionString, o => o.UseNetTopologySuite()));
+            services.AddRestierSpatial();
 
             if (typeof(TDbContext) == typeof(LibraryContext))
             {

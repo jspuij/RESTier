@@ -3,6 +3,7 @@
 
 using System;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
 
 namespace Microsoft.Restier.Samples.Postgres.AspNetCore.Models
 {
@@ -11,6 +12,12 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore.Models
         private static readonly Guid AdminTypeId = new("a1b2c3d4-0001-0001-0001-000000000001");
         private static readonly Guid EditorTypeId = new("a1b2c3d4-0001-0001-0001-000000000002");
         private static readonly Guid ViewerTypeId = new("a1b2c3d4-0001-0001-0001-000000000003");
+
+        private static Point CreatePoint(double longitude, double latitude)
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            return factory.CreatePoint(new Coordinate(longitude, latitude));
+        }
 
         partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
         {
@@ -21,7 +28,7 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore.Models
             );
 
             modelBuilder.Entity<User>().HasData(
-                new User { Id = new Guid("b2c3d4e5-0002-0002-0002-000000000001"), EmailAddress = "admin@example.com", UserTypeId = AdminTypeId },
+                new User { Id = new Guid("b2c3d4e5-0002-0002-0002-000000000001"), EmailAddress = "admin@example.com", UserTypeId = AdminTypeId, HomeLocation = CreatePoint(4.9041, 52.3676) },
                 new User { Id = new Guid("b2c3d4e5-0002-0002-0002-000000000002"), EmailAddress = "editor@example.com", UserTypeId = EditorTypeId },
                 new User { Id = new Guid("b2c3d4e5-0002-0002-0002-000000000003"), EmailAddress = "viewer@example.com", UserTypeId = ViewerTypeId },
                 new User { Id = new Guid("b2c3d4e5-0002-0002-0002-000000000004"), EmailAddress = "another.admin@example.com", UserTypeId = AdminTypeId }

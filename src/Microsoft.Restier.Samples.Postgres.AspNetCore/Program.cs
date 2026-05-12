@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Restier.AspNetCore;
 using Microsoft.Restier.EntityFrameworkCore;
+using Microsoft.Restier.EntityFrameworkCore.Spatial;
 using Microsoft.Restier.Samples.Postgres.AspNetCore.Controllers;
 using Microsoft.Restier.Samples.Postgres.AspNetCore.Models;
 using System;
@@ -34,7 +35,8 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore
                         var connectionString = builder.Configuration.GetConnectionString(nameof(RestierTestContext));
                         restierServices
                             .AddEFCoreProviderServices<RestierTestContext>(dbOptions =>
-                                dbOptions.UseNpgsql(connectionString))
+                                dbOptions.UseNpgsql(connectionString, o => o.UseNetTopologySuite()))
+                            .AddRestierSpatial()
                             .AddSingleton(new ODataValidationSettings
                             {
                                 MaxTop = 5,
@@ -52,7 +54,7 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore
 
             // Apply pending migrations and seed data on startup.
             var optionsBuilder = new DbContextOptionsBuilder<RestierTestContext>();
-            optionsBuilder.UseNpgsql(app.Configuration.GetConnectionString(nameof(RestierTestContext)));
+            optionsBuilder.UseNpgsql(app.Configuration.GetConnectionString(nameof(RestierTestContext)), o => o.UseNetTopologySuite());
             using (var db = new RestierTestContext(optionsBuilder.Options))
             {
                 db.Database.Migrate();

@@ -17,7 +17,7 @@ namespace Microsoft.Restier.Samples.Postgres.AspNetCore.Models
                 .Build();
 
             var optionsBuilder = new DbContextOptionsBuilder<RestierTestContext>();
-            optionsBuilder.UseNpgsql(configuration.GetConnectionString("RestierTestContext"));
+            optionsBuilder.UseNpgsql(configuration.GetConnectionString("RestierTestContext"), o => o.UseNetTopologySuite());
 
             return new RestierTestContext(optionsBuilder.Options);
         }

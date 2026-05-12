@@ -354,6 +354,18 @@
                         ]
                       },
                       {
+                        "group": "Spatial",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/Core/Spatial/index",
+                          "api-reference/Microsoft/Restier/Core/Spatial/ISpatialModelMetadataProvider",
+                          "api-reference/Microsoft/Restier/Core/Spatial/ISpatialTypeConverter",
+                          "api-reference/Microsoft/Restier/Core/Spatial/SpatialAttribute",
+                          "api-reference/Microsoft/Restier/Core/Spatial/SpatialGenus",
+                          "api-reference/Microsoft/Restier/Core/Spatial/SridPrefixHelpers"
+                        ]
+                      },
+                      {
                         "group": "Submit",
                         "icon": "folder-tree",
                         "pages": [
@@ -389,7 +401,30 @@
                       "api-reference/Microsoft/Restier/EntityFramework/EFModelBuilder",
                       "api-reference/Microsoft/Restier/EntityFramework/EFModelMapper",
                       "api-reference/Microsoft/Restier/EntityFramework/EntityFrameworkApi",
-                      "api-reference/Microsoft/Restier/EntityFramework/IEntityFrameworkApi"
+                      "api-reference/Microsoft/Restier/EntityFramework/IEntityFrameworkApi",
+                      {
+                        "group": "Shared",
+                        "icon": "folder-tree",
+                        "pages": [
+                          {
+                            "group": "Model",
+                            "icon": "folder-tree",
+                            "pages": [
+                              "api-reference/Microsoft/Restier/EntityFramework/Shared/Model/index",
+                              "api-reference/Microsoft/Restier/EntityFramework/Shared/Model/SpatialModelConvention"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "group": "Spatial",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/EntityFramework/Spatial/index",
+                          "api-reference/Microsoft/Restier/EntityFramework/Spatial/DbSpatialConverter",
+                          "api-reference/Microsoft/Restier/EntityFramework/Spatial/DbSpatialModelMetadataProvider"
+                        ]
+                      }
                     ]
                   },
                   {
@@ -401,7 +436,16 @@
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/EFModelBuilder",
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/EFModelMapper",
                       "api-reference/Microsoft/Restier/EntityFrameworkCore/EntityFrameworkApi",
-                      "api-reference/Microsoft/Restier/EntityFrameworkCore/IEntityFrameworkApi"
+                      "api-reference/Microsoft/Restier/EntityFrameworkCore/IEntityFrameworkApi",
+                      {
+                        "group": "Spatial",
+                        "icon": "folder-tree",
+                        "pages": [
+                          "api-reference/Microsoft/Restier/EntityFrameworkCore/Spatial/index",
+                          "api-reference/Microsoft/Restier/EntityFrameworkCore/Spatial/NtsSpatialConverter",
+                          "api-reference/Microsoft/Restier/EntityFrameworkCore/Spatial/NtsSpatialModelMetadataProvider"
+                        ]
+                      }
                     ]
                   }
                 ]

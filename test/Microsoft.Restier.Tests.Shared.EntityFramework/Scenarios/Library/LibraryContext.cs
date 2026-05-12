@@ -40,6 +40,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
 
         public IDbSet<Review> Reviews { get; set; }
 
+        public IDbSet<SpatialPlace> SpatialPlaces { get; set; }
+
         #endregion
 
         #region Constructors
@@ -74,6 +76,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
         public DbSet<Employee> Readers { get; set; }
 
         public DbSet<Review> Reviews { get; set; }
+
+        public DbSet<SpatialPlace> SpatialPlaces { get; set; }
 
         #endregion
 
@@ -112,6 +116,14 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 .HasOne(r => r.Book)
                 .WithMany(b => b.Reviews)
                 .HasForeignKey(r => r.BookId);
+
+            modelBuilder.Entity<SpatialPlace>(e =>
+            {
+                e.Property(x => x.HeadquartersLocation).HasColumnType("geography");
+                e.Property(x => x.ServiceArea).HasColumnType("geography");
+                // IndoorOrigin uses [Spatial(typeof(GeographyPoint))] to exercise the attribute on a second geography Point.
+                e.Property(x => x.IndoorOrigin).HasColumnType("geography");
+            });
         }
 
         #endregion

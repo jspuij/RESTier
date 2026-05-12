@@ -196,7 +196,74 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 BookId = new Guid("19d68c75-1313-4369-b2bf-521f2b260a59"),
             });
 
+#if EF6
+            // SQL Server native types only available on Windows / SQL Server hosts; skip seeding spatial
+            // values on platforms where DbGeography.FromText would throw.
+            SpatialPlace spatialPlace1;
+            try
+            {
+                spatialPlace1 = new SpatialPlace
+                {
+                    Id = 1,
+                    Name = "Spatial Place 1",
+                    HeadquartersLocation = System.Data.Entity.Spatial.DbGeography.FromText("POINT(4.9041 52.3676)", 4326),
+                    ServiceArea = System.Data.Entity.Spatial.DbGeography.FromText("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))", 4326),
+                    FloorPlan = System.Data.Entity.Spatial.DbGeometry.FromText("POINT(100 200)", 0),
+                };
+            }
+            catch (System.Exception)
+            {
+                // Native types unavailable (e.g., macOS without Microsoft.SqlServer.Types). Seed without spatial.
+                spatialPlace1 = new SpatialPlace { Id = 1, Name = "Spatial Place 1" };
+            }
+
+            libraryContext.SpatialPlaces.Add(spatialPlace1);
             libraryContext.SaveChanges();
+#endif
+
+#if EFCore
+            libraryContext.SaveChanges();
+
+            // Spatial seeding requires CLR to be enabled on SQL Server (sp_configure 'clr enabled', 1).
+            // If the instance doesn't have CLR enabled (e.g., bare Docker SQL Server), skip spatial values.
+            try
+            {
+                var geographyFactory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+
+                var hq = geographyFactory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(4.9041, 52.3676));
+
+                // SQL Server geography requires a counterclockwise (positive signed area) exterior ring.
+                // Counterclockwise in 2D (lon,lat): (0,0) -> (1,0) -> (1,1) -> (0,1) -> (0,0).
+                var area = geographyFactory.CreatePolygon(new[]
+                {
+                    new NetTopologySuite.Geometries.Coordinate(0, 0),
+                    new NetTopologySuite.Geometries.Coordinate(1, 0),
+                    new NetTopologySuite.Geometries.Coordinate(1, 1),
+                    new NetTopologySuite.Geometries.Coordinate(0, 1),
+                    new NetTopologySuite.Geometries.Coordinate(0, 0),
+                });
+
+                // IndoorOrigin uses HasColumnType("geography"); use a representative geographic point.
+                var indoor = geographyFactory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(10, 20));
+
+                libraryContext.SpatialPlaces.Add(new SpatialPlace
+                {
+                    Name = "Spatial Place 1",
+                    HeadquartersLocation = hq,
+                    ServiceArea = area,
+                    IndoorOrigin = indoor,
+                });
+
+                libraryContext.SaveChanges();
+            }
+            catch (System.Exception)
+            {
+                // Spatial insert failed (e.g., CLR not enabled on SQL Server). Seed without spatial values.
+                libraryContext.ChangeTracker.Clear();
+                libraryContext.SpatialPlaces.Add(new SpatialPlace { Name = "Spatial Place 1" });
+                libraryContext.SaveChanges();
+            }
+#endif
 
         }
 

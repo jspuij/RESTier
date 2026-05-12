@@ -53,6 +53,16 @@
         <Property Name="Addr" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Address" />
         <Property Name="Universe" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Universe" />
       </EntityType>
+      <EntityType Name="SpatialPlace">
+        <Key>
+          <PropertyRef Name="Id" />
+        </Key>
+        <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+        <Property Name="Name" Type="Edm.String" />
+        <Property Name="HeadquartersLocation" Type="Edm.Geography" />
+        <Property Name="ServiceArea" Type="Edm.GeographyPolygon" />
+        <Property Name="FloorPlan" Type="Edm.Geometry" />
+      </EntityType>
       <ComplexType Name="Address">
         <Property Name="Street" Type="Edm.String" />
         <Property Name="Zip" Type="Edm.String" />
@@ -136,6 +146,7 @@
           </Annotation>
         </EntitySet>
         <EntitySet Name="Readers" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.Employee" />
+        <EntitySet Name="SpatialPlaces" EntityType="Microsoft.Restier.Tests.Shared.Scenarios.Library.SpatialPlace" />
         <Singleton Name="MyFavoriteBook" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Book">
           <NavigationPropertyBinding Path="Publisher" Target="Publishers" />
           <NavigationPropertyBinding Path="Reviews" Target="Reviews" />

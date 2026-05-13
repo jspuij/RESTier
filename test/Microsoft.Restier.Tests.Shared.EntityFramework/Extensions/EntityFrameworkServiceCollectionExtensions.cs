@@ -1,6 +1,7 @@
 #if EF6
     using Microsoft.Restier.EntityFramework;
     using System;
+    using System.Collections.Concurrent;
     using System.Data.Common;
     using System.Data.Entity;
     using System.Data.Entity.Infrastructure;
@@ -30,6 +31,8 @@ namespace Microsoft.Extensions.DependencyInjection
 #if EF6
 
         private static IConfiguration _configuration;
+        private static readonly ConcurrentDictionary<string, object> DatabaseLocks = new();
+        private static readonly ConcurrentDictionary<string, bool> InitializedDatabases = new();
 
         /// <summary>
         /// Gets the test configuration, loading user secrets if available.
@@ -77,7 +80,44 @@ namespace Microsoft.Extensions.DependencyInjection
 
             services.AddEF6ProviderServices<TDbContext>(builder.ConnectionString);
             Microsoft.Restier.EntityFramework.Spatial.ServiceCollectionExtensions.AddRestierSpatial(services);
+
+            // Ensure a clean, freshly-seeded database once per process. EF6's
+            // DropCreateDatabaseIfModelChanges only wipes on a model-hash change, which lets
+            // destructive tests (DeepUpdate / DeepInsert / Batch) accumulate state across
+            // sessions and eventually corrupt seeded fixtures (Publisher1, "Jungle Book, The",
+            // etc.). Mirror the EFCore SeedDatabase behavior so each `dotnet test` run starts
+            // from the same known seed.
+            SeedDatabase<TDbContext>(builder.ConnectionString);
+
             return services;
+        }
+
+        /// <summary>
+        /// Drops and re-initializes the EF6 database for <typeparamref name="TContext"/> once per
+        /// process per connection string. Relies on the initializer set in the context constructor
+        /// (typically <see cref="DropCreateDatabaseIfModelChanges{TContext}"/>) to recreate the
+        /// schema and run Seed.
+        /// </summary>
+        private static void SeedDatabase<TContext>(string connectionString)
+            where TContext : DbContext
+        {
+            var databaseLock = DatabaseLocks.GetOrAdd(connectionString, _ => new object());
+            lock (databaseLock)
+            {
+                if (InitializedDatabases.ContainsKey(connectionString))
+                {
+                    return;
+                }
+
+                using var context = (TContext)Activator.CreateInstance(typeof(TContext), connectionString);
+                if (context.Database.Exists())
+                {
+                    context.Database.Delete();
+                }
+                context.Database.Initialize(force: true);
+
+                InitializedDatabases[connectionString] = true;
+            }
         }
 
 #endif

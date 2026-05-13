@@ -6,6 +6,7 @@ using System;
 using System.Collections.ObjectModel;
 #if EF6
 using System.Data.Entity;
+using System.Linq;
 #endif
 #if EFCore
 using Microsoft.EntityFrameworkCore;
@@ -197,28 +198,36 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
             });
 
 #if EF6
-            // SQL Server native types only available on Windows / SQL Server hosts; skip seeding spatial
-            // values on platforms where DbGeography.FromText would throw.
-            SpatialPlace spatialPlace1;
+            // Commit the non-spatial seed first so it survives even if the spatial save throws.
+            // EF6's UpdateTranslator eagerly initializes the spatial type default map for any
+            // entity that targets a table with geography/geometry columns, which requires
+            // Microsoft.SqlServer.Types — an assembly that's only loadable on .NET Framework or
+            // with a third-party shim. On .NET 5+ without the shim, saving SpatialPlace throws.
+            libraryContext.SaveChanges();
+
             try
             {
-                spatialPlace1 = new SpatialPlace
+                libraryContext.SpatialPlaces.Add(new SpatialPlace
                 {
                     Id = 1,
                     Name = "Spatial Place 1",
                     HeadquartersLocation = System.Data.Entity.Spatial.DbGeography.FromText("POINT(4.9041 52.3676)", 4326),
                     ServiceArea = System.Data.Entity.Spatial.DbGeography.FromText("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))", 4326),
                     FloorPlan = System.Data.Entity.Spatial.DbGeometry.FromText("POINT(100 200)", 0),
-                };
+                });
+                libraryContext.SaveChanges();
             }
             catch (System.Exception)
             {
-                // Native types unavailable (e.g., macOS without Microsoft.SqlServer.Types). Seed without spatial.
-                spatialPlace1 = new SpatialPlace { Id = 1, Name = "Spatial Place 1" };
+                // Spatial unavailable on this runtime (no Microsoft.SqlServer.Types). Detach the
+                // failed entry so subsequent context use isn't poisoned, and leave SpatialPlaces
+                // empty — the EF6 spatial tests in Microsoft.Restier.Tests.EntityFramework.Spatial
+                // are already [Skip]-marked for the same reason.
+                foreach (var entry in libraryContext.ChangeTracker.Entries<SpatialPlace>().ToList())
+                {
+                    entry.State = System.Data.Entity.EntityState.Detached;
+                }
             }
-
-            libraryContext.SpatialPlaces.Add(spatialPlace1);
-            libraryContext.SaveChanges();
 #endif
 
 #if EFCore

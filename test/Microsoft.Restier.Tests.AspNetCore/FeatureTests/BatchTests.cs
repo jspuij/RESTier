@@ -79,10 +79,12 @@ public abstract class BatchTests<TApi, TContext> : RestierTestBase<TApi> where T
             var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
             response.IsSuccessStatusCode.Should().BeTrue();
-            // Normalize line endings: MIME responses use \r\n but verbatim string constants use \n on Unix.
-            var normalizedContent = content.Replace("\r\n", "\n");
-            normalizedContent.Should().Contain(BatchResponse1);
-            normalizedContent.Should().Contain(BatchResponse2);
+            // Normalize line endings on both sides: MIME responses use CRLF; verbatim string
+            // constants take whatever line endings the source file was checked out with (CRLF
+            // on Windows, LF or CRLF on Unix depending on core.autocrlf).
+            var normalizedContent = content.Replace("\r\n", Environment.NewLine);
+            normalizedContent.Should().Contain(BatchResponse1.Replace("\r\n", Environment.NewLine));
+            normalizedContent.Should().Contain(BatchResponse2.Replace("\r\n", Environment.NewLine));
         }
         finally
         {

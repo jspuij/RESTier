@@ -28,9 +28,12 @@ public abstract class UpdateTests<TApi, TContext> : RestierTestBase<TApi> where 
     [Fact]
     public async Task UpdateBookWithPublisher_IgnoresNavigationProperty()
     {
+        // Filter to a book with a publisher so the result is deterministic regardless of residual
+        // state from sibling tests in the shared Library DB (books inserted with null FKs may sort
+        // ahead of the seeded books).
         var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
-            resource: "/Books?$expand=Publisher&$top=1",
+            resource: "/Books?$expand=Publisher&$filter=PublisherId ne null&$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
             serviceCollection: ConfigureServices);
         bookRequest.IsSuccessStatusCode.Should().BeTrue();

@@ -86,6 +86,16 @@ namespace Microsoft.Restier.AspNetCore.Formatter
                     graph = new DateTimeOffset((DateTime)graph, TimeSpan.Zero);
                 }
             }
+            else if (primitiveType is not null && graph is not null && RestierPayloadValueConverter.IsSpatialEdmType(primitiveType))
+            {
+                // For spatial primitives, run the payload value converter so storage values
+                // (e.g., NetTopologySuite geometries from EF Core) are translated into
+                // Microsoft.Spatial values before ODataPrimitiveValue is constructed. Without
+                // this, OData throws "ODataPrimitiveValue was instantiated with a value of
+                // type 'NetTopologySuite.Geometries.Point' ... can only wrap values which can
+                // be represented as primitive EDM types".
+                graph = payloadValueConverter.ConvertToPayloadValue(graph, primitiveType);
+            }
 
             return base.CreateODataPrimitiveValue(graph, primitiveType, writeContext);
         }

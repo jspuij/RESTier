@@ -117,7 +117,7 @@ namespace Microsoft.Restier.AspNetCore
             return base.ConvertToPayloadValue(value, edmTypeReference);
         }
 
-        private static bool IsSpatialEdmType(IEdmTypeReference reference)
+        internal static bool IsSpatialEdmType(IEdmTypeReference reference)
         {
             var kind = reference.PrimitiveKind();
             return kind == EdmPrimitiveTypeKind.Geography

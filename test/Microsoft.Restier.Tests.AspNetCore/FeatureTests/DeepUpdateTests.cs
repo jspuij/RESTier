@@ -106,10 +106,12 @@ public abstract class DeepUpdateTests<TApi, TContext> : RestierTestBase<TApi>
     [Fact]
     public async Task DeepUpdate_NullUnlinks_V40()
     {
-        // GET a book that has a publisher
+        // GET a book that has a publisher. Filter so the result is deterministic regardless of
+        // residual state from prior tests in the same Library DB (e.g. books inserted by sibling
+        // tests with null FKs that may sort ahead of the seeded books).
         var bookRequest = await RestierTestHelpers.ExecuteTestRequest<TApi>(
             HttpMethod.Get,
-            resource: "/Books?$expand=Publisher&$top=1",
+            resource: "/Books?$expand=Publisher&$filter=PublisherId ne null&$top=1",
             acceptHeader: ODataConstants.DefaultAcceptHeader,
             serviceCollection: ConfigureServices);
         bookRequest.IsSuccessStatusCode.Should().BeTrue();

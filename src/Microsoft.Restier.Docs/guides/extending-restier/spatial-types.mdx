@@ -77,6 +77,44 @@ services
   </Tab>
 </Tabs>
 
+## Running EF6 spatial on .NET 5+
+
+EF6's spatial bridge (`DbGeography.FromText`, `DbSpatialServices.Default.AsText…`) reflects into the `Microsoft.SqlServer.Types` assembly at runtime via `Assembly.Load` against a hardcoded strong-name list (`PublicKeyToken=89845dcd8080cc91`, official Microsoft key). On **.NET Framework + Windows + SQL Server installed** that assembly lives in the GAC alongside its native `SqlServerSpatial*.dll` — no extra setup. On **.NET 5+ (including .NET 8/9/10 on Windows)** the assembly is **not present by default** and EF6 throws *"Spatial types and functions are not available for this provider because the assembly 'Microsoft.SqlServer.Types' version 10 or higher could not be found"* on any `DbGeography` / `DbGeometry` operation.
+
+<Warning>
+This affects RESTier too — if you've installed `Microsoft.Restier.EntityFramework.Spatial` on a .NET 5+ host without the package below, `DbSpatialConverter` will throw on every read/write. `Microsoft.Restier.EntityFramework.Spatial` deliberately does **not** take a hard dependency on the backing assembly so that you stay in control of how/whether the Windows-only native binaries are deployed.
+</Warning>
+
+### Recommended: install `Microsoft.SqlServer.Types` 160.x
+
+The official Microsoft package ships `lib/netstandard2.1/Microsoft.SqlServer.Types.dll` strong-named with the Microsoft key (`PublicKeyToken=89845dcd8080cc91`, `Version=16.0.0.0`), which EF6 6.5.x accepts on .NET 8/9/10:
+
+```bash
+dotnet add package Microsoft.SqlServer.Types --version 160.1000.6
+```
+
+This is what the RESTier test suite uses. With just the package installed, `DbGeography` Points and all `DbGeometry` types round-trip through `DbSpatialConverter` on Windows, Linux, and macOS using only the managed types.
+
+#### When you also need native operations
+
+`SqlGeography`'s constructor calls `IsValidExpensive` → `GeodeticIsValid` for multi-point geographies (LineString, Polygon, …), which requires the Windows-only native `SqlServerSpatial160.dll`. `SpatialEquals`, `STDistance`, `STIntersects` and the other computational-geometry methods also live in the native binary. To enable any of these you must call the loader once at process startup:
+
+```csharp
+// Program.cs (or any one-time init)
+Microsoft.SqlServer.Types.SqlServerTypes.Utilities
+    .LoadNativeAssemblies(AppContext.BaseDirectory);
+```
+
+Linux / macOS hosts cannot run native operations — those code paths will throw `PlatformNotSupportedException` or `DllNotFoundException`. Push computations server-side (do the comparison in SQL via `$filter` — future work) or stick to Point geography + Geometry where the managed path is sufficient.
+
+<Warning>
+**`dotMorten.Microsoft.SqlServer.Types` is not a viable substitute for EF6.** Although it's frequently recommended as a cross-platform shim for SqlClient consumers, dotMorten ships **unsigned** (`PublicKeyToken=null`) with `Version=2.5.0.0`. EF6's `SqlTypesAssemblyLoader` rejects it on both checks and falls through to the *"version 10 or higher could not be found"* error. If you want EF6 spatial on .NET 5+, you need the strong-named official package.
+</Warning>
+
+<Info>
+EF Core users do not need any of this — the EF Core spatial path uses NetTopologySuite, which is a self-contained managed library with no native dependencies.
+</Info>
+
 ## What's not yet supported
 
 - Server-side `geo.distance` / `geo.length` / `geo.intersects` translation. Use `$filter` with these operators returns an error today; a future spec will deliver translation.

@@ -16,6 +16,10 @@ Restier publishes spatial columns as OData `Edm.Geography*` / `Edm.Geometry*` pr
     ```bash
     dotnet add package Microsoft.Restier.EntityFramework.Spatial
     ```
+
+    <Note>
+    On .NET 5+ (including .NET 8/9/10 on Windows) you also need the `Microsoft.SqlServer.Types` package or EF6 will throw on every spatial read/write. See [Running EF6 spatial on .NET 5+](#running-ef6-spatial-on-net-5) below.
+    </Note>
   </Tab>
   <Tab title="EF Core">
     ```bash
@@ -79,7 +83,9 @@ services
 
 ## Running EF6 spatial on .NET 5+
 
-EF6's spatial bridge (`DbGeography.FromText`, `DbSpatialServices.Default.AsText…`) reflects into the `Microsoft.SqlServer.Types` assembly at runtime via `Assembly.Load` against a hardcoded strong-name list (`PublicKeyToken=89845dcd8080cc91`, official Microsoft key). On **.NET Framework + Windows + SQL Server installed** that assembly lives in the GAC alongside its native `SqlServerSpatial*.dll` — no extra setup. On **.NET 5+ (including .NET 8/9/10 on Windows)** the assembly is **not present by default** and EF6 throws *"Spatial types and functions are not available for this provider because the assembly 'Microsoft.SqlServer.Types' version 10 or higher could not be found"* on any `DbGeography` / `DbGeometry` operation.
+If your EF6 app on .NET 5+ throws *"Spatial types and functions are not available for this provider because the assembly 'Microsoft.SqlServer.Types' version 10 or higher could not be found"* on every `DbGeography` / `DbGeometry` operation, the cause is the runtime: `Microsoft.SqlServer.Types` is not present by default on .NET 5+ — not even on Windows.
+
+Under the hood, EF6's spatial bridge (`DbGeography.FromText`, `DbSpatialServices.Default.AsText…`) reflects into `Microsoft.SqlServer.Types` via `Assembly.Load` against a hardcoded strong-name list (official Microsoft public key). On **.NET Framework + Windows + SQL Server installed** that assembly lives in the GAC alongside its native `SqlServerSpatial*.dll`. On **.NET 5+**, neither is wired up out of the box.
 
 <Warning>
 This affects RESTier too — if you've installed `Microsoft.Restier.EntityFramework.Spatial` on a .NET 5+ host without the package below, `DbSpatialConverter` will throw on every read/write. `Microsoft.Restier.EntityFramework.Spatial` deliberately does **not** take a hard dependency on the backing assembly so that you stay in control of how/whether the Windows-only native binaries are deployed.
@@ -105,7 +111,7 @@ Microsoft.SqlServer.Types.SqlServerTypes.Utilities
     .LoadNativeAssemblies(AppContext.BaseDirectory);
 ```
 
-Linux / macOS hosts cannot run native operations — those code paths will throw `PlatformNotSupportedException` or `DllNotFoundException`. Push computations server-side (do the comparison in SQL via `$filter` — future work) or stick to Point geography + Geometry where the managed path is sufficient.
+Linux / macOS hosts cannot run native operations — those code paths will throw `PlatformNotSupportedException` or `DllNotFoundException`. Stick to Point geography and `DbGeometry` types, where the managed path is sufficient, until server-side `$filter` translation lands (see [What's not yet supported](#whats-not-yet-supported) below).
 
 <Warning>
 **`dotMorten.Microsoft.SqlServer.Types` is not a viable substitute for EF6.** Although it's frequently recommended as a cross-platform shim for SqlClient consumers, dotMorten ships **unsigned** (`PublicKeyToken=null`) with `Version=2.5.0.0`. EF6's `SqlTypesAssemblyLoader` rejects it on both checks and falls through to the *"version 10 or higher could not be found"* error. If you want EF6 spatial on .NET 5+, you need the strong-named official package.

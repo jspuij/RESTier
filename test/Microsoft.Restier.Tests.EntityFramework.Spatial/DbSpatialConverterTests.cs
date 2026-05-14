@@ -30,6 +30,10 @@ namespace Microsoft.Restier.Tests.EntityFramework.Spatial
                 }
                 catch (Exception)
                 {
+                    // Intentionally broad: EF6 surfaces the native-loader failure as
+                    // PlatformNotSupportedException, but under xUnit v3's reflection-based
+                    // test invocation that specific type doesn't reliably propagate. Treat
+                    // any exception from FromText as "native binary not loadable".
                     return false;
                 }
             }

@@ -13,25 +13,7 @@ namespace Microsoft.Restier.Tests.EntityFramework.Spatial
 {
     public class EFChangeSetInitializerSpatialTests
     {
-        public static bool SqlServerTypesAvailable
-        {
-            get
-            {
-                try
-                {
-                    _ = DbSpatialServices.Default;
-                    DbGeography.FromText("POINT(0 0)", 4326);
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-        }
-
-        [Fact(Skip = "Requires Microsoft.SqlServer.Types native assembly (Windows / SQL Server only).",
-              SkipUnless = nameof(SqlServerTypesAvailable))]
+        [Fact]
         public void ConvertToEfValue_dispatches_to_registered_spatial_converter_for_DbGeography()
         {
             var fakeDbg = DbGeography.FromText("POINT(1 2)", 4326);

@@ -45,16 +45,18 @@ public class RestierSpatialFilterBinderTests
     }
 
     /// <summary>
-    /// Surrogate EDM entity. Its CLR spatial properties use Microsoft.Spatial types so that
-    /// ODataConventionModelBuilder emits the correct Edm.Geometry* primitives. The property
-    /// names intentionally match those on <see cref="NtsEntity"/> so that after the
-    /// ClrTypeAnnotation swap the FilterBinder resolves NTS CLR members at bind time.
+    /// Surrogate EDM entity. Its CLR spatial properties use Microsoft.Spatial Geography*
+    /// types so that ODataConventionModelBuilder emits Edm.Geography* primitives — required
+    /// so the OData parser accepts <c>geography'SRID=4326;POINT(0 0)'</c> literals in
+    /// <c>geo.distance</c> / <c>geo.intersects</c> calls against these properties. The
+    /// property names intentionally match those on <see cref="NtsEntity"/> so that after
+    /// the ClrTypeAnnotation swap the FilterBinder resolves NTS CLR members at bind time.
     /// </summary>
     private class EdmSurrogateEntity
     {
         public int Id { get; set; }
-        public GeometryPoint Location { get; set; }
-        public GeometryLineString RouteLine { get; set; }
+        public GeographyPoint Location { get; set; }
+        public GeographyLineString RouteLine { get; set; }
     }
 
     /// <summary>
@@ -133,6 +135,58 @@ public class RestierSpatialFilterBinderTests
                 Found = true;
             }
             return base.VisitMember(node);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // geo.distance
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// geo.distance(prop, literal) lt N must lower to MethodCallExpression(prop, "Distance",
+    /// loweredLiteral) where loweredLiteral is a storage-typed constant. NTS's Distance is
+    /// declared on Geometry and takes Geometry — but the bound argument types are concrete
+    /// Point. The binder must resolve the method by parameter-type assignability, not by
+    /// exact match.
+    /// </summary>
+    [Fact]
+    public void BindGeoDistance_EmitsStorageDistanceMethodCall_WithLoweredLiteral()
+    {
+        var (model, source) = BuildNtsFixture();
+        var clause = ParseFilter(model, "Things",
+            "geo.distance(Location,geography'SRID=4326;POINT(0 0)') lt 1000000");
+
+        var binder = new RestierSpatialFilterBinder(new ISpatialTypeConverter[] { new NtsSpatialConverter() });
+        var context = new QueryBinderContext(model, new ODataQuerySettings(), typeof(NtsEntity));
+
+        var bound = binder.ApplyBind(source, clause, context);
+        bound.Should().NotBeNull();
+
+        // The expression tree must contain a MethodCallExpression on Distance whose receiver
+        // is the Location property and whose single argument is a Constant of NTS Point.
+        var visitor = new FindDistanceCallVisitor();
+        visitor.Visit(bound.Expression);
+        visitor.Found.Should().BeTrue(
+            "the bound expression must contain a MethodCallExpression for Geometry.Distance(Geometry)");
+        visitor.ArgumentType.Should().BeAssignableTo(typeof(NetTopologySuite.Geometries.Geometry),
+            "the lowered literal must be an NTS geometry, not a Microsoft.Spatial value");
+    }
+
+    private class FindDistanceCallVisitor : ExpressionVisitor
+    {
+        public bool Found { get; private set; }
+        public Type ArgumentType { get; private set; }
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            if (node.Method.Name == "Distance"
+                && typeof(NetTopologySuite.Geometries.Geometry).IsAssignableFrom(node.Object?.Type)
+                && node.Arguments.Count == 1)
+            {
+                Found = true;
+                ArgumentType = node.Arguments[0].Type;
+            }
+            return base.VisitMethodCall(node);
         }
     }
 }

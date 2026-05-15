@@ -27,6 +27,7 @@ namespace Microsoft.Restier.AspNetCore.Query
         private readonly ApiBase api;
         private readonly ODataPath path;
         private readonly ODataQuerySettings querySettings;
+        private readonly IFilterBinder filterBinder;
         private readonly IDictionary<Type, Action<ODataPathSegment>> handlers = new Dictionary<Type, Action<ODataPathSegment>>();
         private readonly IEdmModel edmModel;
 
@@ -43,7 +44,12 @@ namespace Microsoft.Restier.AspNetCore.Query
         /// <see cref="FilterSegment"/> expressions so that <see cref="TimeZoneInfo"/>-aware
         /// DateTime literal conversion matches the rest of the filter pipeline (issue #704).
         /// </param>
-        public RestierQueryBuilder(ApiBase api, ODataPath path, ODataQuerySettings querySettings)
+        /// <param name="filterBinder">
+        /// Optional <see cref="IFilterBinder"/> used by path-segment $filter handling. When null,
+        /// <see cref="HandleFilterPathSegment"/> falls back to a fresh <c>FilterBinder</c>
+        /// — observationally identical to the historical behavior.
+        /// </param>
+        public RestierQueryBuilder(ApiBase api, ODataPath path, ODataQuerySettings querySettings, IFilterBinder filterBinder = null)
         {
             Ensure.NotNull(api, nameof(api));
             Ensure.NotNull(path, nameof(path));
@@ -51,6 +57,7 @@ namespace Microsoft.Restier.AspNetCore.Query
             this.api = api;
             this.path = path;
             this.querySettings = querySettings;
+            this.filterBinder = filterBinder;
 
             edmModel = this.api.Model;
 
@@ -320,10 +327,10 @@ namespace Microsoft.Restier.AspNetCore.Query
             // the ASP.NET Core OData FilterBinder infrastructure.
             var filterClause = new FilterClause(filterSegment.Expression, filterSegment.RangeVariable);
 
-            var filterBinder = new FilterBinder();
+            var binder = this.filterBinder ?? new FilterBinder();
             var context = new QueryBinderContext(edmModel, querySettings, currentType);
 
-            queryable = filterBinder.ApplyBind(queryable, filterClause, context);
+            queryable = binder.ApplyBind(queryable, filterClause, context);
         }
     }
 }

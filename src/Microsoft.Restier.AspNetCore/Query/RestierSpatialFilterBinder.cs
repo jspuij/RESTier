@@ -192,7 +192,14 @@ public class RestierSpatialFilterBinder : FilterBinder
             try
             {
                 var storageValue = this.converters[i].ToStorage(targetStorageType, literalValue);
-                return Expression.Constant(storageValue, targetStorageType);
+                // Type the Expression.Constant by the RUNTIME type of the converted storage value
+                // (e.g. NTS.Point), not the widened targetStorageType (e.g. NTS.Geometry). EF Core's
+                // NTS plugin dispatches on the constant's declared type, and a visible cast to the
+                // abstract base interferes with its method-translation lookup — translation of
+                // Geometry.Distance/Intersects fails. The receiver method is still resolved via
+                // ResolveSpatialInstanceMethod (IsAssignableFrom), so Expression.Call upcasts the
+                // concrete subtype to the method's Geometry parameter at the call site implicitly.
+                return Expression.Constant(storageValue, storageValue?.GetType() ?? targetStorageType);
             }
             catch (InvalidOperationException ex)
             {
@@ -234,6 +241,13 @@ public class RestierSpatialFilterBinder : FilterBinder
     /// <c>Geometry.Distance(Geometry)</c> is found even when invoked against
     /// <c>typeof(Point)</c> with a <c>typeof(Point)</c> argument.
     /// </summary>
+    /// <remarks>
+    /// When an inherited method is selected, the returned <see cref="MethodInfo"/> is
+    /// normalized so its <see cref="MemberInfo.ReflectedType"/> equals its
+    /// <see cref="MemberInfo.DeclaringType"/>. This matches the canonical form used by
+    /// EF Core's NTS translator dictionary (which uses <c>MethodInfo</c> equality);
+    /// without the normalization, EF Core fails to find a translator for the call.
+    /// </remarks>
     internal static MethodInfo ResolveSpatialInstanceMethod(
         Type sourceType, string methodName, Type argType)
     {
@@ -250,6 +264,20 @@ public class RestierSpatialFilterBinder : FilterBinder
             }
             if (parameters[0].ParameterType.IsAssignableFrom(argType))
             {
+                // Normalize: when the method is inherited, reflection returns a MethodInfo
+                // whose ReflectedType is the derived type. EF Core's translator dictionary
+                // keys on MethodInfo equality, and the canonical entry has
+                // ReflectedType == DeclaringType. Re-resolve on the declaring type so the
+                // returned MethodInfo matches what EF Core's translator expects.
+                if (m.ReflectedType != m.DeclaringType)
+                {
+                    return m.DeclaringType.GetMethod(
+                        methodName,
+                        BindingFlags.Public | BindingFlags.Instance,
+                        binder: null,
+                        types: new[] { parameters[0].ParameterType },
+                        modifiers: null);
+                }
                 return m;
             }
         }

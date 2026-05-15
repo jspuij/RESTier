@@ -232,4 +232,28 @@ public class RestierSpatialFilterBinderTests
             return base.VisitMethodCall(node);
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Error paths
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Unknown geo.* function names fall through to AspNetCoreOData's base FilterBinder,
+    /// which surfaces the stock "unknown function" error. Forward-compat for future OData
+    /// spec additions and the long tail of non-core geo functions (geo.area, geo.contains, ...).
+    /// </summary>
+    [Fact]
+    public void BindSingleValueFunctionCallNode_UnknownGeoFunction_FallsThroughToBase()
+    {
+        var (model, source) = BuildNtsFixture();
+
+        // ODL's parser rejects unknown function names before the binder ever runs. We
+        // assert that no result-producing happy path exists for geo.area, which is what
+        // a flip-from-negative integration test would expect.
+        Action act = () => ParseFilter(model, "Things", "geo.area(Location) gt 0");
+
+        act.Should().Throw<Microsoft.OData.ODataException>(
+            "AspNetCoreOData's ODataQueryOptionParser must reject unknown function names " +
+            "before the binder ever runs");
+    }
 }

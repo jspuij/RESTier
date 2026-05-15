@@ -33,6 +33,7 @@ using Microsoft.AspNetCore.OData.Routing.Controllers;
 using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.AspNetCore.OData.Routing;
 using Microsoft.AspNetCore.OData.Formatter.Value;
+using Microsoft.AspNetCore.OData.Query.Expressions;
 using Microsoft.Net.Http.Headers;
 
 namespace Microsoft.Restier.AspNetCore
@@ -701,7 +702,8 @@ namespace Microsoft.Restier.AspNetCore
             }
 
             var parentPath = new ODataPath(parentSegments);
-            var parentQuery = new RestierQueryBuilder(api, parentPath, querySettings).BuildQuery();
+            var filterBinder = HttpContext.Request.GetRouteServices()?.GetService<IFilterBinder>();
+            var parentQuery = new RestierQueryBuilder(api, parentPath, querySettings, filterBinder).BuildQuery();
             if (parentQuery is null)
             {
                 return false;
@@ -714,7 +716,8 @@ namespace Microsoft.Restier.AspNetCore
 
         private IQueryable GetQuery(ODataPath path)
         {
-            var builder = new RestierQueryBuilder(api, path, querySettings);
+            var filterBinder = HttpContext.Request.GetRouteServices()?.GetService<IFilterBinder>();
+            var builder = new RestierQueryBuilder(api, path, querySettings, filterBinder);
             var queryable = builder.BuildQuery();
             shouldReturnCount = builder.IsCountPathSegmentPresent;
             shouldWriteRawValue = builder.IsValuePathSegmentPresent;

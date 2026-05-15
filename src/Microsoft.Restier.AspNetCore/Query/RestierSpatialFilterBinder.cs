@@ -169,6 +169,10 @@ public class RestierSpatialFilterBinder : FilterBinder
             {
                 throw new ODataException(ex.Message, ex);
             }
+            catch (NotSupportedException ex)
+            {
+                throw new ODataException(ex.Message, ex);
+            }
         }
 
         throw new ODataException(string.Format(

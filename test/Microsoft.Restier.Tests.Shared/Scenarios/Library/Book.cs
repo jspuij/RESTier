@@ -47,6 +47,15 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         /// </summary>
         public BookCategory? Category { get; set; }
 
+        /// <summary>
+        /// The date the book was published. CLR <see cref="DateTime"/> (not <see cref="DateTimeOffset"/>) so
+        /// regression tests can verify the <see cref="DateTimeKind"/> produced by the OData $filter binder —
+        /// see https://github.com/OData/RESTier/issues/704. Nullable so payloads that omit the field
+        /// don't end up with <see cref="DateTime.MinValue"/> (Kind=Unspecified), which the OData
+        /// DateTimeOffset deserializer rejects.
+        /// </summary>
+        public DateTime? PublishDate { get; set; }
+
         public Book()
         {
             Reviews = new ObservableCollection<Review>();

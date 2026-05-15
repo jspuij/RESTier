@@ -156,6 +156,10 @@ public static class RestierODataOptionsExtensions
                 .AddScoped(sp => (ApiBase)sp.GetService(type));
 
             services.AddSingleton(typeof(RestierNamingConvention), (object)namingConvention);
+            // RemoveAll is required: AspNetCore.OData's AddOData() registers ODataQuerySettings
+            // in the outer service collection (and the route container inherits from it), so
+            // without this our TryAddScoped below silently no-ops and the route ends up with the
+            // default (TimeZone=null) settings — re-opening issue #704.
             services.RemoveAll<ODataQuerySettings>()
                 .AddRestierCoreServices()
                 .AddRestierConventionBasedServices(type);
@@ -172,11 +176,19 @@ public static class RestierODataOptionsExtensions
                 .AddSingleton<IChainedService<IQueryExpressionExpander>, RestierQueryExpressionExpander>()
                 .AddSingleton<IChainedService<IQueryExpressionSourcer>, RestierQueryExpressionSourcer>();
 
-            // Only add if none are there. We have removed the default OData one before.
+            // Stock AspNetCore.OData does not register ODataQuerySettings in DI — it constructs
+            // one on-demand from EnableQueryAttribute defaults. Restier registers one here so the
+            // RestierController and RestierQueryBuilder share a single, route-scoped instance.
+            // Propagate ODataOptions.TimeZone so the AspNetCore.OData filter binder converts
+            // DateTimeOffset literals into DateTime constants with the right DateTimeKind. Without
+            // this, the binder falls back to TimeZoneInfo.Local and emits Kind=Local, which
+            // Npgsql 6+ then rejects against "timestamp with time zone" columns. See
+            // https://github.com/OData/RESTier/issues/704.
             services.TryAddScoped((sp) => new ODataQuerySettings
             {
                 HandleNullPropagation = HandleNullPropagationOption.False,
                 PageSize = null,  // no support for server enforced PageSize, yet
+                TimeZone = oDataOptions.TimeZone,
             });
 
             // default registration, same as OData. Should not be necesary but just in case.

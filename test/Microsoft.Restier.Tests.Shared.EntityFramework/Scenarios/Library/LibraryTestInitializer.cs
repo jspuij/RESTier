@@ -118,6 +118,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                          Title = "A Clockwork Orange",
                          IsActive = true,
                          Category = BookCategory.Fiction,
+                         PublishDate = new DateTime(1962, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                     },
                     new Book
                     {
@@ -126,13 +127,15 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                         Title = "Jungle Book, The",
                         IsActive = true,
                         Category = BookCategory.Fiction,
+                        PublishDate = new DateTime(1894, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                     },
                     new Book
                     {
                         Id = new Guid("2A139A64-B7D9-4F9F-B7F4-E93C1678EB0F"),
                         Isbn = "1122334455668",
                         Title = "Sea of Rustoleum",
-                        IsActive = false
+                        IsActive = false,
+                        PublishDate = new DateTime(2020, 6, 1, 0, 0, 0, DateTimeKind.Utc),
                     },
                     new AudioBook
                     {
@@ -141,7 +144,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                         Title = "Matilda",
                         IsActive = true,
                         Duration = TimeSpan.FromHours(4.5),
-                        Narrator = "Kate Winslet"
+                        Narrator = "Kate Winslet",
+                        PublishDate = new DateTime(1988, 4, 1, 0, 0, 0, DateTimeKind.Utc),
                     },
                 }
             });
@@ -162,7 +166,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                         Id = new Guid("0697576b-d616-4057-9d28-ed359775129e"),
                         Isbn = "1315290642409",
                         Title = "Color Purple, The",
-                        IsActive = true                        
+                        IsActive = true,
+                        PublishDate = new DateTime(1982, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                     }
                 }
             });
@@ -172,7 +177,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 Id = new Guid("2D760F15-974D-4556-8CDF-D610128B537E"),
                 Isbn = "1122334455667",
                 Title = "Sea of Rust",
-                IsActive = true
+                IsActive = true,
+                PublishDate = new DateTime(2017, 9, 5, 0, 0, 0, DateTimeKind.Utc),
             });
 
             libraryContext.LibraryCards.Add(new LibraryCard

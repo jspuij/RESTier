@@ -227,7 +227,7 @@ Location: http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)
 Content-Type: application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8
 OData-Version: 4.0
 
-{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""PublisherId"":""Publisher1"",""IsActive"":true,""Category"":null}
+{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""PublisherId"":""Publisher1"",""IsActive"":true,""Category"":null,""PublishDate"":null}
 ";
 
     private const string BatchResponse2 =
@@ -240,7 +240,7 @@ Location: http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)
 Content-Type: application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8
 OData-Version: 4.0
 
-{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""PublisherId"":""Publisher1"",""IsActive"":true,""Category"":null}
+{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""PublisherId"":""Publisher1"",""IsActive"":true,""Category"":null,""PublishDate"":null}
 ";
 
     private const string JsonBatchRequest = @"
@@ -281,7 +281,7 @@ OData-Version: 4.0
             ]
         }";
 
-    private const string JsonBatchResponse = @"{""responses"":[{""id"":""1"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""PublisherId"":null,""IsActive"":true,""Category"":null}},{""id"":""2"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""PublisherId"":null,""IsActive"":true,""Category"":null}}]}";
+    private const string JsonBatchResponse = @"{""responses"":[{""id"":""1"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(79874b37-ce46-4f4c-aa74-8e02ce4d8b67)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""79874b37-ce46-4f4c-aa74-8e02ce4d8b67"",""Isbn"":""1111111111111"",""Title"":""Batch Test #1"",""PublisherId"":null,""IsActive"":true,""Category"":null,""PublishDate"":null}},{""id"":""2"",""status"":201,""headers"":{""location"":""http://localhost/api/tests/Books(c6b67ec7-badc-45c6-98c7-c76b570ce694)"",""content-type"":""application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8"",""odata-version"":""4.0""}, ""body"" :{""@odata.context"":""http://localhost/api/tests/$metadata#Books/$entity"",""Id"":""c6b67ec7-badc-45c6-98c7-c76b570ce694"",""Isbn"":""2222222222222"",""Title"":""Batch Test #2"",""PublisherId"":null,""IsActive"":true,""Category"":null,""PublishDate"":null}}]}";
 
 
     private const string CollectionBindBatchRequest =

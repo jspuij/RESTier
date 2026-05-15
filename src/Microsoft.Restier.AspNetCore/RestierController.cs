@@ -701,7 +701,7 @@ namespace Microsoft.Restier.AspNetCore
             }
 
             var parentPath = new ODataPath(parentSegments);
-            var parentQuery = new RestierQueryBuilder(api, parentPath).BuildQuery();
+            var parentQuery = new RestierQueryBuilder(api, parentPath, querySettings).BuildQuery();
             if (parentQuery is null)
             {
                 return false;
@@ -714,7 +714,7 @@ namespace Microsoft.Restier.AspNetCore
 
         private IQueryable GetQuery(ODataPath path)
         {
-            var builder = new RestierQueryBuilder(api, path);
+            var builder = new RestierQueryBuilder(api, path, querySettings);
             var queryable = builder.BuildQuery();
             shouldReturnCount = builder.IsCountPathSegmentPresent;
             shouldWriteRawValue = builder.IsValuePathSegmentPresent;

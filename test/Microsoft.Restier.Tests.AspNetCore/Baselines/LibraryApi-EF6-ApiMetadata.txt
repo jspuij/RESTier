@@ -11,6 +11,7 @@
         <Property Name="PublisherId" Type="Edm.String" />
         <Property Name="IsActive" Type="Edm.Boolean" Nullable="false" />
         <Property Name="Category" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.BookCategory" />
+        <Property Name="PublishDate" Type="Edm.DateTimeOffset" />
         <NavigationProperty Name="Publisher" Type="Microsoft.Restier.Tests.Shared.Scenarios.Library.Publisher">
           <ReferentialConstraint Property="PublisherId" ReferencedProperty="Id" />
         </NavigationProperty>

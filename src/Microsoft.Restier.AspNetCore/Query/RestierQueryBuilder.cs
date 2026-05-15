@@ -26,6 +26,7 @@ namespace Microsoft.Restier.AspNetCore.Query
 
         private readonly ApiBase api;
         private readonly ODataPath path;
+        private readonly ODataQuerySettings querySettings;
         private readonly IDictionary<Type, Action<ODataPathSegment>> handlers = new Dictionary<Type, Action<ODataPathSegment>>();
         private readonly IEdmModel edmModel;
 
@@ -37,12 +38,19 @@ namespace Microsoft.Restier.AspNetCore.Query
         /// </summary>
         /// <param name="api">The Api to use.</param>
         /// <param name="path">The path to process.</param>
-        public RestierQueryBuilder(ApiBase api, ODataPath path)
+        /// <param name="querySettings">
+        /// The per-route <see cref="ODataQuerySettings"/> resolved from DI. Used when binding
+        /// <see cref="FilterSegment"/> expressions so that <see cref="TimeZoneInfo"/>-aware
+        /// DateTime literal conversion matches the rest of the filter pipeline (issue #704).
+        /// </param>
+        public RestierQueryBuilder(ApiBase api, ODataPath path, ODataQuerySettings querySettings)
         {
             Ensure.NotNull(api, nameof(api));
             Ensure.NotNull(path, nameof(path));
+            Ensure.NotNull(querySettings, nameof(querySettings));
             this.api = api;
             this.path = path;
+            this.querySettings = querySettings;
 
             edmModel = this.api.Model;
 
@@ -313,7 +321,7 @@ namespace Microsoft.Restier.AspNetCore.Query
             var filterClause = new FilterClause(filterSegment.Expression, filterSegment.RangeVariable);
 
             var filterBinder = new FilterBinder();
-            var context = new QueryBinderContext(edmModel, new ODataQuerySettings(), currentType);
+            var context = new QueryBinderContext(edmModel, querySettings, currentType);
 
             queryable = filterBinder.ApplyBind(queryable, filterClause, context);
         }

@@ -702,7 +702,7 @@ namespace Microsoft.Restier.AspNetCore
             }
 
             var parentPath = new ODataPath(parentSegments);
-            var filterBinder = HttpContext.Request.GetRouteServices()?.GetService<IFilterBinder>();
+            var filterBinder = HttpContext.Request.GetRouteServices().GetService<IFilterBinder>();
             var parentQuery = new RestierQueryBuilder(api, parentPath, querySettings, filterBinder).BuildQuery();
             if (parentQuery is null)
             {
@@ -716,7 +716,7 @@ namespace Microsoft.Restier.AspNetCore
 
         private IQueryable GetQuery(ODataPath path)
         {
-            var filterBinder = HttpContext.Request.GetRouteServices()?.GetService<IFilterBinder>();
+            var filterBinder = HttpContext.Request.GetRouteServices().GetService<IFilterBinder>();
             var builder = new RestierQueryBuilder(api, path, querySettings, filterBinder);
             var queryable = builder.BuildQuery();
             shouldReturnCount = builder.IsCountPathSegmentPresent;

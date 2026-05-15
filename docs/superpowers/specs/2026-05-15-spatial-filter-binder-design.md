@@ -1,7 +1,7 @@
 # Spatial `$filter` Translation in Restier (Spec B)
 
 **Date:** 2026-05-15
-**Status:** Design draft (awaiting user review)
+**Status:** Design draft — revised after first review (awaiting confirmation)
 **Predecessor:** [Spec A — Spatial Types Round-Trip](./2026-05-06-spatial-types-roundtrip-design.md)
 **Issue:** [OData/RESTier#673](https://github.com/OData/RESTier/issues/673) (filtering portion)
 
@@ -18,9 +18,9 @@ This is the second of three planned specs. Source-generator/`[SpatialProperty]` 
 | Function coverage | `geo.distance`, `geo.length`, `geo.intersects` | The three v4-core spatial functions. Non-core (`geo.coveredby`, `geo.contains`, ...) fall through to the base `FilterBinder` (HTTP 400) — out of scope. |
 | EF flavor symmetry | Both EF6 and EF Core | Mirrors Spec A. EF6's `DbGeography.Distance` and EF Core's NTS `Geometry.Distance` both translate natively under their respective providers, so a single binder works for both via Spec A's `ISpatialTypeConverter` indirection. |
 | Mechanism | Custom `IFilterBinder` subclass | AspNetCoreOData's official extension point. Alternatives (post-bind tree rewrite, ODL-level visitor) don't survive: the default `FilterBinder` throws on `geo.*` before any downstream processor sees the expression, and ODL has no node kind to express "call CLR method X". |
-| Opt-in surface | Extend `AddRestierSpatial()` to also register the binder | One-line opt-in for round-trip *and* filtering, matching Spec A's UX. `TryAddSingleton` makes double-registration (both EF6 and EF Core spatial packages referenced) safe. |
-| Error policy on bad input | Hybrid — happy-path translates, unknown function names fall through, genus / CRS mismatches throw `ODataException` | Translates the three supported functions; preserves AspNetCoreOData's stock "unknown function" error for forward compat with future OData additions; surfaces user errors as `400 Bad Request` with property/function context. |
-| Path-segment `$filter` coverage | Fixed too | `RestierQueryBuilder.HandleFilterPathSegment` currently `new FilterBinder()`s with no DI resolution. Spec B switches it to resolve `IFilterBinder` from the request services (default fallback preserved). One mental model for both `?$filter=` and `/$filter(...)` URL shapes. |
+| Opt-in surface | Extend `AddRestierSpatial()` to also register the binder | One-line opt-in for round-trip *and* filtering, matching Spec A's UX. Uses `services.Replace(...)` rather than `TryAdd` because AspNetCoreOData's `AddRouteComponents` registers a default `IFilterBinder` *before* the user's route-services delegate runs (verified at `RestierODataOptionsExtensions.cs:147-180`), so `TryAdd` would be a silent no-op. Both `.Spatial` packages registering the same implementation type means double-`Replace` is also a no-op when both are referenced. |
+| Error policy on bad input | Hybrid — happy-path translates, unknown function names fall through, genus / CRS mismatches throw `ODataException` | Translates the three supported functions; preserves AspNetCoreOData's stock "unknown function" error for forward compat with future OData additions; surfaces user errors as `400 Bad Request` with property/function context. **Genus validation source:** the EDM-side `IEdmTypeReference` on each ODL argument node — *not* the `ISpatialTypeConverter` contract, which is genus-agnostic by design (`NtsSpatialConverter.CanConvert` only checks `Geometry`-assignability; both converters' `ToStorage` accept either Microsoft.Spatial genus). |
+| Path-segment `$filter` coverage | Fixed too | `RestierQueryBuilder.HandleFilterPathSegment` currently `new FilterBinder()`s with no DI access. Spec B widens the QueryBuilder ctor to accept an optional `IFilterBinder` (the controller resolves it from `HttpContext.Request.GetRouteServices()` and passes it in); `HandleFilterPathSegment` uses it instead of constructing a fresh `FilterBinder`. One mental model for both `?$filter=` and `/$filter(...)` URL shapes. |
 | `geo.length` argument validation | Delegated to the provider | OData v4 specifies the input must be `Edm.GeographyLineString` / `Edm.GeometryLineString`. EF6 `DbGeography.Length` returns `null` for non-LineString inputs; NTS `Geometry.Length` returns the boundary length (perimeter for polygons). We don't duplicate the validation at bind time — would require ODL EDM-type plumbing the binder doesn't have. |
 | Provider awareness | None | EF6 SQL Server, EF Core SQL Server NTS plugin, and Npgsql PostGIS each provide their own LINQ-to-SQL translation for the storage CLR members. Spec B is a pure binding/expression-shaping concern. |
 | CRS handling on literals | Mirror Spec A — fail-fast on non-EPSG | Spec A's `ISpatialTypeConverter.ToStorage` throws `InvalidOperationException` for `CoordinateSystem.EpsgId == null`. The binder catches that specific exception and rewraps as `ODataException` so it flows out as a 400. Consistent posture across read, write, and filter. |
@@ -56,8 +56,8 @@ The current main-path `$filter` ingestion goes through `RestierController.ApplyQ
 | # | Component | Assembly | Notes |
 |---|-----------|----------|-------|
 | 1 | `RestierSpatialFilterBinder` (subclass of `Microsoft.AspNetCore.OData.Query.Expressions.FilterBinder`) | `Microsoft.Restier.AspNetCore` | Stateless. Ctor accepts `IEnumerable<ISpatialTypeConverter>` (Spec A primitive). Overrides `BindSingleValueFunctionCallNode`. |
-| 2 | `RestierQueryBuilder.HandleFilterPathSegment` refactor | `Microsoft.Restier.AspNetCore` | Resolves `IFilterBinder` from the request services, falls back to `new FilterBinder()` when nothing's registered. Restores parity with the main `$filter` path. |
-| 3 | `AddRestierSpatial()` extension update — both flavors | `Microsoft.Restier.EntityFramework.Spatial`, `Microsoft.Restier.EntityFrameworkCore.Spatial` | Adds `services.TryAddSingleton<IFilterBinder, RestierSpatialFilterBinder>()`. `TryAdd` keeps double-registration safe if both packages are referenced. |
+| 2 | `RestierQueryBuilder` ctor widening + `HandleFilterPathSegment` refactor | `Microsoft.Restier.AspNetCore` | New optional ctor parameter `IFilterBinder filterBinder = null`. `HandleFilterPathSegment` uses the injected binder when present, falls back to `new FilterBinder()` when null. Both call sites in `RestierController.cs:704, 717` are updated to resolve `IFilterBinder` from `HttpContext.Request.GetRouteServices()` and pass it through. |
+| 3 | `AddRestierSpatial()` extension update — both flavors | `Microsoft.Restier.EntityFramework.Spatial`, `Microsoft.Restier.EntityFrameworkCore.Spatial` | Adds `services.Replace(ServiceDescriptor.Singleton<IFilterBinder, RestierSpatialFilterBinder>())`. `Replace` (not `TryAdd`) because AspNetCoreOData's default `IFilterBinder` is already registered by the surrounding `AddRouteComponents` call before the user-services delegate runs. Documented order: consumers who register their own custom `IFilterBinder` must do so *after* `AddRestierSpatial()`. |
 | 4 | Two new resource strings | `Microsoft.Restier.AspNetCore` | `SpatialFilter_GenusMismatch`, `SpatialFilter_NoConverterForStorageType`. Both used only inside Spec B's dispatch arms. |
 
 ### Why one binder for both flavors
@@ -101,75 +101,160 @@ namespace Microsoft.Restier.AspNetCore.Query
             }
         }
 
-        // BindGeo* helpers: bind each child via base.Bind, lower spatial-literal
-        // ConstantExpressions to storage values via the converters, then Expression.Call
-        // / Expression.Property on the storage CLR type.
+        // BindGeo* helpers: (0) validate genus on the ODL nodes' IEdmTypeReferences,
+        // (1) bind each child via base.Bind, (2) lower spatial-literal ConstantExpressions
+        // to storage values via the converters, (3) Expression.Call / Expression.Property
+        // on the storage CLR type using inheritance-walking method resolution.
+
+        // Reflection helper used by Distance / Intersects dispatch.
+        // We can't call sourceType.GetMethod("Distance", new[] { argType }) because:
+        //   - NTS's Geometry.Distance(Geometry) is inherited by Point/LineString/etc.
+        //     but exact-parameter-type lookup returns null for derived arg types.
+        //   - DbGeography.Distance(DbGeography) is fine, but using one strategy for
+        //     both flavors keeps the binder flavor-free.
+        // Instead, walk methods named X with arity 1 and pick the first one whose
+        // parameter type is assignable from argType. The instance receiver follows the
+        // same rule — inherited members surface through GetMethods() on the derived type.
+        private static MethodInfo ResolveSpatialInstanceMethod(
+            Type sourceType, string methodName, Type argType)
+        {
+            foreach (var m in sourceType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (m.Name != methodName) { continue; }
+                var ps = m.GetParameters();
+                if (ps.Length != 1) { continue; }
+                if (ps[0].ParameterType.IsAssignableFrom(argType)) { return m; }
+            }
+            return null;
+        }
     }
 }
 ```
 
 The `converters = null` default keeps the parameterless construction working for the (rare) case where someone hand-builds the binder outside DI — the base behavior is preserved.
 
-### `HandleFilterPathSegment` change
+**Why `ResolveSpatialInstanceMethod` is necessary.** NTS's `WKTReader.Read(body)` returns the concrete subclass (`Point`, `LineString`, `Polygon`, …) for the parsed WKT, and `NtsSpatialConverter.ToStorage` validates assignability but doesn't widen the runtime type — so a lowered literal whose target storage type is `Point` will have `Expression.Type == typeof(Point)`. `Geometry.Distance(Geometry other)` is declared on the abstract base, and `typeof(Point).GetMethod("Distance", new[] { typeof(Point) })` returns null because exact parameter-type lookup doesn't walk inheritance for parameters. The helper walks `GetMethods()` (which already includes inherited members on the derived type) and matches by name + assignability. `Expression.Call(pointInstance, geometryDistanceMethod, pointArg)` then succeeds because the LINQ expression API accepts derived-type arguments for an assignable parameter slot. `Length` is unaffected — properties are looked up via `GetProperty("Length")` which is already inheritance-aware (single name, no parameter list to mismatch).
 
-Before (`src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs:307-319`):
+### `RestierQueryBuilder` ctor widening + `HandleFilterPathSegment` change
 
-```csharp
-var filterBinder = new FilterBinder();
-queryable = filterBinder.ApplyBind(queryable, filterClause, context);
-```
+`RestierQueryBuilder` today (`src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs:23-60`) is an `internal class` with two private fields (`api`, `path`) plus derived state. It has no `IServiceProvider` and no `IFilterBinder`. The two call sites are inside the controller, where `HttpContext.Request.GetRouteServices()` is already used elsewhere (`RestierController.cs:226, 498`) for route-scoped service resolution.
 
-After (sketch):
+Spec B widens the ctor with an **optional** binder parameter and threads it from both call sites:
 
 ```csharp
-var filterBinder = serviceProvider.GetService<IFilterBinder>() ?? new FilterBinder();
-queryable = filterBinder.ApplyBind(queryable, filterClause, context);
+// src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs
+internal class RestierQueryBuilder
+{
+    private readonly ApiBase api;
+    private readonly ODataPath path;
+    private readonly IFilterBinder filterBinder;       // new field
+    // ... existing fields ...
+
+    public RestierQueryBuilder(ApiBase api, ODataPath path, IFilterBinder filterBinder = null)
+    {
+        Ensure.NotNull(api, nameof(api));
+        Ensure.NotNull(path, nameof(path));
+        this.api = api;
+        this.path = path;
+        this.filterBinder = filterBinder;              // null is fine; HandleFilterPathSegment defaults
+        // ... existing handler-table setup ...
+    }
+
+    private void HandleFilterPathSegment(ODataPathSegment segment)
+    {
+        var filterSegment = (FilterSegment)segment;
+        var filterClause = new FilterClause(filterSegment.Expression, filterSegment.RangeVariable);
+
+        var binder = this.filterBinder ?? new FilterBinder();     // <-- change
+        var context = new QueryBinderContext(edmModel, new ODataQuerySettings(), currentType);
+
+        queryable = binder.ApplyBind(queryable, filterClause, context);
+    }
+}
 ```
 
-`serviceProvider` is already available in the surrounding `RestierQueryBuilder` class; the precise expression resolves it the same way other path-segment handlers resolve services. If `IFilterBinder` isn't registered, the new code is observationally identical to the old code — no behavior change for non-spatial APIs.
+Both call sites in `RestierController.cs` are updated to resolve `IFilterBinder` from route services and pass it through:
+
+```csharp
+// src/Microsoft.Restier.AspNetCore/RestierController.cs:704
+var routeServices = HttpContext.Request.GetRouteServices();
+var filterBinder = routeServices?.GetService<IFilterBinder>();
+var parentQuery = new RestierQueryBuilder(api, parentPath, filterBinder).BuildQuery();
+
+// src/Microsoft.Restier.AspNetCore/RestierController.cs:717
+var routeServices = HttpContext.Request.GetRouteServices();
+var filterBinder = routeServices?.GetService<IFilterBinder>();
+var builder = new RestierQueryBuilder(api, path, filterBinder);
+```
+
+If route services aren't available (a corner-case for direct construction in tests) or no `IFilterBinder` is registered, `HandleFilterPathSegment` falls back to `new FilterBinder()` — observationally identical to today's behavior for non-spatial APIs.
+
+The optional parameter keeps existing direct-construction call sites (none in source today, possibly some in tests) compiling unchanged.
 
 ### `AddRestierSpatial()` change (both flavors)
 
 Each flavor's `Extensions/ServiceCollectionExtensions.cs` gains one line in `AddRestierSpatial(this IServiceCollection services)`:
 
 ```csharp
-services.TryAddSingleton<IFilterBinder, RestierSpatialFilterBinder>();
+services.Replace(ServiceDescriptor.Singleton<IFilterBinder, RestierSpatialFilterBinder>());
 ```
 
-`TryAdd` ensures the second-registration scenario (both `.Spatial` packages referenced) is a no-op rather than overwriting an existing registration. The binder's ctor pulls `IEnumerable<ISpatialTypeConverter>` from DI, so whichever flavor's converters are registered get used.
+**Why `Replace` and not `TryAdd`.** AspNetCoreOData's `AddRouteComponents(...)` registers its default `IFilterBinder` *before* the user-services configuration delegate runs (see `RestierODataOptionsExtensions.cs:147-180` — the inner lambda calls `configureRouteServices.Invoke(services)` partway through, after OData's defaults are already in place). `TryAdd*` would observe the existing default registration and silently no-op, so the spatial binder would never be invoked. `Replace` overrides the existing descriptor with our subclass; AspNetCoreOData resolves whichever lifetime-singleton it finds and our binder gets used for every `$filter` on the route.
+
+**Double-registration.** When both `.Spatial` packages are referenced (rare; you'd have to be running EF6 + EF Core simultaneously on the same API surface, which Spec A's converters don't even contemplate), the second `Replace` call replaces a descriptor with an identical descriptor — no behavioral difference.
+
+**Custom binders.** If a consumer wants to keep their own custom `IFilterBinder`, the documented order is: call `AddRestierSpatial()` first, then `services.Replace(...)` with their own implementation. The spatial guide page picks up this note.
+
+The binder's ctor pulls `IEnumerable<ISpatialTypeConverter>` from DI, so whichever flavor's converters are registered get used.
 
 ### Data flow per function
 
-Each dispatch arm follows the same three-step pattern: bind children → lower spatial literals → emit storage-typed member access. Detailed below.
+Each dispatch arm for the binary functions (`geo.distance`, `geo.intersects`) follows a four-step pattern: validate genus on the EDM nodes → bind children → lower spatial literals → emit storage-typed member access via inheritance-walking method resolution. `geo.length` is a one-step property access on a single bound argument.
 
 #### `geo.distance(arg0, arg1)`
 
-1. `boundArg0 = base.Bind(node.Parameters[0], context)`; same for `boundArg1`. After this step, the property-side bound expression has `Expression.Type` equal to the storage CLR type (`DbGeography` etc.); the literal-side bound expression is a `ConstantExpression` whose `Value` is a `Microsoft.Spatial.Geography*` / `Geometry*` runtime instance.
-2. **Lower the spatial literal.** For each bound expression whose `Value`'s runtime type is a `Microsoft.Spatial` subclass:
-   - Take the "other" argument's `Expression.Type` as the storage target type.
-   - Find a `converter` whose `CanConvert(storageTargetType)` returns `true`.
-   - Replace the `ConstantExpression` with `Expression.Constant(converter.ToStorage(storageTargetType, edmValue), storageTargetType)`.
-   - If no converter matches, throw `ODataException` (`SpatialFilter_NoConverterForStorageType`, see Error handling).
-   - If `ToStorage` throws `InvalidOperationException` (Spec A's non-EPSG fail-fast path), wrap it in `ODataException` preserving the original message.
-3. **Emit** `Expression.Call(storageArg0, storageArg0.Type.GetMethod("Distance", new[] { storageArg1.Type }), storageArg1)`.
+**Step 0 — validate genus from the ODL node tree.** Before binding, inspect each `SingleValueNode` parameter's `TypeReference` (an `IEdmTypeReference`). For each parameter whose primitive kind is in the geography or geometry family, derive its genus from `IEdmPrimitiveTypeReference.PrimitiveKind()` (`Geography*` → Geography family; `Geometry*` → Geometry family). If two parameters disagree on genus, throw `ODataException` (`SpatialFilter_GenusMismatch`, see § Error handling). This validation is **necessary at the binder layer** because Spec A's converter contract is genus-agnostic: `NtsSpatialConverter.CanConvert` checks only `Geometry`-assignability (NTS shares the same `Geometry` base for both genera), and both converters' `ToStorage` happily accept either Microsoft.Spatial genus, dispatching to the storage type by `targetStorageType` — they would silently lower a `GeographyPoint` literal into a `DbGeometry` storage value, which is semantically wrong but the converter alone can't catch.
+
+**Step 1 — bind children.** `boundArg0 = base.Bind(node.Parameters[0], context)`; same for `boundArg1`. After this step, the property-side bound expression has `Expression.Type` equal to the storage CLR type (`DbGeography`, `Point`, `Polygon`, etc. — Spec A's model-builder convention preserves the storage-typed CLR property); the literal-side bound expression is a `ConstantExpression` whose `Value` is a `Microsoft.Spatial.Geography*` / `Geometry*` runtime instance.
+
+**Step 2 — lower spatial literals.** For each bound expression whose `Value`'s runtime type is a `Microsoft.Spatial` subclass:
+- Take the "other" argument's `Expression.Type` as the storage target type (e.g., when the property side is `DbGeography`, the literal target is also `DbGeography`).
+- Find a `converter` whose `CanConvert(storageTargetType)` returns `true`.
+- Replace the `ConstantExpression` with `Expression.Constant(converter.ToStorage(storageTargetType, edmValue), storageTargetType)`.
+- If no converter matches, throw `ODataException` (`SpatialFilter_NoConverterForStorageType`).
+- If `ToStorage` throws `InvalidOperationException` (Spec A's non-EPSG fail-fast path), wrap it in `ODataException` preserving the original message.
+
+**Step 3 — emit the method call** via inheritance-walking resolution:
+
+```csharp
+var method = ResolveSpatialInstanceMethod(storageArg0.Type, "Distance", storageArg1.Type);
+// method is e.g. typeof(Geometry).GetMethod("Distance", new[] { typeof(Geometry) })
+// even when storageArg0.Type is Point and storageArg1.Type is Point.
+return Expression.Call(storageArg0, method, storageArg1);
+```
+
+`ResolveSpatialInstanceMethod` (sketch in the previous subsection) walks `GetMethods()` on the source type and picks the first instance method named `Distance` with one parameter whose `ParameterType.IsAssignableFrom(argType)`. This works for both EF6 (`DbGeography.Distance(DbGeography)` lookup against `DbGeography` source and `DbGeography` argument) and NTS (`Geometry.Distance(Geometry)` lookup against a `Point` source and `Point` argument — inherited members surface through `GetMethods()` on the derived type).
 
 The returned `MethodCallExpression`'s type is `double?` (EF6) or `double` (NTS). Base `FilterBinder.BindBinaryOperatorNode` handles the `lt N` wrapper — including nullable-versus-non-nullable comparison — without any further intervention.
 
 #### `geo.length(arg0)`
 
 1. Bind `boundArg0` via base.
-2. **Emit** `Expression.Property(boundArg0, "Length")`. `DbGeography.Length` and `DbGeometry.Length` are `double?` instance properties; `NTS.Geometry.Length` is a `double` instance property. Reflection-based resolution against `boundArg0.Type` returns the right `PropertyInfo` automatically.
+2. **Emit** `Expression.Property(boundArg0, "Length")`. `DbGeography.Length` and `DbGeometry.Length` are `double?` instance properties; `NTS.Geometry.Length` is a `double` instance property. `GetProperty("Length")` is already inheritance-aware (no parameter list to mismatch), so a `Point`-typed source resolves to the inherited `Geometry.Length` property without help.
 
-No literal lowering — `geo.length` is unary.
+No literal lowering — `geo.length` is unary. No Step 0 either: there's no second argument to compare genus against.
 
 #### `geo.intersects(arg0, arg1)`
 
-Same shape as `geo.distance`. Lower spatial literals, then `Expression.Call(storageArg0, "Intersects", typeArguments: null, storageArg1)`. Return type is `bool?` (EF6) or `bool` (NTS); base bind handles the predicate position.
+Same four-step shape as `geo.distance`:
+- **Step 0** validates that both arguments are the same genus (Geography vs Geometry) via their EDM type references.
+- **Step 1** binds.
+- **Step 2** lowers spatial literals.
+- **Step 3** emits `Expression.Call(storageArg0, ResolveSpatialInstanceMethod(storageArg0.Type, "Intersects", storageArg1.Type), storageArg1)`. Return type is `bool?` (EF6) or `bool` (NTS); base bind handles the predicate position.
 
 #### Cross-cutting
 
-- **Literal-on-literal calls** (`geo.distance(geography'...', geography'...')`) are uncommon but legal. The binder handles them symmetrically: when both arguments are literals, the first one's storage type seeds the lowering of the second. If neither side has a determinable storage type (no property-access node anywhere in the call), it falls through to the no-converter error path.
-- **Genus matching.** Spec A's `ISpatialTypeConverter` contract: `CanConvert(targetStorageType)` plus a runtime-genus check inside `ToStorage`. A `GeometryPoint` literal against a `DbGeography` property fails one of those checks; we surface that as the `SpatialFilter_GenusMismatch` error described in § Error handling.
+- **Literal-on-literal calls** (`geo.distance(geography'...', geography'...')`) are uncommon but legal. Step 0 catches genus mismatches across them; Step 2 lowers both — the first literal's storage type can't be inferred from a property access, so the binder uses the converter's preferred storage type for the literal's genus (`DbGeography` for Geography on EF6, `NetTopologySuite.Geometries.Geometry` on EF Core, etc.). Implementation detail: ask each registered converter for the first storage type it would lower the Geography family into via a sentinel call; the implementation plan will pin this down.
 - **Null property values.** EF6 and EF Core both propagate null through instance-method spatial calls — `null.Distance(x) → null` in three-valued SQL logic. The binder relies on that and adds no special-case handling.
 - **Provider translation.** EF6's SQL Server provider, EF Core's SQL Server NTS plugin, and Npgsql's PostGIS plugin each translate `DbGeography`/`Geometry`/`NTS.Geometry` instance members to native SQL spatial operators. Spec B contributes zero provider-aware code; if the configured provider can't translate, the failure surfaces from EF as it would for any unsupported LINQ call.
 
@@ -186,9 +271,10 @@ Cases: `geo.area`, `geo.contains`, `geo.coveredby`, `geo.within`, anything else 
 
 ### Genus mismatch
 
-Cases: `geo.distance(GeographyProperty, geometry'...')`, two literals of incompatible families, or any other path where no registered converter's `CanConvert` matches the storage target type's genus against the literal's genus.
+Cases: `geo.distance(GeographyProperty, geometry'...')`, two literals of incompatible families, or any other binary spatial call where the two arguments' EDM type references disagree on family.
 
-- **Action:** throw `new ODataException(Resources.SpatialFilter_GenusMismatch.FormatWith(functionName, propertyPath, propertyGenus, literalGenus))`.
+- **Detection source:** the EDM `IEdmTypeReference` carried by each parameter's `SingleValueNode`, classified via `IEdmPrimitiveTypeReference.PrimitiveKind()` into the geography family (`Geography`, `GeographyPoint`, `GeographyLineString`, `GeographyPolygon`, `GeographyMultiPoint`, `GeographyMultiLineString`, `GeographyMultiPolygon`, `GeographyCollection`) or the geometry family. **Not** detected via the `ISpatialTypeConverter` contract — that contract is intentionally genus-agnostic (see § Data flow Step 0 rationale) and would silently lower a `GeographyPoint` literal into a `DbGeometry` storage value if asked.
+- **Action:** throw `new ODataException(Resources.SpatialFilter_GenusMismatch.FormatWith(functionName, propertyPath, propertyGenus, literalGenus))` from Step 0 of the binary-function dispatch, before any binding occurs.
 - **Surface:** HTTP 400. Example: *"Cannot bind 'geo.distance' on 'HeadquartersLocation' (Geography) against a Geometry literal."*
 
 ### Non-EPSG / unsupported CRS
@@ -222,6 +308,15 @@ In `src/Microsoft.Restier.AspNetCore/Properties/Resources.resx` (and the generat
 Each test constructs a `FilterClause` via `ODataQueryOptionParser`, calls `binder.ApplyBind(IQueryable, filterClause, context)`, and asserts on the resulting LINQ `Expression`. No DB roundtrip, no HTTP — fast.
 
 Each positive case runs as an xUnit theory across the two flavor converters (`DbSpatialConverter`, `NtsSpatialConverter`) to prove the binder is converter-agnostic.
+
+**Project reference plumbing.** `test/Microsoft.Restier.Tests.AspNetCore/Microsoft.Restier.Tests.AspNetCore.csproj` does not currently reference either `.Spatial` source package — its integration-test access to spatial behavior is transitive through `Microsoft.Restier.Tests.Shared.EntityFramework[Core]` only. The new unit tests construct `DbSpatialConverter` and `NtsSpatialConverter` directly, so the csproj gains two explicit `<ProjectReference>` items:
+
+```xml
+<ProjectReference Include="..\..\src\Microsoft.Restier.EntityFramework.Spatial\Microsoft.Restier.EntityFramework.Spatial.csproj" />
+<ProjectReference Include="..\..\src\Microsoft.Restier.EntityFrameworkCore.Spatial\Microsoft.Restier.EntityFrameworkCore.Spatial.csproj" />
+```
+
+This mixed-flavor reference set is consistent with the project's existing pattern (it already references both `Tests.Shared.EntityFramework` and `Tests.Shared.EntityFrameworkCore`).
 
 - `BindSingleValueFunctionCallNode_GeoDistance_EmitsStorageDistanceMethodCall` — `geo.distance(prop, literal) lt N` → expression tree shape: `MethodCallExpression(prop, "Distance", [storageLiteral]) < ConstantExpression(N)`.
 - `BindSingleValueFunctionCallNode_GeoLength_EmitsStorageLengthProperty` — shape: `MemberExpression(prop, "Length") > ConstantExpression(0)`.
@@ -295,15 +390,17 @@ EF6 sample is unchanged.
 
 ### Source files modified
 
-- `src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs` — `HandleFilterPathSegment` resolves `IFilterBinder` from request services with a default fallback.
+- `src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs` — widen ctor with optional `IFilterBinder filterBinder = null`; `HandleFilterPathSegment` uses the injected binder when present, falls back to `new FilterBinder()` when null.
+- `src/Microsoft.Restier.AspNetCore/RestierController.cs` — two call sites (lines 704 and 717) resolve `IFilterBinder` from `HttpContext.Request.GetRouteServices()` and pass it into the new ctor.
 - `src/Microsoft.Restier.AspNetCore/Properties/Resources.resx` (+ generated `Resources.Designer.cs`) — two new strings.
-- `src/Microsoft.Restier.EntityFramework.Spatial/Extensions/ServiceCollectionExtensions.cs` — `TryAddSingleton<IFilterBinder, RestierSpatialFilterBinder>()` inside `AddRestierSpatial`.
+- `src/Microsoft.Restier.EntityFramework.Spatial/Extensions/ServiceCollectionExtensions.cs` — `services.Replace(ServiceDescriptor.Singleton<IFilterBinder, RestierSpatialFilterBinder>())` inside `AddRestierSpatial`.
 - `src/Microsoft.Restier.EntityFrameworkCore.Spatial/Extensions/ServiceCollectionExtensions.cs` — same line.
 
 ### Test files
 
+- `test/Microsoft.Restier.Tests.AspNetCore/Microsoft.Restier.Tests.AspNetCore.csproj` — add `<ProjectReference>` for `Microsoft.Restier.EntityFramework.Spatial` and `Microsoft.Restier.EntityFrameworkCore.Spatial` (the unit-test file constructs the converters directly).
 - `test/Microsoft.Restier.Tests.AspNetCore/Query/RestierSpatialFilterBinderTests.cs` — new, unit tests.
-- `test/Microsoft.Restier.Tests.AspNetCore/Query/RestierQueryBuilderFilterBinderResolutionTests.cs` — new, regression test for the DI-resolution change.
+- `test/Microsoft.Restier.Tests.AspNetCore/Query/RestierQueryBuilderFilterBinderResolutionTests.cs` — new, regression test for the ctor-plumbing change.
 - `test/Microsoft.Restier.Tests.AspNetCore/IntegrationTests/SpatialTypeIntegrationTests.cs` — flip existing negative, add eight positive + four negative cases.
 - `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/SpatialPlace.cs` — add `RouteLine`.
 - `test/Microsoft.Restier.Tests.Shared.EntityFramework/Scenarios/Library/LibraryTestInitializer.cs` — seed `RouteLine` (EF6 path).

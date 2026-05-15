@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.OData.Batch;
 using Microsoft.AspNetCore.OData.Formatter.Deserialization;
 using Microsoft.AspNetCore.OData.Formatter.Serialization;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Query.Expressions;
 using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -163,6 +164,14 @@ public static class RestierODataOptionsExtensions
             services.RemoveAll<ODataQuerySettings>()
                 .AddRestierCoreServices()
                 .AddRestierConventionBasedServices(type);
+
+            // Replace AspNetCoreOData's default IFilterBinder with the spatial-aware subclass.
+            // The binder falls through to base for every non-geo.* call and for geo.* calls when
+            // no ISpatialTypeConverter is registered, so this has zero behavioral impact on
+            // non-spatial Restier APIs. Inserted BEFORE configureRouteServices.Invoke so consumers
+            // who register their own IFilterBinder in their route-services delegate still win.
+            services.RemoveAll<IFilterBinder>();
+            services.AddSingleton<IFilterBinder, RestierSpatialFilterBinder>();
 
             configureRouteServices.Invoke(services);
 

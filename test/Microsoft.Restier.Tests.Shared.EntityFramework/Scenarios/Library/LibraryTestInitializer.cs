@@ -220,6 +220,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                     HeadquartersLocation = System.Data.Entity.Spatial.DbGeography.FromText("POINT(4.9041 52.3676)", 4326),
                     ServiceArea = System.Data.Entity.Spatial.DbGeography.FromText("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))", 4326),
                     FloorPlan = System.Data.Entity.Spatial.DbGeometry.FromText("POINT(100 200)", 0),
+                    RouteLine = System.Data.Entity.Spatial.DbGeography.FromText("LINESTRING(0 0, 1 1, 2 2)", 4326),
                 });
                 libraryContext.SaveChanges();
             }
@@ -261,12 +262,21 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 // IndoorOrigin uses HasColumnType("geography"); use a representative geographic point.
                 var indoor = geographyFactory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(10, 20));
 
+                // RouteLine: simple LineString for geo.length filter tests.
+                var route = geographyFactory.CreateLineString(new[]
+                {
+                    new NetTopologySuite.Geometries.Coordinate(0, 0),
+                    new NetTopologySuite.Geometries.Coordinate(1, 1),
+                    new NetTopologySuite.Geometries.Coordinate(2, 2),
+                });
+
                 libraryContext.SpatialPlaces.Add(new SpatialPlace
                 {
                     Name = "Spatial Place 1",
                     HeadquartersLocation = hq,
                     ServiceArea = area,
                     IndoorOrigin = indoor,
+                    RouteLine = route,
                 });
 
                 libraryContext.SaveChanges();

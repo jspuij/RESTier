@@ -21,6 +21,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
         public System.Data.Entity.Spatial.DbGeography ServiceArea { get; set; }
 
         public System.Data.Entity.Spatial.DbGeometry FloorPlan { get; set; }
+
+        public System.Data.Entity.Spatial.DbGeography RouteLine { get; set; }
     }
 }
 
@@ -47,6 +49,8 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library
 
         [Microsoft.Restier.Core.Spatial.Spatial(typeof(Microsoft.Spatial.GeographyPoint))]
         public NetTopologySuite.Geometries.Point IndoorOrigin { get; set; }
+
+        public NetTopologySuite.Geometries.LineString RouteLine { get; set; }
     }
 }
 

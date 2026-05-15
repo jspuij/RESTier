@@ -23,7 +23,7 @@ This is the second of three planned specs. Source-generator/`[SpatialProperty]` 
 | Path-segment `$filter` coverage | Fixed too | `RestierQueryBuilder.HandleFilterPathSegment` currently `new FilterBinder()`s with no DI access. Spec B widens the QueryBuilder ctor to accept an optional `IFilterBinder` (the controller resolves it from `HttpContext.Request.GetRouteServices()` and passes it in); `HandleFilterPathSegment` uses it instead of constructing a fresh `FilterBinder`. One mental model for both `?$filter=` and `/$filter(...)` URL shapes. |
 | `geo.length` argument validation | Delegated to the provider | OData v4 specifies the input must be `Edm.GeographyLineString` / `Edm.GeometryLineString`. EF6 `DbGeography.Length` returns `null` for non-LineString inputs; NTS `Geometry.Length` returns the boundary length (perimeter for polygons). We don't duplicate the validation at bind time — would require ODL EDM-type plumbing the binder doesn't have. |
 | Provider awareness | None | EF6 SQL Server, EF Core SQL Server NTS plugin, and Npgsql PostGIS each provide their own LINQ-to-SQL translation for the storage CLR members. Spec B is a pure binding/expression-shaping concern. |
-| CRS handling on literals | Mirror Spec A — fail-fast on non-EPSG | Spec A's `ISpatialTypeConverter.ToStorage` throws `InvalidOperationException` for `CoordinateSystem.EpsgId == null`. The binder catches that specific exception and rewraps as `ODataException` so it flows out as a 400. Consistent posture across read, write, and filter. |
+| CRS handling on literals | Mirror Spec A — fail-fast on non-EPSG | Spec A's `ISpatialTypeConverter.ToStorage` throws `InvalidOperationException` for `CoordinateSystem.EpsgId == null`. The binder catches that specific exception and rewraps as `ODataException` so it flows out as a 400. Consistent posture across read, write, and filter. Note (added 2026-05-15 during implementation): Microsoft.Spatial treats any integer SRID as a valid EpsgId, so the spec-A non-EPSG fail-fast path (`EpsgId == null` → `InvalidOperationException`) is unreachable from OData literal syntax (`geography'SRID=N;…'` only accepts integer N). The wrap-as-ODataException rewrap remains in `LowerSpatialLiteralIfNeeded` as defense-in-depth for programmatic FilterClause callers but has no Spec B test. |
 
 ## Background
 
@@ -303,6 +303,8 @@ Case: parsed `Microsoft.Spatial.CoordinateSystem.EpsgId == null` on a literal.
 - **Detection:** Spec A's `ISpatialTypeConverter.ToStorage` already throws `InvalidOperationException` for this — see Spec A § "Non-EPSG coordinate systems".
 - **Action:** the binder wraps the `InvalidOperationException` thrown by the converter call in an `ODataException`, preserving the original message and adding the function/property context.
 - **Surface:** HTTP 400. Same posture as Spec A's submit-time rejection of non-EPSG CRS, applied at filter-bind time.
+
+**Implementation note (2026-05-15):** the catch-and-rewrap path is unreachable through OData URL queries because Microsoft.Spatial accepts any integer as a valid `EpsgId`, and OData `geography'SRID=N;…'` literals only allow integer N. Reaching `EpsgId == null` requires a programmatic Microsoft.Spatial value constructed with a string-id CoordinateSystem (e.g. `CoordinateSystem.Geography("CRS84")`), which cannot be expressed in `$filter`. The rewrap remains in the binder as defense-in-depth; Spec B does not exercise it.
 
 ### Catch scope
 

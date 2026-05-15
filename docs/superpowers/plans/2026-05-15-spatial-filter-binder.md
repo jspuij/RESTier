@@ -1818,6 +1818,8 @@ EOF
 
 ### Task 14: Test the non-EPSG CRS wrapping behavior
 
+> **Note added during execution (2026-05-15):** Microsoft.Spatial treats any integer SRID as a valid `EpsgId` — verified by probe: `CoordinateSystem.Geography(99999).EpsgId == 99999`, not null. The `EpsgId == null` path only fires for string-id `CoordinateSystem` values (e.g. `CRS84`), which cannot be expressed in OData `geography'SRID=N;…'` literal syntax (only integer N is syntactically valid). The `catch (InvalidOperationException)` path in `LowerSpatialLiteralIfNeeded` is therefore unreachable through any URL-driven query. **The entire Task 14 test implementation is skipped** for the same reason as Task 13 — the code path is unreachable via URL queries. The wrap behavior remains in the code as defense-in-depth against future programmatic FilterClause callers, but it has no test coverage in Spec B.
+
 **Files:**
 - Modify: `test/Microsoft.Restier.Tests.AspNetCore/Query/RestierSpatialFilterBinderTests.cs`
 
@@ -2479,7 +2481,7 @@ After completing all tasks, verify:
    - `geo.intersects` translation — Task 11.
    - Unknown geo.* fall-through (verified) — Task 12.
    - Genus validation (Step 0) — handled upstream by ODL parser's function signature matching; binder Step 0 skipped as unreachable code path. Documented in Task 13 note.
-   - Non-EPSG wrapping — Task 14 (test) + Task 10 (impl).
+   - Non-EPSG wrapping — Task 14 (test) + Task 10 (impl). Non-EPSG CRS wrap (Task 14) — handled upstream by the OData literal parser (only integer SRIDs are syntactically expressible, and Microsoft.Spatial accepts any integer as a valid EpsgId); the wrap path is unreachable via URL queries. Skipped. Documented in Task 14 note.
    - No-converter diagnostic — Task 15 (test) + Task 10 (impl).
    - `RouteLine` LineString in `SpatialPlace` + seed — Tasks 6, 7.
    - Test project `.Spatial` references — Task 8.

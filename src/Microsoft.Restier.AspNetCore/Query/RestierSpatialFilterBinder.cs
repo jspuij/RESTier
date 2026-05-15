@@ -18,6 +18,11 @@ namespace Microsoft.Restier.AspNetCore.Query;
 /// them to native SQL spatial operators. Anything else falls through to the base
 /// <see cref="T:Microsoft.AspNetCore.OData.Query.Expressions.FilterBinder"/> behavior.
 /// </summary>
+/// <remarks>
+/// Dispatch is added incrementally across the spec-B series: <c>geo.length</c> is implemented
+/// today; <c>geo.distance</c> and <c>geo.intersects</c> arms land in subsequent commits and
+/// currently fall through to the base implementation.
+/// </remarks>
 public class RestierSpatialFilterBinder : FilterBinder
 {
     private readonly ISpatialTypeConverter[] converters;
@@ -27,8 +32,9 @@ public class RestierSpatialFilterBinder : FilterBinder
     /// </summary>
     /// <param name="converters">
     /// The <see cref="ISpatialTypeConverter"/> instances registered in the route service
-    /// container. May be null or empty, in which case the binder falls through to the base
-    /// behavior for every <c>geo.*</c> call.
+    /// container. Used by the <c>geo.distance</c> and <c>geo.intersects</c> arms to lower
+    /// Microsoft.Spatial literals into storage values; <c>geo.length</c> does not need a
+    /// converter (pure property access). May be null or empty when no converter is registered.
     /// </param>
     public RestierSpatialFilterBinder(IEnumerable<ISpatialTypeConverter> converters = null)
     {

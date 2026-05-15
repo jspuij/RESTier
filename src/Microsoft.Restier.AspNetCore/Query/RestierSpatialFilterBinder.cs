@@ -21,9 +21,21 @@ namespace Microsoft.Restier.AspNetCore.Query;
 /// <see cref="T:Microsoft.AspNetCore.OData.Query.Expressions.FilterBinder"/> behavior.
 /// </summary>
 /// <remarks>
-/// Dispatch is added incrementally across the spec-B series: <c>geo.distance</c>,
-/// <c>geo.length</c>, and <c>geo.intersects</c> are all implemented today; error-handling
-/// (genus validation, no-converter diagnostics) lands in subsequent commits.
+/// <para><c>geo.distance</c> and <c>geo.intersects</c> are translated as instance-method
+/// calls on the storage type, with method resolution done by parameter-type assignability
+/// so <c>Geometry.Distance(Geometry)</c> binds even when both arguments are concrete
+/// <c>Point</c>s. Microsoft.Spatial literals in the binary calls are lowered to storage
+/// values via the injected <see cref="ISpatialTypeConverter"/> set; the lowered constant
+/// is typed by the converted value's runtime CLR type so EF Core's NTS translator can
+/// match it.</para>
+/// <para><c>geo.length</c> is translated as a property access on the storage type's
+/// <c>Length</c> member (no converter required — pure inheritance-aware lookup).</para>
+/// <para>Diagnostic surface: an empty converter set against a <c>geo.*</c> call surfaces as
+/// <see cref="ODataException"/> with the <c>SpatialFilter_NoConverterForStorageType</c>
+/// message; non-EPSG CRS literals (programmatic <see cref="FilterClause"/> only — the OData
+/// URL parser only accepts integer SRIDs) rewrap the converter's
+/// <see cref="InvalidOperationException"/> as <see cref="ODataException"/>. Cross-genus
+/// calls are rejected upstream by ODL's function-signature matching before the binder runs.</para>
 /// </remarks>
 public class RestierSpatialFilterBinder : FilterBinder
 {

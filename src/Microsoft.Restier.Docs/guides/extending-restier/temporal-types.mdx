@@ -132,6 +132,26 @@ public class Person
 }
 ```
 
+## Filtering by `DateTime` and time zones
+
+When a client issues a `$filter` like `?$filter=ReleaseDate gt 2024-01-01T00:00:00Z`, AspNetCore.OData binds the literal `2024-01-01T00:00:00Z` to a `System.DateTime` constant whose `Kind` is decided by the route-scoped `ODataQuerySettings.TimeZone`. Restier propagates `ODataOptions.TimeZone` (configured via `AddOData(...)` at startup) into the per-route `ODataQuerySettings`, so the filter binder honors whichever zone you configured.
+
+```csharp
+services.AddControllers().AddOData(options =>
+{
+    options.TimeZone = TimeZoneInfo.Utc;       // recommended for most APIs
+    // ... other route configuration ...
+});
+```
+
+With `TimeZoneInfo.Utc`, UTC literals (`...Z` suffix) bind as `DateTime` with `Kind = Utc`. Without explicit configuration, AspNetCore.OData's default is `TimeZoneInfo.Local`, which binds `DateTime` constants with `Kind = Local` — typically the wrong choice for filter expressions against database columns.
+
+<Note>
+**Npgsql + `timestamp with time zone`:** Npgsql 6+ rejects `DateTime` values with `Kind = Unspecified` or `Kind = Local` when writing or filtering `timestamp with time zone` (a.k.a. `timestamptz`) columns. If your Postgres schema uses `timestamptz` and your filters fail with *"Cannot write DateTime with Kind=…"*, set `options.TimeZone = TimeZoneInfo.Utc` on the route.
+</Note>
+
+The same configuration also applies to path-segment `$filter` syntax (`/Books/$filter(ReleaseDate gt …)`) — both paths resolve the same route-scoped `ODataQuerySettings`.
+
 ## Payload value conversion
 
 If you have the need to override `ODataPayloadValueConverter`, please now change to override

@@ -123,6 +123,7 @@ namespace Microsoft.Restier.Tests.Shared.Scenarios.Library.EFCore
                 e.Property(x => x.ServiceArea).HasColumnType("geography");
                 // IndoorOrigin uses [Spatial(typeof(GeographyPoint))] to exercise the attribute on a second geography Point.
                 e.Property(x => x.IndoorOrigin).HasColumnType("geography");
+                e.Property(x => x.RouteLine).HasColumnType("geography");
             });
         }
 

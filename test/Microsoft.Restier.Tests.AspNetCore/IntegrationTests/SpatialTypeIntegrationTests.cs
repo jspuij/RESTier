@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Restier.Breakdance;
 using Microsoft.Restier.Tests.Shared;
@@ -25,6 +26,53 @@ public class SpatialTypeIntegrationTests : RestierTestBase<LibraryApi>
 {
     private readonly Action<IServiceCollection> _configureServices
         = services => services.AddEntityFrameworkServices<LibraryContext>();
+
+    /// <summary>
+    /// Probes whether the test SQL Server instance has CLR enabled (required for the
+    /// geography spatial methods that geo.* filters translate to). SQL Server Express
+    /// does not support CLR; other editions require sp_configure 'clr enabled', 1.
+    /// </summary>
+    public static bool SqlServerClrEnabled
+    {
+        get
+        {
+            if (_clrProbeResult.HasValue)
+            {
+                return _clrProbeResult.Value;
+            }
+
+            try
+            {
+                var configuration = new ConfigurationBuilder()
+                    .AddUserSecrets(typeof(LibraryContext).Assembly, optional: true)
+                    .Build();
+                var raw = configuration.GetConnectionString(nameof(LibraryContext));
+                if (string.IsNullOrEmpty(raw))
+                {
+                    _clrProbeResult = false;
+                    return false;
+                }
+
+                using var connection = new Microsoft.Data.SqlClient.SqlConnection(raw);
+                connection.Open();
+                using var command = connection.CreateCommand();
+                // STDistance is a CLR-routed geography method. If CLR is disabled, this
+                // throws SqlException ("Common Language Runtime (CLR) is not enabled").
+                command.CommandText =
+                    "SELECT geography::STGeomFromText('POINT(0 0)', 4326).STDistance(geography::STGeomFromText('POINT(1 1)', 4326))";
+                _ = command.ExecuteScalar();
+                _clrProbeResult = true;
+                return true;
+            }
+            catch (System.Exception)
+            {
+                _clrProbeResult = false;
+                return false;
+            }
+        }
+    }
+
+    private static bool? _clrProbeResult;
 
     // ─────────────────────────────────────────────────────────────────────────
     // EDM / metadata assertions (EFCore)
@@ -111,25 +159,127 @@ public class SpatialTypeIntegrationTests : RestierTestBase<LibraryApi>
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Negative test — geo.distance $filter (spec-A limitation)
+    // Positive — geo.distance $filter (spec B)
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// EFCore: $filter using geo.distance must NOT return 200.  EF Core + NTS does not translate
-    /// the OData geo.distance function, so the request must be rejected (4xx) or cause a server
-    /// error (5xx).  This test locks the documented spec-A limitation.
+    /// EFCore: $filter using geo.distance must return 200 OK and include the seeded
+    /// HeadquartersLocation row (Amsterdam, ~5570 km from POINT(0 0)).  Spec B flips
+    /// the previous spec-A negative assertion to a positive one. Requires CLR on the
+    /// SQL Server instance.
     /// </summary>
-    [Fact]
-    public async Task EFCore_Filter_GeoDistance_IsNotTranslatable_ReturnsError()
+    [Fact(SkipUnless = nameof(SqlServerClrEnabled),
+          Skip = "Requires SQL Server CLR for geography spatial method execution (sp_configure 'clr enabled', 1).")]
+    public async Task EFCore_Filter_GeoDistance_TranslatesAndReturnsSeededRow()
     {
         var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
             HttpMethod.Get,
-            resource: "/SpatialPlaces?$filter=geo.distance(HeadquartersLocation,geography'POINT(0 0)') lt 10000",
+            resource: "/SpatialPlaces?$filter=geo.distance(HeadquartersLocation,geography'SRID=4326;POINT(0 0)') lt 10000000",
+            serviceCollection: _configureServices);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK,
+            "EFCore + NTS now translates geo.distance to a server-side spatial operator");
+
+        content.Should().Contain("\"Name\":\"Spatial Place 1\"",
+            "the Amsterdam row is well inside 10000 km from POINT(0 0)");
+    }
+
+    /// <summary>
+    /// EFCore: $filter using geo.length must return 200 OK and include the seeded RouteLine row.
+    /// The seeded LineString (0,0)->(1,1)->(2,2) has positive length, so it survives the filter.
+    /// </summary>
+    [Fact(SkipUnless = nameof(SqlServerClrEnabled),
+          Skip = "Requires SQL Server CLR for geography spatial method execution (sp_configure 'clr enabled', 1).")]
+    public async Task EFCore_Filter_GeoLength_TranslatesPropertyAccess()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+            HttpMethod.Get,
+            resource: "/SpatialPlaces?$filter=geo.length(RouteLine) gt 0",
+            serviceCollection: _configureServices);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("\"Name\":\"Spatial Place 1\"",
+            "the seeded RouteLine LINESTRING(0 0, 1 1, 2 2) has positive length");
+    }
+
+    /// <summary>
+    /// EFCore: $filter using geo.intersects must return 200 OK and include the seeded
+    /// ServiceArea row when the test point lies inside the polygon. The seeded polygon
+    /// covers (0,0)–(1,1) so a query point at (0.5, 0.5) intersects.
+    /// </summary>
+    [Fact(SkipUnless = nameof(SqlServerClrEnabled),
+          Skip = "Requires SQL Server CLR for geography spatial method execution (sp_configure 'clr enabled', 1).")]
+    public async Task EFCore_Filter_GeoIntersects_TranslatesMethodCall()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+            HttpMethod.Get,
+            resource: "/SpatialPlaces?$filter=geo.intersects(ServiceArea,geography'SRID=4326;POINT(0.5 0.5)')",
+            serviceCollection: _configureServices);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("\"Name\":\"Spatial Place 1\"",
+            "POINT(0.5 0.5) lies inside the seeded ServiceArea polygon");
+    }
+
+    /// <summary>
+    /// EFCore: path-segment $filter syntax (/Entities/$filter(...)) must also translate
+    /// geo.distance.  Exercises the RestierQueryBuilder.HandleFilterPathSegment change.
+    /// </summary>
+    [Fact(SkipUnless = nameof(SqlServerClrEnabled),
+          Skip = "Requires SQL Server CLR for geography spatial method execution (sp_configure 'clr enabled', 1).")]
+    public async Task EFCore_Filter_GeoDistance_PathSegmentSyntax_TranslatesToo()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+            HttpMethod.Get,
+            resource: "/SpatialPlaces/$filter(geo.distance(HeadquartersLocation,geography'SRID=4326;POINT(0 0)') lt 10000000)",
+            serviceCollection: _configureServices);
+        var content = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK,
+            "path-segment $filter must use the same DI-resolved IFilterBinder as the URL-query form");
+        content.Should().Contain("\"Name\":\"Spatial Place 1\"");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Negative — error handling (spec B)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Mixing Geography property with a Geometry literal must return 4xx. The ODL parser's
+    /// function signature matching rejects cross-genus calls at parse time before the
+    /// binder ever sees the call — see the implementation note in the spec.
+    /// </summary>
+    [Fact]
+    public async Task EFCore_Filter_GeoDistance_GenusMismatch_Returns400()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+            HttpMethod.Get,
+            resource: "/SpatialPlaces?$filter=geo.distance(HeadquartersLocation,geometry'SRID=0;POINT(0 0)') lt 10000000",
             serviceCollection: _configureServices);
         _ = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.IsSuccessStatusCode.Should().BeFalse(
-            "geo.distance translation is not supported by EF Core + NTS (spec-A limitation); " +
-            "the server must return a 4xx or 5xx error, not a successful response");
+            "cross-genus geo.distance must be rejected (ODL parser's function signature " +
+            "matching enforces same-genus arguments)");
+    }
+
+    /// <summary>
+    /// Unknown geo.* function names (geo.area, etc.) must be rejected with 4xx —
+    /// proves the binder's default: arm forwards to AspNetCoreOData's base FilterBinder.
+    /// </summary>
+    [Fact]
+    public async Task EFCore_Filter_GeoArea_UnknownFunction_Returns400()
+    {
+        var response = await RestierTestHelpers.ExecuteTestRequest<LibraryApi>(
+            HttpMethod.Get,
+            resource: "/SpatialPlaces?$filter=geo.area(ServiceArea) gt 0",
+            serviceCollection: _configureServices);
+        _ = await TraceListener.LogAndReturnMessageContentAsync(response);
+
+        response.IsSuccessStatusCode.Should().BeFalse(
+            "unknown geo.* functions (not in OData v4 core) must be rejected");
     }
 }

@@ -39,7 +39,24 @@ public class RestierSpatialFilterBinder : FilterBinder
     public override Expression BindSingleValueFunctionCallNode(
         SingleValueFunctionCallNode node, QueryBinderContext context)
     {
-        // Subsequent tasks fill in the three dispatch arms. Today every call falls through.
-        return base.BindSingleValueFunctionCallNode(node, context);
+        switch (node.Name)
+        {
+            case "geo.length":
+                return BindGeoLength(node, context);
+            default:
+                return base.BindSingleValueFunctionCallNode(node, context);
+        }
+    }
+
+    private Expression BindGeoLength(SingleValueFunctionCallNode node, QueryBinderContext context)
+    {
+        // geo.length is unary: a single LineString-typed argument.
+        var args = node.Parameters.ToArray();
+        var bound = base.Bind(args[0], context);
+
+        // Geometry.Length (NTS) and DbGeography.Length / DbGeometry.Length (EF6) are all
+        // instance properties. GetProperty walks inheritance, so a concrete LineString-typed
+        // expression still finds the inherited Length on Geometry.
+        return Expression.Property(bound, "Length");
     }
 }

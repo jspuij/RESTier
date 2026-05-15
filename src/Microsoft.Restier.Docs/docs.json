@@ -241,7 +241,8 @@
                         "pages": [
                           "api-reference/Microsoft/Restier/AspNetCore/Query/index",
                           "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionExpander",
-                          "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionSourcer"
+                          "api-reference/Microsoft/Restier/AspNetCore/Query/RestierQueryExpressionSourcer",
+                          "api-reference/Microsoft/Restier/AspNetCore/Query/RestierSpatialFilterBinder"
                         ]
                       },
                       {

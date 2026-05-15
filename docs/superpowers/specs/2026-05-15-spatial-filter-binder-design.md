@@ -1,7 +1,7 @@
 # Spatial `$filter` Translation in Restier (Spec B)
 
 **Date:** 2026-05-15
-**Status:** Design draft — revised after first review (awaiting confirmation)
+**Status:** Design draft — second revision after review (awaiting confirmation)
 **Predecessor:** [Spec A — Spatial Types Round-Trip](./2026-05-06-spatial-types-roundtrip-design.md)
 **Issue:** [OData/RESTier#673](https://github.com/OData/RESTier/issues/673) (filtering portion)
 
@@ -18,7 +18,7 @@ This is the second of three planned specs. Source-generator/`[SpatialProperty]` 
 | Function coverage | `geo.distance`, `geo.length`, `geo.intersects` | The three v4-core spatial functions. Non-core (`geo.coveredby`, `geo.contains`, ...) fall through to the base `FilterBinder` (HTTP 400) — out of scope. |
 | EF flavor symmetry | Both EF6 and EF Core | Mirrors Spec A. EF6's `DbGeography.Distance` and EF Core's NTS `Geometry.Distance` both translate natively under their respective providers, so a single binder works for both via Spec A's `ISpatialTypeConverter` indirection. |
 | Mechanism | Custom `IFilterBinder` subclass | AspNetCoreOData's official extension point. Alternatives (post-bind tree rewrite, ODL-level visitor) don't survive: the default `FilterBinder` throws on `geo.*` before any downstream processor sees the expression, and ODL has no node kind to express "call CLR method X". |
-| Opt-in surface | Extend `AddRestierSpatial()` to also register the binder | One-line opt-in for round-trip *and* filtering, matching Spec A's UX. Uses `services.Replace(...)` rather than `TryAdd` because AspNetCoreOData's `AddRouteComponents` registers a default `IFilterBinder` *before* the user's route-services delegate runs (verified at `RestierODataOptionsExtensions.cs:147-180`), so `TryAdd` would be a silent no-op. Both `.Spatial` packages registering the same implementation type means double-`Replace` is also a no-op when both are referenced. |
+| Opt-in surface | `AddRestierSpatial()` activates filtering by registering `ISpatialTypeConverter`; the binder itself is registered unconditionally by `Microsoft.Restier.AspNetCore` inside `AddRouteComponents`. | One-line user opt-in (the same `AddRestierSpatial()` call that lights up round-trip lights up filtering), matching Spec A's UX, *without* forcing the host-agnostic `.Spatial` packages to depend on `Microsoft.Restier.AspNetCore`. The binder is a near-identity passthrough when no converters are registered (overrides only three function names; everything else falls through to `base`), so always-registering it has zero behavioral impact on non-spatial Restier APIs. Registration site is inside the `AddRouteComponents` services lambda *before* `configureRouteServices.Invoke(services)`, so consumers who register their own custom `IFilterBinder` in their route-services delegate win. Uses `RemoveAll<IFilterBinder>() + AddSingleton<...>` (idempotent regardless of whether AspNetCoreOData's default is already present). |
 | Error policy on bad input | Hybrid — happy-path translates, unknown function names fall through, genus / CRS mismatches throw `ODataException` | Translates the three supported functions; preserves AspNetCoreOData's stock "unknown function" error for forward compat with future OData additions; surfaces user errors as `400 Bad Request` with property/function context. **Genus validation source:** the EDM-side `IEdmTypeReference` on each ODL argument node — *not* the `ISpatialTypeConverter` contract, which is genus-agnostic by design (`NtsSpatialConverter.CanConvert` only checks `Geometry`-assignability; both converters' `ToStorage` accept either Microsoft.Spatial genus). |
 | Path-segment `$filter` coverage | Fixed too | `RestierQueryBuilder.HandleFilterPathSegment` currently `new FilterBinder()`s with no DI access. Spec B widens the QueryBuilder ctor to accept an optional `IFilterBinder` (the controller resolves it from `HttpContext.Request.GetRouteServices()` and passes it in); `HandleFilterPathSegment` uses it instead of constructing a fresh `FilterBinder`. One mental model for both `?$filter=` and `/$filter(...)` URL shapes. |
 | `geo.length` argument validation | Delegated to the provider | OData v4 specifies the input must be `Edm.GeographyLineString` / `Edm.GeometryLineString`. EF6 `DbGeography.Length` returns `null` for non-LineString inputs; NTS `Geometry.Length` returns the boundary length (perimeter for polygons). We don't duplicate the validation at bind time — would require ODL EDM-type plumbing the binder doesn't have. |
@@ -57,7 +57,7 @@ The current main-path `$filter` ingestion goes through `RestierController.ApplyQ
 |---|-----------|----------|-------|
 | 1 | `RestierSpatialFilterBinder` (subclass of `Microsoft.AspNetCore.OData.Query.Expressions.FilterBinder`) | `Microsoft.Restier.AspNetCore` | Stateless. Ctor accepts `IEnumerable<ISpatialTypeConverter>` (Spec A primitive). Overrides `BindSingleValueFunctionCallNode`. |
 | 2 | `RestierQueryBuilder` ctor widening + `HandleFilterPathSegment` refactor | `Microsoft.Restier.AspNetCore` | New optional ctor parameter `IFilterBinder filterBinder = null`. `HandleFilterPathSegment` uses the injected binder when present, falls back to `new FilterBinder()` when null. Both call sites in `RestierController.cs:704, 717` are updated to resolve `IFilterBinder` from `HttpContext.Request.GetRouteServices()` and pass it through. |
-| 3 | `AddRestierSpatial()` extension update — both flavors | `Microsoft.Restier.EntityFramework.Spatial`, `Microsoft.Restier.EntityFrameworkCore.Spatial` | Adds `services.Replace(ServiceDescriptor.Singleton<IFilterBinder, RestierSpatialFilterBinder>())`. `Replace` (not `TryAdd`) because AspNetCoreOData's default `IFilterBinder` is already registered by the surrounding `AddRouteComponents` call before the user-services delegate runs. Documented order: consumers who register their own custom `IFilterBinder` must do so *after* `AddRestierSpatial()`. |
+| 3 | `RestierODataOptionsExtensions` registers `RestierSpatialFilterBinder` inside `AddRouteComponents` | `Microsoft.Restier.AspNetCore` | One added line inside the services lambda, before `configureRouteServices.Invoke(services)`: `services.RemoveAll<IFilterBinder>(); services.AddSingleton<IFilterBinder, RestierSpatialFilterBinder>();`. The flavor `.Spatial` packages stay host-agnostic — they keep their existing dependency surface (`Microsoft.Restier.Core` + the flavor's EF package only) and do not gain a reference to `Microsoft.Restier.AspNetCore`. |
 | 4 | Two new resource strings | `Microsoft.Restier.AspNetCore` | `SpatialFilter_GenusMismatch`, `SpatialFilter_NoConverterForStorageType`. Both used only inside Spec B's dispatch arms. |
 
 ### Why one binder for both flavors
@@ -191,21 +191,38 @@ If route services aren't available (a corner-case for direct construction in tes
 
 The optional parameter keeps existing direct-construction call sites (none in source today, possibly some in tests) compiling unchanged.
 
-### `AddRestierSpatial()` change (both flavors)
+### AspNetCore filter-binder registration
 
-Each flavor's `Extensions/ServiceCollectionExtensions.cs` gains one line in `AddRestierSpatial(this IServiceCollection services)`:
+The binder is registered by `Microsoft.Restier.AspNetCore` directly — inside the route-components services lambda in `RestierODataOptionsExtensions.cs` (the file Spec A and earlier work already extends for every Restier route). The flavor `.Spatial` packages stay untouched on this dimension; their `AddRestierSpatial()` extensions only register `ISpatialTypeConverter` and `ISpatialModelMetadataProvider` as they do today.
+
+Why the registration moves up the stack: neither `.Spatial` package references `Microsoft.Restier.AspNetCore` (`src/Microsoft.Restier.EntityFramework.Spatial/Microsoft.Restier.EntityFramework.Spatial.csproj:22-23` references only `Core` + `EntityFramework`; `src/Microsoft.Restier.EntityFrameworkCore.Spatial/Microsoft.Restier.EntityFrameworkCore.Spatial.csproj:24-25` references only `Core` + `EntityFrameworkCore`). They are deliberately host-agnostic. Forcing them to take an AspNetCore dependency just to register a filter binder would invert that design.
+
+The new line goes inside the existing services lambda at `RestierODataOptionsExtensions.cs:147-180`, immediately before `configureRouteServices.Invoke(services)` (i.e. after Restier's own core registrations but before user code):
 
 ```csharp
-services.Replace(ServiceDescriptor.Singleton<IFilterBinder, RestierSpatialFilterBinder>());
+// src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs
+oDataOptions.AddRouteComponents(routePrefix, model, services =>
+{
+    // ... existing setup (RestierRouteMarker, scoped Api, RestierNamingConvention,
+    // RemoveAll<ODataQuerySettings>, AddRestierCoreServices, AddRestierConventionBasedServices) ...
+
+    // Override the default OData FilterBinder with the spatial-aware subclass. The
+    // binder is a near-identity passthrough — only the three v4-core geo.* functions
+    // are intercepted, and even those fall through to base when no ISpatialTypeConverter
+    // is registered, so this has zero behavioral impact on non-spatial Restier APIs.
+    services.RemoveAll<IFilterBinder>();
+    services.AddSingleton<IFilterBinder, RestierSpatialFilterBinder>();
+
+    configureRouteServices.Invoke(services);
+    // ... rest of existing setup ...
+});
 ```
 
-**Why `Replace` and not `TryAdd`.** AspNetCoreOData's `AddRouteComponents(...)` registers its default `IFilterBinder` *before* the user-services configuration delegate runs (see `RestierODataOptionsExtensions.cs:147-180` — the inner lambda calls `configureRouteServices.Invoke(services)` partway through, after OData's defaults are already in place). `TryAdd*` would observe the existing default registration and silently no-op, so the spatial binder would never be invoked. `Replace` overrides the existing descriptor with our subclass; AspNetCoreOData resolves whichever lifetime-singleton it finds and our binder gets used for every `$filter` on the route.
+**Why `RemoveAll` + `AddSingleton` and not `Replace`.** `Replace` requires the descriptor to already be present; if a future AspNetCoreOData refactor removes the default registration, `Replace` throws. `RemoveAll` is idempotent — works whether or not the default is registered.
 
-**Double-registration.** When both `.Spatial` packages are referenced (rare; you'd have to be running EF6 + EF Core simultaneously on the same API surface, which Spec A's converters don't even contemplate), the second `Replace` call replaces a descriptor with an identical descriptor — no behavioral difference.
+**Why before `configureRouteServices.Invoke`.** Consumers' route-services delegate runs *after* this line, so a user who registers their own custom `IFilterBinder` (or who calls `services.Replace<IFilterBinder, MyBinder>()`) wins. The documentation page picks up this note.
 
-**Custom binders.** If a consumer wants to keep their own custom `IFilterBinder`, the documented order is: call `AddRestierSpatial()` first, then `services.Replace(...)` with their own implementation. The spatial guide page picks up this note.
-
-The binder's ctor pulls `IEnumerable<ISpatialTypeConverter>` from DI, so whichever flavor's converters are registered get used.
+**Activation by `AddRestierSpatial()`.** The user-facing UX from Q2 is unchanged: a single `AddRestierSpatial()` call inside `configureRouteServices` registers `ISpatialTypeConverter`s and `ISpatialModelMetadataProvider`. The already-installed binder resolves the converter enumerable from DI lazily (singleton, constructed at first request); by the time the binder is constructed, the user's `AddRestierSpatial()` has run inside `configureRouteServices.Invoke(services)` and the enumerable is populated. APIs that don't call `AddRestierSpatial()` get an empty enumerable; the binder falls through to base on every `geo.*` function name (same behavior as today).
 
 ### Data flow per function
 
@@ -390,11 +407,12 @@ EF6 sample is unchanged.
 
 ### Source files modified
 
+- `src/Microsoft.Restier.AspNetCore/Extensions/RestierODataOptionsExtensions.cs` — inside the existing `AddRouteComponents` services lambda, add `services.RemoveAll<IFilterBinder>(); services.AddSingleton<IFilterBinder, RestierSpatialFilterBinder>();` immediately before `configureRouteServices.Invoke(services)`.
 - `src/Microsoft.Restier.AspNetCore/Query/RestierQueryBuilder.cs` — widen ctor with optional `IFilterBinder filterBinder = null`; `HandleFilterPathSegment` uses the injected binder when present, falls back to `new FilterBinder()` when null.
 - `src/Microsoft.Restier.AspNetCore/RestierController.cs` — two call sites (lines 704 and 717) resolve `IFilterBinder` from `HttpContext.Request.GetRouteServices()` and pass it into the new ctor.
 - `src/Microsoft.Restier.AspNetCore/Properties/Resources.resx` (+ generated `Resources.Designer.cs`) — two new strings.
-- `src/Microsoft.Restier.EntityFramework.Spatial/Extensions/ServiceCollectionExtensions.cs` — `services.Replace(ServiceDescriptor.Singleton<IFilterBinder, RestierSpatialFilterBinder>())` inside `AddRestierSpatial`.
-- `src/Microsoft.Restier.EntityFrameworkCore.Spatial/Extensions/ServiceCollectionExtensions.cs` — same line.
+
+The flavor `.Spatial` packages are deliberately **not** modified by Spec B. Their `AddRestierSpatial()` extensions continue to register `ISpatialTypeConverter` + `ISpatialModelMetadataProvider` exactly as Spec A defines, and their csproj dependency surface stays narrow.
 
 ### Test files
 
@@ -425,6 +443,8 @@ EF6 sample is unchanged.
 - The model-builder convention from Spec A — Spec B operates entirely on the bound LINQ expression tree; no EDM-model changes.
 - `RestierPayloadValueConverter` — read path unchanged.
 - `EFChangeSetInitializer` (both flavors) — write path unchanged.
+- `Microsoft.Restier.EntityFramework.Spatial.csproj` and `Microsoft.Restier.EntityFrameworkCore.Spatial.csproj` — no new project/package references. Both packages stay host-agnostic (no AspNetCore dependency). The binder registration moves to `Microsoft.Restier.AspNetCore` precisely to preserve this invariant.
+- Flavor `.Spatial` packages' `Extensions/ServiceCollectionExtensions.cs` (`AddRestierSpatial`) — Spec A's registrations are sufficient. No Spec B additions.
 
 ## Out of scope (deferred)
 

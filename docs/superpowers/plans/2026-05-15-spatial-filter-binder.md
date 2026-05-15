@@ -1627,6 +1627,10 @@ EOF
 
 ### Task 13: Test + implement genus validation (Step 0)
 
+> **Note added during execution (2026-05-15):** During implementation it was discovered that ODL's `ODataQueryOptionParser.ParseFilter` rejects cross-genus `geo.*` calls **at parse time**, before the binder is ever invoked. The two `geo.distance` signatures registered in the OData function registry are `geo.distance(Edm.GeographyPoint, Edm.GeographyPoint)` and `geo.distance(Edm.GeometryPoint, Edm.GeometryPoint)` — there is no `(GeographyPoint, GeometryPoint)` signature. When a mixed-genus call is submitted (e.g. `geo.distance(HeadquartersLocation, geometry'POINT(0 0)')` against a Geography property), the parser throws: `ODataException("No function signature for the function with name 'geo.distance' matches the specified arguments. ...")`. AspNetCoreOData maps this to HTTP 400 automatically.
+>
+> **Net effect:** the entire Step 0 `ValidateGenus` / `ClassifyGenus` code path, and the dedicated `BindGeoDistance_GeographyPropertyVsGeometryLiteral_ThrowsODataException` unit test below, are **skipped**. The parser is the de facto genus gatekeeper; adding a binder-level check would be dead code for all URL-driven queries. HTTP 400 with a sensible error message is already delivered by the parser. The `SpatialFilter_GenusMismatch` resource string added in Task 1 is retained as a placeholder for potential future programmatic `FilterClause` callers but is not used by the binder.
+
 **Files:**
 - Modify: `test/Microsoft.Restier.Tests.AspNetCore/Query/RestierSpatialFilterBinderTests.cs`
 - Modify: `src/Microsoft.Restier.AspNetCore/Query/RestierSpatialFilterBinder.cs`
@@ -2180,7 +2184,12 @@ After the path-segment test added in Task 18, append:
         var content = await TraceListener.LogAndReturnMessageContentAsync(response);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        content.Should().Contain("HeadquartersLocation");
+        // NOTE (added 2026-05-15): the original plan asserted content.Should().Contain("HeadquartersLocation")
+        // here, expecting the binder's SpatialFilter_GenusMismatch message to include the property name.
+        // However, this error is raised by ODL's parser (function signature matching) before the binder
+        // runs — the parser's message is "No function signature for the function with name 'geo.distance'
+        // matches the specified arguments" and does NOT include the property name. Drop that assertion.
+        // The HTTP 400 status check above and the "geometry" body check below are sufficient.
         content.ToLowerInvariant().Should().Contain("geometry");
     }
 
@@ -2469,7 +2478,7 @@ After completing all tasks, verify:
    - `geo.distance` translation + `ResolveSpatialInstanceMethod` + literal lowering — Task 10.
    - `geo.intersects` translation — Task 11.
    - Unknown geo.* fall-through (verified) — Task 12.
-   - Genus validation (Step 0) — Task 13.
+   - Genus validation (Step 0) — handled upstream by ODL parser's function signature matching; binder Step 0 skipped as unreachable code path. Documented in Task 13 note.
    - Non-EPSG wrapping — Task 14 (test) + Task 10 (impl).
    - No-converter diagnostic — Task 15 (test) + Task 10 (impl).
    - `RouteLine` LineString in `SpatialPlace` + seed — Tasks 6, 7.

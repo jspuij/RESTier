@@ -21,9 +21,9 @@ namespace Microsoft.Restier.AspNetCore.Query;
 /// <see cref="T:Microsoft.AspNetCore.OData.Query.Expressions.FilterBinder"/> behavior.
 /// </summary>
 /// <remarks>
-/// Dispatch is added incrementally across the spec-B series: <c>geo.length</c> and
-/// <c>geo.distance</c> are implemented today; <c>geo.intersects</c> arm lands in the next
-/// commit and currently falls through to the base implementation.
+/// Dispatch is added incrementally across the spec-B series: <c>geo.distance</c>,
+/// <c>geo.length</c>, and <c>geo.intersects</c> are all implemented today; error-handling
+/// (genus validation, no-converter diagnostics) lands in subsequent commits.
 /// </remarks>
 public class RestierSpatialFilterBinder : FilterBinder
 {
@@ -53,6 +53,8 @@ public class RestierSpatialFilterBinder : FilterBinder
                 return BindGeoDistance(node, context);
             case "geo.length":
                 return BindGeoLength(node, context);
+            case "geo.intersects":
+                return BindGeoIntersects(node, context);
             default:
                 return base.BindSingleValueFunctionCallNode(node, context);
         }
@@ -61,6 +63,11 @@ public class RestierSpatialFilterBinder : FilterBinder
     private Expression BindGeoDistance(SingleValueFunctionCallNode node, QueryBinderContext context)
     {
         return BindBinarySpatialMethod(node, context, methodName: "Distance");
+    }
+
+    private Expression BindGeoIntersects(SingleValueFunctionCallNode node, QueryBinderContext context)
+    {
+        return BindBinarySpatialMethod(node, context, methodName: "Intersects");
     }
 
     private Expression BindGeoLength(SingleValueFunctionCallNode node, QueryBinderContext context)
@@ -139,6 +146,13 @@ public class RestierSpatialFilterBinder : FilterBinder
             return bound;
         }
 
+        // Use the abstract base storage type (e.g. NTS.Geometry) rather than a concrete
+        // subtype (e.g. NTS.Point) so that the converter can materialise any geometry
+        // subtype from the literal.  We probe when (a) the other side is a Microsoft.Spatial
+        // type — meaning there is no storage property to guide us — or (b) the other side IS
+        // a concrete storage type but a converter still handles its family (the literal may
+        // carry a different subtype, e.g. geo.intersects(Point, Polygon) where the property
+        // side is Point and the literal side is Polygon).
         var targetStorageType = otherSideType;
         if (typeof(Microsoft.Spatial.ISpatial).IsAssignableFrom(targetStorageType))
         {
@@ -146,6 +160,21 @@ public class RestierSpatialFilterBinder : FilterBinder
             {
                 var probe = ProbeStorageType(c);
                 if (probe is not null)
+                {
+                    targetStorageType = probe;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // Other side is already a storage type, but the literal may be a different
+            // geometry subtype (e.g., Polygon when the property is Point in geo.intersects).
+            // Widen to the abstract base so ToStorage can produce the correct subtype.
+            foreach (var c in this.converters)
+            {
+                var probe = ProbeStorageType(c);
+                if (probe is not null && probe.IsAssignableFrom(targetStorageType))
                 {
                     targetStorageType = probe;
                     break;

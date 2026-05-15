@@ -189,4 +189,47 @@ public class RestierSpatialFilterBinderTests
             return base.VisitMethodCall(node);
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // geo.intersects
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// geo.intersects(prop, literal) must lower to MethodCallExpression(prop, "Intersects",
+    /// loweredLiteral). Same reflection-walk requirement as geo.distance — NTS's Intersects
+    /// is declared on Geometry.
+    /// </summary>
+    [Fact]
+    public void BindGeoIntersects_EmitsStorageIntersectsMethodCall()
+    {
+        var (model, source) = BuildNtsFixture();
+        var clause = ParseFilter(model, "Things",
+            "geo.intersects(Location,geography'SRID=4326;POLYGON((0 0,0 1,1 1,1 0,0 0))')");
+
+        var binder = new RestierSpatialFilterBinder(new ISpatialTypeConverter[] { new NtsSpatialConverter() });
+        var context = new QueryBinderContext(model, new ODataQuerySettings(), typeof(NtsEntity));
+
+        var bound = binder.ApplyBind(source, clause, context);
+        bound.Should().NotBeNull();
+
+        var visitor = new FindIntersectsCallVisitor();
+        visitor.Visit(bound.Expression);
+        visitor.Found.Should().BeTrue(
+            "the bound expression must contain a MethodCallExpression for Geometry.Intersects(Geometry)");
+    }
+
+    private class FindIntersectsCallVisitor : ExpressionVisitor
+    {
+        public bool Found { get; private set; }
+
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            if (node.Method.Name == "Intersects"
+                && typeof(NetTopologySuite.Geometries.Geometry).IsAssignableFrom(node.Object?.Type))
+            {
+                Found = true;
+            }
+            return base.VisitMethodCall(node);
+        }
+    }
 }

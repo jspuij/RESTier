@@ -256,4 +256,26 @@ public class RestierSpatialFilterBinderTests
             "AspNetCoreOData's ODataQueryOptionParser must reject unknown function names " +
             "before the binder ever runs");
     }
+
+    /// <summary>
+    /// Binder constructed with an empty ISpatialTypeConverter enumerable hitting a geo.* call
+    /// against a spatial property must throw ODataException — this is the diagnostic for the
+    /// "forgot to call AddRestierSpatial()" case.
+    /// </summary>
+    [Fact]
+    public void Ctor_NoConvertersRegistered_GeoFunctionAgainstSpatialProperty_ThrowsODataException()
+    {
+        var (model, source) = BuildNtsFixture();
+        var clause = ParseFilter(model, "Things",
+            "geo.distance(Location,geography'SRID=4326;POINT(0 0)') lt 1000000");
+
+        var binder = new RestierSpatialFilterBinder(); // no converters
+        var context = new QueryBinderContext(model, new ODataQuerySettings(), typeof(NtsEntity));
+
+        Action act = () => binder.ApplyBind(source, clause, context);
+
+        act.Should().Throw<Microsoft.OData.ODataException>()
+            .WithMessage("*No ISpatialTypeConverter*",
+                "the message must point the developer at AddRestierSpatial()");
+    }
 }

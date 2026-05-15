@@ -190,6 +190,36 @@ public class RestierSpatialFilterBinderTests
         }
     }
 
+    /// <summary>
+    /// Both-literal corner case: <c>geo.distance(geography'…', geography'…')</c>. Neither
+    /// side has a property to seed the storage-type inference, so the binder probes the
+    /// registered converters for a preferred storage root. The fix in
+    /// BindBinarySpatialMethod is that lowered1 sees lowered0.Type (the *post-lowering*
+    /// concrete storage type) rather than bound0.Type (still Microsoft.Spatial). Without
+    /// that, lowered1 would independently re-probe and could pick a different storage
+    /// root in cross-flavor configurations.
+    /// </summary>
+    [Fact]
+    public void BindGeoDistance_BothLiteralArguments_BothLoweredToSameStorageRoot()
+    {
+        var (model, source) = BuildNtsFixture();
+        var clause = ParseFilter(model, "Things",
+            "geo.distance(geography'SRID=4326;POINT(0 0)',geography'SRID=4326;POINT(1 1)') lt 1000000");
+
+        var binder = new RestierSpatialFilterBinder(new ISpatialTypeConverter[] { new NtsSpatialConverter() });
+        var context = new QueryBinderContext(model, new ODataQuerySettings(), typeof(NtsEntity));
+
+        var bound = binder.ApplyBind(source, clause, context);
+        bound.Should().NotBeNull();
+
+        var visitor = new FindDistanceCallVisitor();
+        visitor.Visit(bound.Expression);
+        visitor.Found.Should().BeTrue(
+            "both-literal geo.distance must still resolve a storage-typed Distance call");
+        visitor.ArgumentType.Should().BeAssignableTo(typeof(NetTopologySuite.Geometries.Geometry),
+            "the lowered argument must be an NTS geometry");
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // geo.intersects
     // ─────────────────────────────────────────────────────────────────────

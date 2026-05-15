@@ -97,8 +97,14 @@ public class RestierSpatialFilterBinder : FilterBinder
         var bound0 = base.Bind(args[0], context);
         var bound1 = base.Bind(args[1], context);
 
+        // Lower bound0 first using bound1's raw type as the storage-type hint, then lower
+        // bound1 against lowered0's *post-lowering* type. For the both-literal corner case
+        // (geo.distance(geography'…', geography'…')) this means lowered1 sees a concrete
+        // storage type (the one lowered0 settled on) rather than a Microsoft.Spatial type,
+        // so it doesn't have to re-probe ProbeStorageType independently and risk picking a
+        // different storage root.
         var lowered0 = LowerSpatialLiteralIfNeeded(node.Name, bound0, otherSideType: bound1.Type);
-        var lowered1 = LowerSpatialLiteralIfNeeded(node.Name, bound1, otherSideType: bound0.Type);
+        var lowered1 = LowerSpatialLiteralIfNeeded(node.Name, bound1, otherSideType: lowered0.Type);
 
         var method = ResolveSpatialInstanceMethod(lowered0.Type, methodName, lowered1.Type);
         if (method is null)

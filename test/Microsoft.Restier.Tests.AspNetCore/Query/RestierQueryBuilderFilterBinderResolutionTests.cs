@@ -3,6 +3,7 @@
 
 using System;
 using FluentAssertions;
+using Microsoft.AspNetCore.OData.Query;
 using Microsoft.AspNetCore.OData.Query.Expressions;
 using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
@@ -37,15 +38,16 @@ public class RestierQueryBuilderFilterBinderResolutionTests
             Substitute.For<ISubmitHandler>());
 
         var path = new ODataPath(Array.Empty<ODataPathSegment>());
+        var querySettings = new ODataQuerySettings();
 
-        var act = () => new RestierQueryBuilder(api, path, binder);
+        var act = () => new RestierQueryBuilder(api, path, querySettings, binder);
 
         act.Should().NotThrow("the widened ctor must accept an IFilterBinder argument");
     }
 
     /// <summary>
     /// The IFilterBinder parameter is optional — callers that don't pass one must continue to
-    /// compile against the existing two-argument ctor signature.
+    /// compile against the (api, path, querySettings) ctor signature.
     /// </summary>
     [Fact]
     public void Ctor_FilterBinderParameter_IsOptional()
@@ -56,10 +58,11 @@ public class RestierQueryBuilderFilterBinderResolutionTests
             Substitute.For<ISubmitHandler>());
 
         var path = new ODataPath(Array.Empty<ODataPathSegment>());
+        var querySettings = new ODataQuerySettings();
 
-        var act = () => new RestierQueryBuilder(api, path);
+        var act = () => new RestierQueryBuilder(api, path, querySettings);
 
-        act.Should().NotThrow("the (api, path) ctor signature must still compile");
+        act.Should().NotThrow("the (api, path, querySettings) ctor signature must still compile without an IFilterBinder");
     }
 
     private class TestApi : ApiBase

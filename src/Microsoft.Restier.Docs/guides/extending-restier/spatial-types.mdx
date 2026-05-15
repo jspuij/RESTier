@@ -121,9 +121,46 @@ Linux / macOS hosts cannot run native operations — those code paths will throw
 EF Core users do not need any of this — the EF Core spatial path uses NetTopologySuite, which is a self-contained managed library with no native dependencies.
 </Info>
 
+## Server-side filtering with `geo.*` functions
+
+Once `AddRestierSpatial()` is wired into route services (see [Install the package](#install-the-package) above), the three OData v4-core spatial functions translate to native SQL spatial operators server-side. The exact translation depends on the EF flavor and the database provider, but the OData URL surface is identical.
+
+| Function | OData syntax | Translates to |
+|----------|--------------|---------------|
+| `geo.distance` | `?$filter=geo.distance(LocationProp,geography'SRID=4326;POINT(lon lat)') lt N` | `DbGeography.Distance` (EF6) or `NetTopologySuite.Geometries.Geometry.Distance` (EF Core), then native SQL `geography::STDistance` / `ST_Distance`. |
+| `geo.length` | `?$filter=geo.length(LineStringProp) gt 0` | `DbGeography.Length` (EF6) or `NetTopologySuite.Geometries.Geometry.Length` (EF Core), then native SQL `geography::STLength` / `ST_Length`. Input must be a LineString — non-LineString inputs return null (EF6) or boundary length (NTS). |
+| `geo.intersects` | `?$filter=geo.intersects(PolygonProp,geography'SRID=4326;POINT(lon lat)')` | `DbGeography.Intersects` (EF6) or `Geometry.Intersects` (EF Core), then native SQL `geography::STIntersects` / `ST_Intersects`. |
+
+Path-segment `$filter` syntax (`/SpatialPlaces/$filter(geo.distance(...) lt N)`) works the same as the URL-query form.
+
+<Note>
+The `geography::STDistance`, `STLength`, and `STIntersects` methods on SQL Server require CLR to be enabled (`sp_configure 'clr enabled', 1`). SQL Server Express does not support CLR; other editions need an admin to enable it. PostGIS via Npgsql has no equivalent requirement.
+</Note>
+
+### Error responses
+
+- **Genus mismatch.** Comparing a Geography property to a Geometry literal (or vice versa) → HTTP 400. ODL's function signature matching rejects cross-genus calls at parse time, before the request reaches the route handler.
+- **Unsupported function.** Calls to `geo.*` functions outside the three above (`geo.area`, `geo.contains`, `geo.coveredby`, ...) → HTTP 400 with AspNetCoreOData's stock "unknown function" error. Forward-compat for future OData v4 spec additions.
+- **Missing `AddRestierSpatial()`.** If the spatial extension is not registered but a `geo.*` filter is issued against a spatial property → HTTP 400 with a diagnostic naming the function, property, and the missing `AddRestierSpatial()` call.
+
+### Custom IFilterBinder
+
+Restier registers `RestierSpatialFilterBinder` before invoking the user-supplied route-services delegate. Consumers who need their own custom `IFilterBinder` register it inside that delegate (it runs after Restier's registration and wins):
+
+```csharp
+services.AddRestier(...)
+    // Restier registers RestierSpatialFilterBinder here.
+    .AddRouteComponents("api", model, route =>
+    {
+        // Your custom registration runs after Restier's and overrides it.
+        route.RemoveAll<IFilterBinder>();
+        route.AddSingleton<IFilterBinder, MyCustomFilterBinder>();
+    });
+```
+
 ## What's not yet supported
 
-- Server-side `geo.distance` / `geo.length` / `geo.intersects` translation. Use `$filter` with these operators returns an error today; a future spec will deliver translation.
+- `$orderby=geo.distance(...)` and other `geo.*` operators in `$orderby`. Planned for a future spec.
 - Non-EPSG `CoordinateSystem` values throw `InvalidOperationException` on write. Default-SRID configuration is planned for a future spec.
 
 ## How it works

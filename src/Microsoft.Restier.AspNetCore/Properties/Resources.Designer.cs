@@ -277,7 +277,7 @@ namespace Microsoft.Restier.AspNetCore {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No ISpatialTypeConverter is registered for storage type &apos;{2}&apos; (function &apos;{0}&apos;, property &apos;{1}&apos;). Did you forget to call AddRestierSpatial()?.
+        ///   Looks up a localized string similar to Function &apos;{0}&apos;, property &apos;{1}&apos;: no ISpatialTypeConverter is registered for storage type &apos;{2}&apos;. Did you forget to call AddRestierSpatial()?.
         /// </summary>
         internal static string SpatialFilter_NoConverterForStorageType {
             get {
